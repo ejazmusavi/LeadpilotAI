@@ -1,0 +1,39 @@
+@model AccountsViewModel
+@using LeadPilot.Domain.Messaging
+@{
+    ViewData["Title"] = "WhatsApp accounts";
+    string Badge(ConnectionStatus s) => s switch { ConnectionStatus.Working => "text-bg-success", ConnectionStatus.ScanQrCode => "text-bg-warning", ConnectionStatus.Failed => "text-bg-danger", ConnectionStatus.Starting => "text-bg-info", _ => "text-bg-secondary" };
+}
+<div class="d-flex flex-wrap justify-content-between align-items-start mb-3 gap-2">
+    <div><h1 class="h3 mb-1">WhatsApp accounts</h1><p class="text-muted mb-0">Each account is one WhatsApp number running as a session on your WAHA server.</p></div>
+    @if (Model.CanManage) { <a asp-action="New" class="btn btn-primary">Add account</a> }
+</div>
+<partial name="_WhatsAppRisk" />
+@if (Model.Status is { } st && (!st.BrokerConfigured || !st.BrokerReachable))
+{
+    <div class="alert alert-danger" role="alert">@st.BrokerNote @if (st.PendingOutbox > 0) { <span>(@st.PendingOutbox event(s) are waiting.)</span> }</div>
+}
+@if (Model.Accounts.Count == 0)
+{
+    <div class="card"><partial name="_EmptyState" model='("No WhatsApp accounts yet", Model.CanManage ? "Add the URL and API key of your WAHA server to connect your first number." : "Ask an administrator to add a WhatsApp account.")' /></div>
+}
+else
+{
+    <div class="row g-3">
+    @foreach (var a in Model.Accounts)
+    {
+        <div class="col-12 col-xl-6"><div class="card h-100"><div class="card-body">
+            <div class="d-flex justify-content-between align-items-start gap-2">
+                <div><h2 class="h5 mb-0"><a asp-action="Details" asp-route-id="@a.Id" class="text-decoration-none">@a.DisplayName</a></h2><div class="small text-muted">@(a.PhoneE164 ?? "number not known yet") · session <code>@a.GatewayAccountId</code> · @a.BaseUrlHost</div></div>
+                <div class="text-end"><span class="badge @Badge(a.Status)">@a.Status</span> @if (a.IsPaused) { <span class="badge text-bg-warning">Paused</span> }</div>
+            </div>
+            @if (a.IsPaused && a.PauseReason is not null) { <div class="small text-danger mt-2">@a.PauseReason</div> }
+            <dl class="row small mt-3 mb-0">
+                <dt class="col-6">Sent last hour</dt><dd class="col-6">@a.SentLastHour / @a.HourlyCap</dd>
+                <dt class="col-6">Sent last 24 h</dt><dd class="col-6">@a.SentLast24Hours / @a.DailyLimitToday today (cap @a.DailyCap)</dd>
+                @if (a.UnacknowledgedNotifications > 0) { <dt class="col-6">Notices</dt><dd class="col-6"><span class="badge text-bg-danger">@a.UnacknowledgedNotifications new</span></dd> }
+            </dl>
+        </div></div></div>
+    }
+    </div>
+}

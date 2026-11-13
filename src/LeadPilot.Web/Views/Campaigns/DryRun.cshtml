@@ -1,0 +1,15 @@
+@model CampaignDetailsViewModel
+@{ ViewData["Title"] = "Dry run"; var d = Model.DryRun!; var a = d.Audience; }
+<h1 class="h3 mb-1">Dry run: @Model.Campaign.Name</h1>
+<div class="alert alert-info">Nothing was sent. This is what would happen if the campaign started now. Consent is checked again for every message at send time.</div>
+<div class="row g-3 mb-3">
+    <div class="col-6 col-md-3"><div class="card card-body text-center"><div class="fs-3">@a.Candidates</div><div class="small text-muted">contacts examined</div></div></div>
+    <div class="col-6 col-md-3"><div class="card card-body text-center"><div class="fs-3 text-success">@a.Eligible</div><div class="small text-muted">would be messaged</div></div></div>
+    <div class="col-6 col-md-3"><div class="card card-body text-center"><div class="fs-3 text-secondary">@a.Excluded</div><div class="small text-muted">excluded</div></div></div>
+    <div class="col-6 col-md-3"><div class="card card-body text-center"><div class="fs-3">~@d.EstimatedMinutes min</div><div class="small text-muted">at the account's limits</div></div></div>
+</div>
+@foreach (var w in a.Warnings) { <div class="alert alert-warning">@w</div> }
+@if (!d.TemplateValid) { <div class="alert alert-danger"><strong>The message has problems:</strong> @string.Join(" ", d.Problems)</div> }
+@if (!d.AccountReady) { <div class="alert alert-warning">WhatsApp account: @d.AccountNote</div> }
+<partial name="_AudienceBreakdown" model="a" />
+<a asp-action="Details" asp-route-id="@Model.Campaign.Id" class="btn btn-link">Back to the campaign</a>

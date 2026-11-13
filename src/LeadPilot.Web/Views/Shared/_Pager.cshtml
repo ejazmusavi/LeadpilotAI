@@ -1,0 +1,21 @@
+@model PagerModel
+@if (Model.TotalPages > 1)
+{
+    string Link(int p)
+    {
+        var rv = new Microsoft.AspNetCore.Routing.RouteValueDictionary(Model.Query.ToDictionary(k => k.Key, k => (object?)k.Value));
+        rv["page"] = p;
+        return Url.Action(Model.Action, rv)!;
+    }
+    <nav aria-label="Pages" class="d-flex flex-wrap align-items-center gap-2 mt-3">
+        <ul class="pagination pagination-sm mb-0">
+            <li class="page-item @(Model.Page <= 1 ? "disabled" : "")"><a class="page-link" href="@(Model.Page <= 1 ? "#" : Link(Model.Page - 1))">Previous</a></li>
+            @foreach (var p in PagerExtensions.PageWindow(Model.Page, Model.TotalPages))
+            {
+                <li class="page-item @(p == Model.Page ? "active" : "")"><a class="page-link" href="@Link(p)">@p</a></li>
+            }
+            <li class="page-item @(Model.Page >= Model.TotalPages ? "disabled" : "")"><a class="page-link" href="@(Model.Page >= Model.TotalPages ? "#" : Link(Model.Page + 1))">Next</a></li>
+        </ul>
+        <span class="text-muted small">@Model.Total total</span>
+    </nav>
+}

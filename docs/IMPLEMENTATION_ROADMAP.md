@@ -6,7 +6,7 @@ Rule: implement one phase at a time; no phase starts until the previous meets it
 | Phase | Scope | Depends on | External prerequisite |
 |---|---|---|---|
 | 0 | Requirements, architecture, docs | — | Owner review/approval |
-| 1 | Solution, Identity auth, EF/MySQL, logging, Swagger, health, Docker, MVC shell | 0 | .NET 10 SDK + Docker available |
+| 1 | Solution, Identity auth, EF/MySQL, logging, Swagger, health, Docker, MVC shell | 0 | .NET 10 SDK + Docker available — **code done; Docker run unverified** |
 | 2 | Tenancy, users, roles, permissions, audit, isolation tests | 1 | — |
 | 3 | CRM: leads, contacts, pipeline, import/export, scoring, consent, suppression | 2 | — |
 | 4 | Discovery & enrichment (Google Places, websites, imports) | 3 | Google Places key |

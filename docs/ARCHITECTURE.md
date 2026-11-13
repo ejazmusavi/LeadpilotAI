@@ -71,3 +71,13 @@ Structured logging (Serilog, JSON, with TenantId/CorrelationId enrichment), glob
 ## Technology notes
 - Package versions will be pinned in Phase 1 after verifying NuGet compatibility with .NET 10 (Pomelo.EntityFrameworkCore.MySql, Hangfire.MySqlStorage or Hangfire.Storage.MySql, RabbitMQ.Client, StackExchange.Redis, FluentValidation, Serilog, xUnit, Testcontainers, NetArchTest).
 - Integration tests use Testcontainers (MySQL, RabbitMQ, Redis, Qdrant) so tenant-isolation tests run against real engines.
+
+## Phase 1 technology decisions (verified)
+| Decision | Reason |
+|---|---|
+| **MySQL provider: Oracle `MySql.EntityFrameworkCore` 10.0.12** with EF Core 10.0.15 | Pomelo's latest stable (9.0.0) targets EF Core 9 and has no EF Core 10 release on NuGet. Oracle's provider is the only stable EF Core 10 provider for MySQL. Trade-off: fewer provider extras than Pomelo; revisit if Pomelo ships EF 10. |
+| Identity user/role live in **Infrastructure** | Keeps Domain/Application free of ASP.NET Identity; enforced by architecture tests. |
+| `Hangfire`, `RabbitMQ`, `Redis`, `Qdrant` **not yet added** | Not needed by Phase 1 (spec: no unnecessary infrastructure). Added in the phase that first uses each. Compose therefore only runs MySQL + the three apps. |
+| Fallback authorization policy = authenticated user everywhere | Secure by default; endpoints opt out with `[AllowAnonymous]`. |
+| API auth: JWT bearer with ephemeral key until `Jwt:SigningKey` is set | Phase 1 has no token issuing, so protected API endpoints answer 401; token issuing is Phase 2. |
+| Migrations applied by Web at startup only when `Database:MigrateOnStartup=true` | Single migrator avoids races; production can disable and run `dotnet ef` explicitly. |

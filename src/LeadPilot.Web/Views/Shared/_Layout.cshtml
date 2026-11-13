@@ -1,0 +1,71 @@
+@{
+    var crumbs = ViewData["Breadcrumbs"] as IEnumerable<(string Title, string? Url)> ?? Enumerable.Empty<(string, string?)>();
+    var title = ViewData["Title"] as string ?? "LeadPilot AI";
+    var name = User.Identity?.Name ?? "";
+    var initial = name.Length > 0 ? name[..1].ToUpperInvariant() : "?";
+    var path = Context.Request.Path.Value ?? "/";
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@title · LeadPilot AI</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body class="app-shell">
+<div id="page-loading" class="page-loading" hidden><div class="progress" style="height:3px"><div class="progress-bar progress-bar-striped progress-bar-animated w-100"></div></div></div>
+
+<aside class="offcanvas-lg offcanvas-start sidebar" tabindex="-1" id="sidebar" aria-label="Main navigation">
+    <div class="sidebar-brand">
+        <a asp-controller="Home" asp-action="Index" class="text-decoration-none"><span class="brand-mark">LP</span> LeadPilot AI</a>
+        <button type="button" class="btn-close btn-close-white d-lg-none" data-bs-dismiss="offcanvas" data-bs-target="#sidebar" aria-label="Close"></button>
+    </div>
+    <nav class="nav flex-column px-2">
+        <a class="nav-link @(path == "/" || path.StartsWith("/Home", StringComparison.OrdinalIgnoreCase) ? "active" : "")" asp-controller="Home" asp-action="Index">Dashboard</a>
+    </nav>
+    <div class="sidebar-footer small">Discover. Engage. Convert.</div>
+</aside>
+
+<div class="main-col">
+    <header class="topbar">
+        <button class="btn btn-outline-secondary d-lg-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebar" aria-controls="sidebar" aria-label="Open navigation">☰</button>
+        <div class="ms-auto d-flex align-items-center gap-2">
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary position-relative" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-label="Notifications" aria-expanded="false">🔔</button>
+                <div class="dropdown-menu dropdown-menu-end p-0" style="min-width:18rem" id="notification-area">
+                    <div class="px-3 py-2 border-bottom fw-semibold">Notifications</div>
+                    <partial name="_EmptyState" model='("No notifications", "You are all caught up.")' />
+                </div>
+            </div>
+            <div class="dropdown">
+                <button class="btn btn-light d-flex align-items-center gap-2" data-bs-toggle="dropdown" aria-expanded="false">
+                    <span class="avatar">@initial</span><span class="d-none d-md-inline">@name</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><span class="dropdown-item-text small text-muted">Signed in as<br />@name</span></li>
+                    <li><hr class="dropdown-divider" /></li>
+                    <li>
+                        <form asp-controller="Account" asp-action="Logout" method="post" class="px-3">
+                            <button type="submit" class="btn btn-sm btn-outline-danger w-100">Sign out</button>
+                        </form>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </header>
+
+    <main class="content container-fluid py-4">
+        <partial name="_Breadcrumbs" model="crumbs" />
+        <partial name="_Toasts" />
+        @RenderBody()
+    </main>
+</div>
+
+<script src="~/lib/jquery/dist/jquery.min.js"></script>
+<script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+<script src="~/js/site.js" asp-append-version="true"></script>
+@await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

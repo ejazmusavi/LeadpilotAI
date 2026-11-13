@@ -5,13 +5,20 @@
 ## Vision
 A multi-tenant AI marketing, lead-generation, engagement and sales-automation SaaS. First use: internal acquisition of customers for an existing cloud School Management Software (private schools in Pakistan). Later: a general-purpose platform other businesses subscribe to. Schools are the first **industry vertical**, never a hardcoded limitation.
 
+## Owner decisions (recorded at Phase 0 approval)
+1. **WhatsApp gateway = WAHA** (WhatsApp HTTP API). Phase 5 will read the WAHA documentation and build the adapter from it; no endpoints are assumed here.
+2. **Product-agnostic from day one.** The School ERP is only the first *product/vertical*. Product knowledge, pricing, qualification questions, agent instructions and workflows are tenant configuration, never code. Phase 13's configurability is pulled forward into the *design* of Phases 3, 7 and 8 (e.g. `Product`/`CatalogItem`, configurable pipeline, agent instructions per tenant).
+3. **AI provider = Claude API** (behind `IAIProvider`). Embeddings provider still to be chosen (Anthropic has no embeddings endpoint; a separate embedding provider or a local model is needed for RAG).
+4. Product details (features, pricing, demo/trial process) will be supplied later and entered as tenant data; Phase 7/8 are blocked on them for real content, not for code.
+5. **Phase 0 approved.**
+
 ## Scope decisions (Phase 0)
 | Topic | Decision |
 |---|---|
 | MVP | Items 1–11 of README §13: tenancy, auth/permissions, school CRM, approved discovery, existing WhatsApp gateway, consent/suppression, AI knowledge base, AI sales agent, demo booking, follow-up automation, basic analytics |
 | Deferred | Subscription billing (Ph12), industry configurability beyond data-driven design (Ph13), Flutter (Ph14), enterprise DB-per-tenant |
 | Compliance | Discovery is never permission to contact. Consent + suppression are enforced at send time, not only at audience selection |
-| WhatsApp | Existing gateway is preserved; we build an adapter only after its documentation is supplied |
+| WhatsApp | Existing WAHA gateway is preserved; adapter is built from the WAHA docs in Phase 5 |
 | AI | Provider-independent; grounded answers only; no invented prices/features/payments |
 
 ## Modules (23) and target phase
@@ -47,10 +54,10 @@ Platform Owner, SaaS Administrator, Tenant Administrator, Tenant Staff, Sales Ma
 9. **Outbox** — Required for DB-change + RabbitMQ-publish consistency (transactional outbox in MySQL).
 
 ## Information needed from the owner (essential only)
-1. **WhatsApp gateway docs**: base URL, auth scheme, send/receive/status endpoints, webhook format + signature method, multi-session model, rate limits, and whether it is WhatsApp Web/QR-based or Business Platform.
-2. **School ERP product info**: feature list, pricing plans, demo & trial process, objection answers, support hours, brand voice (English/Urdu/Roman Urdu).
+1. **WAHA specifics for your deployment**: base URL, API key, which WAHA engine (WEBJS / NOWEB / GOWS) and edition (Core / Plus), webhook secret (HMAC), session names. General API shape will be taken from the WAHA docs.
+2. **Product info (any product, supplied later)**: feature list, pricing plans, demo & trial process, objection answers, support hours, brand voice (English/Urdu/Roman Urdu).
 3. **Google Places API key** availability (or other authorized discovery sources).
-4. **LLM provider preference** (and key) and embedding model.
+4. **Claude API key** (decided) and an **embedding provider/model** for RAG.
 5. **Payment methods** used in Pakistan for subscriptions (bank transfer, JazzCash/Easypaisa, card gateway) so Phase 10 can design the verifier.
 6. **Hosting target** (VPS size/provider) for Phase 15 sizing.
 7. Confirmation of approach to **marketing consent** for Pakistani schools (opt-in source expectations).

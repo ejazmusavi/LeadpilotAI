@@ -4,8 +4,8 @@ Every integration sits behind an Application-layer port with an Infrastructure a
 
 | Integration | Port | Phase | Status / contract |
 |---|---|---|---|
-| Existing WhatsApp gateway | `IWhatsAppGateway` | 5 | **Blocked on documentation** from owner |
-| LLM provider | `IAIProvider` | 7 | Provider TBD |
+| WAHA WhatsApp gateway | `IWhatsAppGateway` | 5 | Owner decision: WAHA. Adapter built from WAHA docs in Phase 5 |
+| LLM provider | `IAIProvider` | 7 | **Claude API** (owner decision) |
 | Embeddings | `IEmbeddingProvider` | 7 | Provider/model TBD |
 | Qdrant | `IVectorStore` | 7 | Default; swappable |
 | Google Places API | `IDiscoveryConnector` | 4 | Needs API key; obey ToS (field masks, caching/retention limits, attribution) |
@@ -16,7 +16,10 @@ Every integration sits behind an Application-layer port with an Infrastructure a
 | Email (future) | `IEmailSender` | later | — |
 | Calendar/meeting links | `IMeetingLinkProvider` | 10 | Optional |
 
-## WhatsApp gateway (Phase 5)
+## WhatsApp gateway — WAHA (Phase 5)
+WAHA is a self-hosted HTTP wrapper around WhatsApp **Web** engines (not the official Business Platform). So the account-risk section below applies in full: conservative rate limits, consent gate, auto-pause on failure signals. Phase 5 starts by reading the WAHA docs for sessions, send endpoints, message/ack events, webhook HMAC signing and engine differences, and recording the findings here before coding.
+
+### Original information checklist
 **Do not assume endpoints or payloads.** Information required before coding:
 1. Base URL(s), environments, authentication (API key/bearer/HMAC) and rotation.
 2. Endpoints: send text, send template/media, message status, mark-read, list accounts/sessions, account status, connect (QR/pairing), disconnect.

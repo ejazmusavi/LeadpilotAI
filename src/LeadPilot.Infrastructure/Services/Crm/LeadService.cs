@@ -1,4 +1,5 @@
 using LeadPilot.Application.Abstractions;
+using LeadPilot.Application.Campaigns;
 using LeadPilot.Application.Common;
 using LeadPilot.Application.Contracts;
 using LeadPilot.Application.Crm;
@@ -13,7 +14,7 @@ using Microsoft.Extensions.Options;
 
 namespace LeadPilot.Infrastructure.Services.Crm;
 
-public sealed class LeadService(CrmContext crm, DuplicateDetector duplicates, ILeadScorer scorer, IPipelineService pipelines, IOptions<CrmOptions> options, ILogger<LeadService> logger) : ILeadService
+public sealed class LeadService(CrmContext crm, DuplicateDetector duplicates, ILeadScorer scorer, IPipelineService pipelines, IOptions<CrmOptions> options, ICampaignEvents campaigns, ILogger<LeadService> logger) : ILeadService
 {
     private static readonly LeadSourceType[] ClientSourceTypes = [LeadSourceType.Manual, LeadSourceType.Api, LeadSourceType.Referral, LeadSourceType.Website, LeadSourceType.Other];
 
@@ -231,9 +232,21 @@ public sealed class LeadService(CrmContext crm, DuplicateDetector duplicates, IL
             var error = await ApplyStage(lead, stageId, ct);
             if (error is not null) return Result.Failure<LeadDto>(error);
             await crm.Db.SaveChangesAsync(ct);
+            await FlushStageEventsAsync(ct);
             await scorer.RescoreAsync([id], ct);
             return await GetAsync(id, ct);
         }, logger);
+
+    /// <summary>Tells campaign tracking about stage changes that were just saved (a real CRM event that may be attributed to a campaign). Never fails the CRM operation.</summary>
+    private async Task FlushStageEventsAsync(CancellationToken ct)
+    {
+        var changes = crm.StageChanges.ToList(); crm.StageChanges.Clear();
+        foreach (var c in changes)
+        {
+            try { await campaigns.OnLeadStageChangedAsync(c.LeadId, c.FromStageId, c.ToStageId, c.ActivityId, ct); }
+            catch (Exception ex) { logger.LogWarning(ex, "Campaign tracking of a stage change failed for lead {LeadId}", c.LeadId); }
+        }
+    }
 
     /// <summary>Moves a tracked lead to a stage of its own pipeline, recording activity + audit. Caller saves.</summary>
     private async Task<Error?> ApplyStage(Lead lead, Guid stageId, CancellationToken ct)
@@ -244,8 +257,10 @@ public sealed class LeadService(CrmContext crm, DuplicateDetector duplicates, IL
         if (target.PipelineId != lead.PipelineId) return Error.Validation("That stage belongs to a different pipeline.");
         if (target.Id == lead.PipelineStageId) return null;
         var from = await crm.Db.PipelineStages.AsNoTracking().Where(s => s.Id == lead.PipelineStageId && s.TenantId == tenantId).Select(s => s.Name).FirstOrDefaultAsync(ct) ?? "?";
+        var fromStageId = lead.PipelineStageId;
         lead.MoveToStage(lead.PipelineId, target.Id, crm.Now, crm.Actor);
-        crm.Activity(lead.Id, LeadActivityType.StageChanged, $"Stage changed from {from} to {target.Name}.", new { from = lead.PipelineStageId, to = target.Id, fromName = from, toName = target.Name });
+        var activityId = crm.Activity(lead.Id, LeadActivityType.StageChanged, $"Stage changed from {from} to {target.Name}.", new { from = lead.PipelineStageId, to = target.Id, fromName = from, toName = target.Name });
+        crm.StageChanges.Add(new StageChange(lead.Id, fromStageId, target.Id, activityId));
         crm.Record("Lead.StageChanged", "Lead", lead.Id, $"Lead '{lead.Name}' moved from '{from}' to '{target.Name}'.");
         return null;
     }
@@ -417,6 +432,7 @@ public sealed class LeadService(CrmContext crm, DuplicateDetector duplicates, IL
         {
             crm.Record(auditAction, "Lead", Guid.Empty, $"{auditAction}: {touched.Count} of {ids.Count} lead(s) changed.");
             await crm.Db.SaveChangesAsync(ct);
+            await FlushStageEventsAsync(ct);
             await scorer.RescoreAsync(touched, ct);
         }
         return Done();

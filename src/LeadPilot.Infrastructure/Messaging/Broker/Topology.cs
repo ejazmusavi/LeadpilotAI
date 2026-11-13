@@ -1,3 +1,4 @@
+using LeadPilot.Application.Campaigns;
 using LeadPilot.Application.Messaging;
 using RabbitMQ.Client;
 
@@ -16,6 +17,7 @@ public static class MessagingTopology
     [
         new($"{o.Prefix}.inbound", "messaging.inbound", [MessagingEventTypes.MessageReceived]),
         new($"{o.Prefix}.status", "messaging.status", [MessagingEventTypes.MessageStatusChanged, MessagingEventTypes.AccountStatusChanged]),
+        new($"{o.Prefix}.campaigns", "campaigns.events", [CampaignEventTypes.RecipientChanged, CampaignEventTypes.StatusChanged]),
     ];
 
     /// <summary>

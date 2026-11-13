@@ -147,10 +147,11 @@ public static class WahaEvents
 
 public static class MessagingKit
 {
-    public static void RegisterTestServices(IServiceCollection s, OffsetClock clock, RecordingMessagingScheduler scheduler)
+    public static void RegisterTestServices(IServiceCollection s, OffsetClock clock, RecordingMessagingScheduler scheduler, RecordingCampaignScheduler? campaigns = null)
     {
         s.RemoveAll<IClock>(); s.AddSingleton<IClock>(clock);
         s.RemoveAll<IMessagingJobScheduler>(); s.AddSingleton<IMessagingJobScheduler>(scheduler);
+        if (campaigns is not null) { s.RemoveAll<LeadPilot.Application.Campaigns.ICampaignJobScheduler>(); s.AddSingleton<LeadPilot.Application.Campaigns.ICampaignJobScheduler>(campaigns); }
     }
 
     public static WorkerHarness BuildWorker(AppFixture app, bool realBroker = false)
@@ -159,7 +160,7 @@ public static class MessagingKit
         b.Configuration.AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:Default"] = Environment.GetEnvironmentVariable("ConnectionStrings__Default"), ["Discovery:Hangfire:PollSeconds"] = "1" });
         b.Services.AddApplication(); b.Services.AddInfrastructure(b.Configuration, b.Environment); b.Services.AddWorkerServices(b.Configuration);
         var publisher = new InMemoryPublisher();
-        RegisterTestServices(b.Services, app.Clock, app.Messaging);
+        RegisterTestServices(b.Services, app.Clock, app.Messaging, app.Campaigns);
         if (!realBroker) { b.Services.RemoveAll<IEventPublisher>(); b.Services.AddSingleton<IEventPublisher>(publisher); }
         return new WorkerHarness { Host = b.Build(), Publisher = publisher };
     }
@@ -284,7 +285,7 @@ public static class MessagingKit
         {
             var f = new ConnectionFactory { HostName = Environment.GetEnvironmentVariable(RequiresRabbitMqFactAttribute.EnvVar)!, UserName = "guest", Password = "guest" };
             await using var conn = await f.CreateConnectionAsync(); await using var ch = await conn.CreateChannelAsync();
-            foreach (var q in new[] { "inbound", "status" })
+            foreach (var q in new[] { "inbound", "status", "campaigns" })
             {
                 foreach (var name in new[] { $"{prefix}.{q}", $"{prefix}.{q}.dlq" }.Concat(Enumerable.Range(1, 8).Select(i => $"{prefix}.{q}.retry.{i}")))
                     try { await ch.QueueDeleteAsync(name); } catch { /* not declared */ }

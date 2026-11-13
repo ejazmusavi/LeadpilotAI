@@ -1,5 +1,6 @@
 using System.Reflection;
 using LeadPilot.Application.Abstractions;
+using LeadPilot.Domain.Campaigns;
 using LeadPilot.Domain.Common;
 using LeadPilot.Domain.Crm;
 using LeadPilot.Domain.Discovery;
@@ -76,6 +77,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<ProcessedMessage> ProcessedMessages => Set<ProcessedMessage>();
     public DbSet<ChannelAccountNotification> ChannelAccountNotifications => Set<ChannelAccountNotification>();
+
+    // Campaigns (Phase 6)
+    public DbSet<Campaign> Campaigns => Set<Campaign>();
+    public DbSet<CampaignAudienceSnapshot> CampaignAudienceSnapshots => Set<CampaignAudienceSnapshot>();
+    public DbSet<CampaignRecipient> CampaignRecipients => Set<CampaignRecipient>();
+    public DbSet<CampaignExecutionLog> CampaignExecutionLogs => Set<CampaignExecutionLog>();
+    public DbSet<CampaignStatsRollup> CampaignStatsRollups => Set<CampaignStatsRollup>();
+    public DbSet<CampaignConversion> CampaignConversions => Set<CampaignConversion>();
+    public DbSet<CampaignUsageEntry> CampaignUsageEntries => Set<CampaignUsageEntry>();
+    public DbSet<CampaignTenantSettings> CampaignTenantSettings => Set<CampaignTenantSettings>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -220,6 +231,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
         CrmModel.Configure(builder);
         DiscoveryModel.Configure(builder);
         MessagingModel.Configure(builder);
+        CampaignModel.Configure(builder);
 
         // Every tenant-owned entity: mandatory FK to Tenant (restrict), indexed TenantId and the global tenant filter.
         foreach (var type in builder.Model.GetEntityTypes().Select(e => e.ClrType).Where(t => typeof(ITenantOwned).IsAssignableFrom(t)).ToList())

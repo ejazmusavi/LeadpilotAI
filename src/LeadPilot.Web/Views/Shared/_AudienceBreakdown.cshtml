@@ -1,0 +1,9 @@
+@model LeadPilot.Application.Campaigns.AudiencePreviewDto
+<div class="row g-3">
+    <div class="col-12 col-lg-5"><div class="card h-100"><div class="card-header">Why contacts are excluded</div>
+        @if (Model.Breakdown.Count == 0) { <div class="card-body text-muted small">Nobody is excluded.</div> }
+        else { <ul class="list-group list-group-flush">@foreach (var b in Model.Breakdown) { <li class="list-group-item d-flex justify-content-between"><span class="small">@b.Explanation</span><span class="badge text-bg-secondary">@b.Count</span></li> }</ul> }</div></div>
+    <div class="col-12 col-lg-7"><div class="card h-100"><div class="card-header">Sample messages</div>
+        @if (Model.Samples.Count == 0) { <div class="card-body text-muted small">No recipients to show.</div> }
+        else { <div class="list-group list-group-flush">@foreach (var s in Model.Samples) { <div class="list-group-item"><div class="small text-muted">@s.LeadName · @s.MaskedDestination</div>@if (s.Problem is not null) { <div class="text-danger small">@s.Problem</div> } else if (s.RenderedMessage is not null) { <div class="small" style="white-space:pre-wrap">@s.RenderedMessage</div> }</div> }</div> }</div></div>
+</div>

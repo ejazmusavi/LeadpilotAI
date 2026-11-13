@@ -42,5 +42,8 @@ Build green · unit + integration tests green (incl. tenant-isolation tests for 
 | Scope creep | README Rule 5/10; changes to stack require approval |
 
 
+## Status after Phase 6
+Phase 6 (campaigns) is **built and tested against the fake WAHA, real MySQL, real RabbitMQ and a real Hangfire server; not verified against a live WAHA instance**. Details and limits: PROGRESS.md. Next: Phase 7 (AI agent) — not started.
+
 ## Status after Phase 5
 Phase 5 (WhatsApp gateway via WAHA) is **built and tested against a fake WAHA and a real RabbitMQ/MySQL; not verified against a live WAHA instance** (no instance available, owner runbook in DEVELOPMENT.md). Docker/compose remains unverified. Phase 6 (campaigns) may use the outbound pipeline (`IOutboundQueueService`, eligibility gate, caps); Phase 7/8 consume the `ai.reply.requested` event. Not started.

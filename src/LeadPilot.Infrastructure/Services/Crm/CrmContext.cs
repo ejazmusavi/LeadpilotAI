@@ -21,6 +21,8 @@ public sealed class CrmContext(AppDbContext db, ITenantContext tenant, ICurrentU
     private bool _defaultsEnsured;
 
     public AppDbContext Db => db;
+    /// <summary>Stage changes applied in this unit of work, announced to campaign tracking once they are saved.</summary>
+    public List<StageChange> StageChanges { get; } = [];
     public Guid TenantId => tenant.RequireTenantId();
     public DateTime Now => clock.UtcNow;
     public Guid? UserId => user.UserId;
@@ -37,8 +39,13 @@ public sealed class CrmContext(AppDbContext db, ITenantContext tenant, ICurrentU
         return _countryCode;
     }
 
-    public void Activity(Guid leadId, LeadActivityType type, string summary, object? payload = null) =>
-        db.LeadActivities.Add(LeadActivity.Create(TenantId, leadId, type, summary, payload is null ? null : JsonSerializer.Serialize(payload), UserId, Now));
+    /// <summary>Adds a lead activity (saved with the caller's SaveChanges) and returns its id.</summary>
+    public Guid Activity(Guid leadId, LeadActivityType type, string summary, object? payload = null)
+    {
+        var a = LeadActivity.Create(TenantId, leadId, type, summary, payload is null ? null : JsonSerializer.Serialize(payload), UserId, Now);
+        db.LeadActivities.Add(a);
+        return a.Id;
+    }
 
     public void Record(string action, string entityType, Guid id, string summary) =>
         audit.Record(new AuditEntry(action, entityType, id.ToString(), summary));
@@ -86,6 +93,8 @@ public sealed class CrmContext(AppDbContext db, ITenantContext tenant, ICurrentU
         return value.Length <= 4 ? "****" : value[..Math.Min(4, value.Length - 4)] + "****" + value[^3..];
     }
 }
+
+public sealed record StageChange(Guid LeadId, Guid FromStageId, Guid ToStageId, Guid ActivityId);
 
 internal static class CrmFlow
 {

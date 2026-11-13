@@ -57,6 +57,8 @@ public interface ISuppressionService
 public interface IContactEligibilityService
 {
     Task<EligibilityDecision> CheckAsync(Guid contactId, ConsentChannel channel, ConsentPurpose purpose, CancellationToken ct = default);
+    /// <summary>The same decision as <see cref="CheckAsync"/> for many contacts at once (one handful of queries per call; same rule object). Used to scan audiences without a query storm. Unknown ids answer ContactNotFound.</summary>
+    Task<IReadOnlyDictionary<Guid, EligibilityDecision>> CheckManyAsync(IReadOnlyCollection<Guid> contactIds, ConsentChannel channel, ConsentPurpose purpose, CancellationToken ct = default);
     /// <summary>Contacts that pass the gate, computed in the database: suppressed, unconsented, revoked, invalid, removed and archived-lead contacts never appear.</summary>
     Task<PagedResult<EligibleContactDto>> QueryAudienceAsync(AudienceQuery query, CancellationToken ct = default);
 }

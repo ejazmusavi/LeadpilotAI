@@ -161,3 +161,23 @@ Cost: **one** Text Search request (pageSize 5, Enterprise SKU because the field 
 
 ## Tests for Phase 5
 `dotnet test` as before. Broker tests need a RabbitMQ: set `LEADPILOT_TEST_RABBITMQ=<host>` (e.g. `localhost`, default guest/guest; otherwise they are skipped and reported as skipped). The WAHA fake is test-only (`FakeWahaServer`).
+
+## Configuration added in Phase 6
+| Key | Where | Meaning |
+|---|---|---|
+| `Campaigns:ScanLimit` (20000) / `PageSize` (200) | Web, Api, Worker | Audience scan limit and page size (streamed, never all in memory). |
+| `Campaigns:DefaultMonthlyMessageLimit` (1000) | all | Used when a workspace sets no monthly limit in the campaign settings. |
+| `Campaigns:LeaseSeconds` (120) / `StaleTickMinutes` (3) | Worker | Tick lease; a Running campaign nobody ticked for this long is pushed again by the sweep. |
+| `Campaigns:SampleSize` (5) | all | Sample messages shown in a preview. |
+Workspace policy (cool-down, approval, four-eyes, attribution window, failure threshold, opt-out text, monthly limit, test numbers, kill switch) is edited under **Campaigns → Campaign settings**.
+
+Hangfire queue `campaigns` is processed by the Worker; recurring job `campaign-sweep` (every minute) is registered next to the messaging jobs. RabbitMQ gets a third consumer queue `{Prefix}.campaigns` (+ retry/DLQ).
+
+## Running a campaign locally
+1. Connect a WhatsApp account (Phase 5 runbook) and create a template of the **Marketing** category.
+2. Record marketing consent for contacts (or import with consent) — nobody without consent is ever messaged.
+3. Campaigns → New campaign: template, account, audience (watch the live preview and the exclusion reasons), limits. Save draft → Dry run → Submit (→ approval if the workspace requires it) → Start now / wait for the schedule.
+4. Add your own phone under *Campaign settings → Test numbers* and use *Send test* first. Start with a tiny audience on a disposable number.
+5. Pause, resume, cancel or use the workspace **kill switch** at any time.
+
+Tests: `CampaignKit` (integration) provides `CampaignWorld` (a tenant with a connected fake-WAHA account, a template and a worker harness that ticks and runs the Phase 5 send jobs deterministically with an adjustable clock) and a recording campaign scheduler. Two tests use the real Hangfire server and the real broker. Migration: `Phase6Campaigns` is the only new migration; `CampaignMigrationTests` upgrades a Phase 5 database with data.

@@ -44,6 +44,7 @@ public sealed class AppFixture : IAsyncLifetime
     public FakeScript Script { get; } = new();
     public RecordingScheduler Scheduler { get; } = new();
     public RecordingMessagingScheduler Messaging { get; } = new();
+    public RecordingCampaignScheduler Campaigns { get; } = new();
     public OffsetClock Clock { get; } = new();
     public FakeWahaServer Waha { get; private set; } = default!;
     /// <summary>Per-run cache for expensive shared test data (a tenant is limited to 5 WhatsApp accounts, so tests share one).</summary>
@@ -107,7 +108,7 @@ public sealed class AppFixture : IAsyncLifetime
             s.RemoveAll<IEmailSender>();
             s.AddSingleton<IEmailSender>(Outbox);
             DiscoveryKit.RegisterTestServices(s, Script, Scheduler);   // TEST-ONLY fake connector, recording scheduler, no-network website enricher
-            MessagingKit.RegisterTestServices(s, Clock, Messaging);    // TEST-ONLY adjustable clock and recording job scheduler (jobs are run by the tests, deterministically)
+            MessagingKit.RegisterTestServices(s, Clock, Messaging, Campaigns);    // TEST-ONLY adjustable clock and recording job scheduler (jobs are run by the tests, deterministically)
         });
         Web = new WebApplicationFactory<Program>().WithWebHostBuilder(UseOutbox);
         Web.CreateClient().Dispose(); // boots the app: migrates + seeds the catalog, platform tenant and platform owner

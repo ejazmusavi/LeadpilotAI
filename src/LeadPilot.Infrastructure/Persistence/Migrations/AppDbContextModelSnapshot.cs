@@ -19,6 +19,667 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
                 .HasAnnotation("ProductVersion", "10.0.15")
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
 
+            modelBuilder.Entity("LeadPilot.Domain.Campaigns.Campaign", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime?>("ApprovedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid?>("ApprovedByUserId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<int>("AttributionWindowDays")
+                        .HasColumnType("int");
+
+                    b.Property<string>("AudienceJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("AudienceVersion")
+                        .HasColumnType("int");
+
+                    b.Property<int>("BatchSize")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("CancelledAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid?>("CancelledByUserId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<Guid?>("ChannelAccountId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int?>("CooldownDays")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<int?>("DailyLimit")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<string>("FailureReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<int?>("FailureThresholdPercent")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("FollowUpDelayDays")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IncludeOptOutFooter")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<DateTime?>("LastTickAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTime?>("LeaseUntilUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("MaxIntervalSeconds")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MaxRecipients")
+                        .HasColumnType("int");
+
+                    b.Property<string>("MessageBodySnapshot")
+                        .HasColumnType("text");
+
+                    b.Property<int>("MinIntervalSeconds")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("varchar(150)");
+
+                    b.Property<DateTime?>("NextRunAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("OptOutFooterSnapshot")
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<Guid?>("ParentCampaignId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("PauseReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("varchar(300)");
+
+                    b.Property<DateTime?>("PausedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<bool>("PausedAutomatically")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("RejectedReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<string>("ScheduleJobId")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("ScheduleTimeZone")
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<DateTime?>("ScheduledAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid?>("SnapshotId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime?>("StartedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<DateTime?>("SubmittedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid?>("SubmittedByUserId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid?>("TemplateId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChannelAccountId");
+
+                    b.HasIndex("ParentCampaignId");
+
+                    b.HasIndex("TemplateId");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("TenantId", "CreatedAtUtc");
+
+                    b.HasIndex("TenantId", "ParentCampaignId");
+
+                    b.HasIndex("TenantId", "Status", "ScheduledAtUtc");
+
+                    b.ToTable("Campaigns", (string)null);
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Campaigns.CampaignAudienceSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<int>("AudienceVersion")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("CampaignId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<int>("Candidates")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("DefinitionJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Excluded")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ExclusionBreakdownJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Recipients")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<DateTime>("TakenAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid?>("TakenByUserId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<bool>("Truncated")
+                        .HasColumnType("tinyint(1)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CampaignId");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("TenantId", "CampaignId");
+
+                    b.ToTable("CampaignAudienceSnapshots", (string)null);
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Campaigns.CampaignConversion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid>("CampaignId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("Detail")
+                        .HasMaxLength(300)
+                        .HasColumnType("varchar(300)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<Guid>("LeadId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid>("RecipientId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("RecordedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid>("ReferenceId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("SentAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("char(36)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CampaignId");
+
+                    b.HasIndex("LeadId");
+
+                    b.HasIndex("RecipientId");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("TenantId", "CampaignId", "OccurredAtUtc");
+
+                    b.HasIndex("TenantId", "RecipientId", "Kind", "ReferenceId")
+                        .IsUnique();
+
+                    b.ToTable("CampaignConversions", (string)null);
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Campaigns.CampaignExecutionLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid?>("ActorUserId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid>("CampaignId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("varchar(60)");
+
+                    b.Property<string>("Level")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("varchar(1000)");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("char(36)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CampaignId");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("TenantId", "CampaignId", "OccurredAtUtc");
+
+                    b.ToTable("CampaignExecutionLogs", (string)null);
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Campaigns.CampaignRecipient", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid>("CampaignId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid>("ContactId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid?>("ConversationId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTime?>("DeliveredAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Destination")
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
+                    b.Property<string>("EligibilityJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("FailedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid>("LeadId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid?>("MessageId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime?>("QueuedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTime?>("ReadAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTime?>("RepliedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("Round")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("SentAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("SnapshotId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<string>("StatusDetail")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<string>("StatusReason")
+                        .HasMaxLength(60)
+                        .HasColumnType("varchar(60)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContactId");
+
+                    b.HasIndex("ConversationId");
+
+                    b.HasIndex("LeadId");
+
+                    b.HasIndex("MessageId");
+
+                    b.HasIndex("SnapshotId");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("CampaignId", "ContactId")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "LeadId");
+
+                    b.HasIndex("TenantId", "MessageId");
+
+                    b.HasIndex("TenantId", "ContactId", "QueuedAtUtc");
+
+                    b.HasIndex("TenantId", "CampaignId", "Status", "Sequence");
+
+                    b.ToTable("CampaignRecipients", (string)null);
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Campaigns.CampaignStatsRollup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid>("CampaignId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<int>("Cancelled")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Conversions")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Delivered")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Failed")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Pending")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Queued")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Read")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Replied")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Sent")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Skipped")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<int>("Total")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CampaignId")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("CampaignStatsRollups", (string)null);
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Campaigns.CampaignTenantSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<bool>("ApprovalRequired")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<int>("AttributionWindowDays")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CooldownDays")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)");
+
+                    b.Property<bool>("CreatorCannotApprove")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<int>("FailureMinSample")
+                        .HasColumnType("int");
+
+                    b.Property<int>("FailureThresholdPercent")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("KillSwitch")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<DateTime?>("KillSwitchAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid?>("KillSwitchByUserId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<int?>("MonthlyMessageLimit")
+                        .HasColumnType("int");
+
+                    b.Property<string>("OptOutFooter")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("TestNumbersJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId")
+                        .IsUnique();
+
+                    b.ToTable("CampaignTenantSettings", (string)null);
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Campaigns.CampaignUsageEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid>("CampaignId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("PeriodKey")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("RecipientId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<int>("Round")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("char(36)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CampaignId");
+
+                    b.HasIndex("RecipientId");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("TenantId", "PeriodKey");
+
+                    b.HasIndex("TenantId", "RecipientId", "Round")
+                        .IsUnique();
+
+                    b.ToTable("CampaignUsageEntries", (string)null);
+                });
+
             modelBuilder.Entity("LeadPilot.Domain.Crm.ConsentRecord", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2176,6 +2837,12 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<Guid?>("CampaignId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid?>("CampaignRecipientId")
+                        .HasColumnType("char(36)");
+
                     b.Property<Guid>("ChannelAccountId")
                         .HasColumnType("char(36)");
 
@@ -2270,6 +2937,8 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CampaignId");
+
                     b.HasIndex("ChannelAccountId");
 
                     b.HasIndex("ContactId");
@@ -2282,8 +2951,12 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Status", "NextAttemptAtUtc");
 
+                    b.HasIndex("TenantId", "CampaignRecipientId");
+
                     b.HasIndex("TenantId", "IdempotencyKey")
                         .IsUnique();
+
+                    b.HasIndex("TenantId", "CampaignId", "Status");
 
                     b.HasIndex("TenantId", "ChannelAccountId", "ExternalMessageId")
                         .IsUnique();
@@ -3348,6 +4021,175 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("LeadPilot.Domain.Campaigns.Campaign", b =>
+                {
+                    b.HasOne("LeadPilot.Domain.Messaging.ChannelAccount", null)
+                        .WithMany()
+                        .HasForeignKey("ChannelAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("LeadPilot.Domain.Campaigns.Campaign", null)
+                        .WithMany()
+                        .HasForeignKey("ParentCampaignId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("LeadPilot.Domain.Messaging.MessageTemplate", null)
+                        .WithMany()
+                        .HasForeignKey("TemplateId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("LeadPilot.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Campaigns.CampaignAudienceSnapshot", b =>
+                {
+                    b.HasOne("LeadPilot.Domain.Campaigns.Campaign", null)
+                        .WithMany()
+                        .HasForeignKey("CampaignId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LeadPilot.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Campaigns.CampaignConversion", b =>
+                {
+                    b.HasOne("LeadPilot.Domain.Campaigns.Campaign", null)
+                        .WithMany()
+                        .HasForeignKey("CampaignId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LeadPilot.Domain.Crm.Lead", null)
+                        .WithMany()
+                        .HasForeignKey("LeadId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LeadPilot.Domain.Campaigns.CampaignRecipient", null)
+                        .WithMany()
+                        .HasForeignKey("RecipientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LeadPilot.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Campaigns.CampaignExecutionLog", b =>
+                {
+                    b.HasOne("LeadPilot.Domain.Campaigns.Campaign", null)
+                        .WithMany()
+                        .HasForeignKey("CampaignId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LeadPilot.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Campaigns.CampaignRecipient", b =>
+                {
+                    b.HasOne("LeadPilot.Domain.Campaigns.Campaign", null)
+                        .WithMany()
+                        .HasForeignKey("CampaignId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LeadPilot.Domain.Crm.Contact", null)
+                        .WithMany()
+                        .HasForeignKey("ContactId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LeadPilot.Domain.Messaging.Conversation", null)
+                        .WithMany()
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("LeadPilot.Domain.Crm.Lead", null)
+                        .WithMany()
+                        .HasForeignKey("LeadId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LeadPilot.Domain.Messaging.Message", null)
+                        .WithMany()
+                        .HasForeignKey("MessageId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("LeadPilot.Domain.Campaigns.CampaignAudienceSnapshot", null)
+                        .WithMany()
+                        .HasForeignKey("SnapshotId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LeadPilot.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Campaigns.CampaignStatsRollup", b =>
+                {
+                    b.HasOne("LeadPilot.Domain.Campaigns.Campaign", null)
+                        .WithMany()
+                        .HasForeignKey("CampaignId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LeadPilot.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Campaigns.CampaignTenantSettings", b =>
+                {
+                    b.HasOne("LeadPilot.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Campaigns.CampaignUsageEntry", b =>
+                {
+                    b.HasOne("LeadPilot.Domain.Campaigns.Campaign", null)
+                        .WithMany()
+                        .HasForeignKey("CampaignId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LeadPilot.Domain.Campaigns.CampaignRecipient", null)
+                        .WithMany()
+                        .HasForeignKey("RecipientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LeadPilot.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("LeadPilot.Domain.Crm.ConsentRecord", b =>
                 {
                     b.HasOne("LeadPilot.Domain.Crm.Contact", null)
@@ -3817,6 +4659,11 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("LeadPilot.Domain.Messaging.Message", b =>
                 {
+                    b.HasOne("LeadPilot.Domain.Campaigns.Campaign", null)
+                        .WithMany()
+                        .HasForeignKey("CampaignId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("LeadPilot.Domain.Messaging.ChannelAccount", null)
                         .WithMany()
                         .HasForeignKey("ChannelAccountId")

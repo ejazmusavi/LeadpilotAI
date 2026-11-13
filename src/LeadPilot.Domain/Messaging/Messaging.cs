@@ -244,6 +244,9 @@ public class Message : Entity, ITenantOwned
     public string? FailureCode { get; private set; }
     public string? FailureMessage { get; private set; }
     public int Version { get; private set; } = 1;
+    /// <summary>Set when the message belongs to a campaign. <see cref="CampaignRecipientId"/> is null for a test send (which is never part of a campaign's audience or statistics).</summary>
+    public Guid? CampaignId { get; private set; }
+    public Guid? CampaignRecipientId { get; private set; }
 
     public static Message Inbound(Guid tenantId, Guid conversationId, Guid accountId, string externalId, string body, DateTime occurredAtUtc, string correlationId, DateTime nowUtc) =>
         new()
@@ -269,6 +272,7 @@ public class Message : Entity, ITenantOwned
     private static string Truncate(string? body) => (body ?? string.Empty).Length > MaxBodyLength ? body![..MaxBodyLength] : body ?? string.Empty;
 
     public void SetContact(Guid contactId) => ContactId = contactId;
+    public void SetCampaign(Guid campaignId, Guid? recipientId) { CampaignId = campaignId; CampaignRecipientId = recipientId; }
 
     // ---- outbound lifecycle (the send runner performs the atomic Queued → Sending claim in SQL; these mirror it for tracked entities) ----
     public void MarkSent(string externalId, DateTime nowUtc)

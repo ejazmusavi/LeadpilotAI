@@ -66,6 +66,14 @@
             @if (perms.Has(PermissionCodes.WebhooksView)) { <a class="nav-link @(Nav("/Webhooks") ? "active" : "")" asp-controller="Webhooks" asp-action="Index">Webhook events</a> }
         </nav>
     }
+    @if (perms.Has(PermissionCodes.CampaignsView))
+    {
+        <div class="nav-section">Campaigns</div>
+        <nav class="nav flex-column px-2">
+            <a class="nav-link @(Nav("/Campaigns") && !Nav("/CampaignSettings") ? "active" : "")" asp-controller="Campaigns" asp-action="Index">Campaigns</a>
+            <a class="nav-link @(Nav("/CampaignSettings") ? "active" : "")" asp-controller="CampaignSettings" asp-action="Index">Campaign settings</a>
+        </nav>
+    }
     @if (perms.Has(PermissionCodes.SuppressionManage))
     {
         <div class="nav-section">Compliance</div>

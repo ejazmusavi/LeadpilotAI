@@ -1,3 +1,4 @@
+using LeadPilot.Application.Campaigns;
 using System.Security.Cryptography;
 using LeadPilot.Application.Abstractions;
 using LeadPilot.Application.Common;
@@ -71,7 +72,7 @@ public static class SendRateFactsLoader
 }
 
 /// <summary>Auto-pause: repeated send failures, a disconnected session, and WhatsApp's own restrictions all end up here, each with a notification the owner sees on the account page.</summary>
-public sealed class AccountHealthService(CrmContext crm, IOptions<MessagingOptions> options, ILogger<AccountHealthService> logger) : IAccountHealthService
+public sealed class AccountHealthService(CrmContext crm, ICampaignEvents campaigns, IOptions<MessagingOptions> options, ILogger<AccountHealthService> logger) : IAccountHealthService
 {
     public async Task RecordSendFailureAsync(Guid accountId, string reason, CancellationToken ct = default)
     {
@@ -79,8 +80,10 @@ public sealed class AccountHealthService(CrmContext crm, IOptions<MessagingOptio
         var account = await db.ChannelAccounts.FirstOrDefaultAsync(a => a.Id == accountId && a.TenantId == tenantId, ct);
         if (account is null) return;
         var failures = account.RegisterFailure(crm.Now);
-        if (failures >= Math.Max(1, options.Value.AutoPauseFailureThreshold) && !account.IsPaused) Pause(account, $"Paused automatically after {failures} failed sends in a row. Last problem: {reason}", NotificationKind.AccountPaused);
+        var paused = false;
+        if (failures >= Math.Max(1, options.Value.AutoPauseFailureThreshold) && !account.IsPaused) { Pause(account, $"Paused automatically after {failures} failed sends in a row. Last problem: {reason}", NotificationKind.AccountPaused); paused = true; }
         await db.SaveChangesAsync(ct);
+        if (paused) await campaigns.OnAccountUnavailableAsync(accountId, account.PauseReason ?? "paused automatically", ct);
     }
 
     public async Task RecordSendSuccessAsync(Guid accountId, CancellationToken ct = default)
@@ -106,7 +109,8 @@ public sealed class AccountHealthService(CrmContext crm, IOptions<MessagingOptio
         var previous = account.ConnectionStatus;
         var changed = account.ApplyConnection(status, s.PhoneE164, s.PushName, null, now);
 
-        if (changed && status is ConnectionStatus.Failed or ConnectionStatus.Stopped && previous == ConnectionStatus.Working)
+        var wentDown = changed && status is ConnectionStatus.Failed or ConnectionStatus.Stopped && previous == ConnectionStatus.Working;
+        if (wentDown)
         {
             if (!account.IsPaused) Pause(account, $"The WhatsApp session is {status.ToString().ToLowerInvariant()} (it was working before). Reconnect it, then resume sending.", NotificationKind.SessionDisconnected);
             else AddNotification(account, NotificationKind.SessionDisconnected, $"The WhatsApp session is {status.ToString().ToLowerInvariant()}.");
@@ -128,6 +132,7 @@ public sealed class AccountHealthService(CrmContext crm, IOptions<MessagingOptio
         else if (account.NewContactBlockedUntilUtc is not null && status == ConnectionStatus.Working) account.BlockNewContacts(null, now);
 
         await db.SaveChangesAsync(ct);
+        if (wentDown) await campaigns.OnAccountUnavailableAsync(accountId, $"the WhatsApp session is {status.ToString().ToLowerInvariant()}", ct);
         logger.LogInformation("Account {AccountId} status {Status}", accountId, status);
     }
 
@@ -144,7 +149,7 @@ public sealed class AccountHealthService(CrmContext crm, IOptions<MessagingOptio
 
 public sealed class ChannelAccountService(
     CrmContext crm, CredentialVault vault, GatewayConnections connections, IWhatsAppGateway gateway, IOptions<WahaOptions> waha,
-    Microsoft.Extensions.Configuration.IConfiguration config, ILogger<ChannelAccountService> logger) : IChannelAccountService
+    ICampaignEvents campaigns, Microsoft.Extensions.Configuration.IConfiguration config, ILogger<ChannelAccountService> logger) : IChannelAccountService
 {
     public const int MaxAccountsPerTenant = 5;
     public const string PublicWebhookBaseSetting = "Messaging:PublicWebhookBaseUrl";
@@ -302,11 +307,16 @@ public sealed class ChannelAccountService(
             if (!acc.IsPaused) acc.Pause(logout ? "Disconnected (WhatsApp unlinked)" : "Disconnected (session stopped)", automatic: false, crm.Now);
             crm.Record("Channel.Disconnected", "ChannelAccount", id, $"'{acc.DisplayName}' {(logout ? "logged out of WhatsApp" : "stopped")}.");
             await crm.Db.SaveChangesAsync(ct);
+            await campaigns.OnAccountUnavailableAsync(id, "the session was disconnected", ct);
             return Result.Success(await ToDtoAsync(acc, ct));
         }, ct);
 
-    public Task<Result<ChannelAccountDto>> PauseAsync(Guid id, CancellationToken ct = default) =>
-        MutateAsync(id, a => { a.Pause("Paused by " + (crm.Actor ?? "a user"), automatic: false, crm.Now); crm.Record("Channel.Paused", "ChannelAccount", id, $"'{a.DisplayName}' paused."); }, ct);
+    public async Task<Result<ChannelAccountDto>> PauseAsync(Guid id, CancellationToken ct = default)
+    {
+        var r = await MutateAsync(id, a => { a.Pause("Paused by " + (crm.Actor ?? "a user"), automatic: false, crm.Now); crm.Record("Channel.Paused", "ChannelAccount", id, $"'{a.DisplayName}' paused."); }, ct);
+        if (r.IsSuccess) await campaigns.OnAccountUnavailableAsync(id, "the account was paused", ct);
+        return r;
+    }
 
     public Task<Result<ChannelAccountDto>> ResumeAsync(Guid id, CancellationToken ct = default) =>
         MutateAsync(id, a =>
@@ -325,6 +335,7 @@ public sealed class ChannelAccountService(
         a.Remove(crm.Now);
         crm.Record("Channel.Removed", "ChannelAccount", id, $"'{a.DisplayName}' removed. Its webhook address no longer accepts events; the WAHA session itself was not touched.");
         await crm.Db.SaveChangesAsync(ct);
+        await campaigns.OnAccountUnavailableAsync(id, "the account was removed", ct);
         return Result.Success();
     }
 

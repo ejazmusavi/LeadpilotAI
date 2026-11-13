@@ -1,5 +1,6 @@
 using System.Text.Json;
 using LeadPilot.Application.Abstractions;
+using LeadPilot.Application.Campaigns;
 using LeadPilot.Application.Contracts;
 using LeadPilot.Application.Crm;
 using LeadPilot.Application.Messaging;
@@ -36,7 +37,7 @@ internal static class ConsumerIdempotency
 /// <c>messaging.auto_create_leads</c> is on), updates the conversation, detects opt-outs (suppression + consent revocation through the Phase 3 services, audited) and publishes the AI extension event.
 /// </summary>
 public sealed class InboundMessageHandler(
-    CrmContext crm, ISuppressionService suppression, IConsentService consent, ITenantSettingsService settings, ILeadService leads, ILogger<InboundMessageHandler> logger) : IMessagingEventHandler
+    CrmContext crm, ISuppressionService suppression, IConsentService consent, ITenantSettingsService settings, ILeadService leads, ICampaignEvents campaigns, ILogger<InboundMessageHandler> logger) : IMessagingEventHandler
 {
     public const string Name = "messaging.inbound";
     public string ConsumerName => Name;
@@ -70,6 +71,8 @@ public sealed class InboundMessageHandler(
             db.OutboxMessages.Add(OutboxMessage.Create(tenantId, MessagingEventTypes.AiReplyRequested, JsonSerializer.Serialize(new AiReplyRequestedPayload(conv.Id, message.Id, conv.ChannelAccountId)), envelope.CorrelationId, envelope.MessageId.ToString(), now));
 
         we.MarkProcessed(now, optedOut ? "opt-out processed" : null);
+        // a reply to a campaign message inside the attribution window (an opt-out is logged, never counted as a reply); staged into the same transaction as the idempotency record
+        await campaigns.StageInboundAsync(conv.Id, message.Id, optedOut, ct);
         await ConsumerIdempotency.CommitAsync(crm, Name, envelope.MessageId, ct);
     }
 
@@ -123,7 +126,7 @@ public sealed class InboundMessageHandler(
 }
 
 /// <summary>Consumer of <c>message.status</c> (acks → monotonic delivery status) and <c>account.status</c> (session state, auto-pause, WhatsApp restrictions).</summary>
-public sealed class StatusEventHandler(CrmContext crm, IAccountHealthService health, IOptions<MessagingOptions> options, ILogger<StatusEventHandler> logger) : IMessagingEventHandler
+public sealed class StatusEventHandler(CrmContext crm, IAccountHealthService health, ICampaignEvents campaigns, IOptions<MessagingOptions> options, ILogger<StatusEventHandler> logger) : IMessagingEventHandler
 {
     public const string Name = "messaging.status";
     public string ConsumerName => Name;
@@ -168,6 +171,7 @@ public sealed class StatusEventHandler(CrmContext crm, IAccountHealthService hea
         if (delivery is not null || p.IsError)
             db.MessageStatusEvents.Add(MessageStatusEvent.Create(tenantId, message.Id, delivery ?? MessageStatus.Failed, "ack", p.Ack, applied, at, now));
         we.MarkProcessed(now, applied ? null : "no change (older or equal status)");
+        if (message.CampaignRecipientId is not null) await campaigns.OnOutboundChangedAsync(message.Id, save: false, ct: ct);   // same transaction as the idempotency record
         await ConsumerIdempotency.CommitAsync(crm, Name, envelope.MessageId, ct);
     }
 

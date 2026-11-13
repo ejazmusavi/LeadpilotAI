@@ -1,5 +1,6 @@
 using System.Text.Json;
 using LeadPilot.Application.Abstractions;
+using LeadPilot.Application.Campaigns;
 using LeadPilot.Application.Contracts;
 using LeadPilot.Application.Crm;
 using LeadPilot.Application.Messaging;
@@ -16,7 +17,17 @@ using TenancyResultFlow = LeadPilot.Infrastructure.Services.Tenancy.ResultFlow;
 namespace LeadPilot.Infrastructure.Messaging.Services;
 
 /// <summary>What the outbound validator needs: either an existing conversation or (contact, account) to open one.</summary>
-internal sealed record QueueRequest(Guid? ConversationId, Guid? ContactId, Guid? AccountId, string? Text, Guid? TemplateId, string? IdempotencyKey, bool ReplyContext);
+internal sealed record QueueRequest(Guid? ConversationId, Guid? ContactId, Guid? AccountId, string? Text, Guid? TemplateId, string? IdempotencyKey, bool ReplyContext)
+{
+    /// <summary>Campaign sends are ALWAYS marketing, even inside a customer-initiated service window: consent is required.</summary>
+    public MessagePurpose? ForcedPurpose { get; init; }
+    public Guid? CampaignId { get; init; }
+    public Guid? CampaignRecipientId { get; init; }
+    /// <summary>The text was rendered by the caller (campaign content builder); <see cref="TemplateId"/> is then only a reference.</summary>
+    public bool TextIsRendered { get; init; }
+    /// <summary>Test send to an allow-listed internal number that is not a contact (always a Service-purpose message labelled as a test; suppression and opt-out still apply).</summary>
+    public string? TestPhoneE164 { get; init; }
+}
 
 /// <summary>
 /// The one place an outbound message is validated and queued. Order: account state → conversation → idempotency → template → compliance (suppression, opt-out, marketing eligibility)
@@ -38,6 +49,10 @@ public sealed class OutboundQueueService(CrmContext crm, IContactEligibilityServ
             account = await db.ChannelAccounts.FirstOrDefaultAsync(a => a.Id == conv.ChannelAccountId && a.TenantId == tenantId, ct);
             if (conv.ContactId is { } ccid) contact = await db.Contacts.AsNoTracking().FirstOrDefaultAsync(c => c.Id == ccid && c.TenantId == tenantId, ct);
         }
+        else if (q.TestPhoneE164 is not null)
+        {
+            account = await db.ChannelAccounts.FirstOrDefaultAsync(a => a.Id == q.AccountId && a.TenantId == tenantId, ct);
+        }
         else
         {
             contact = await db.Contacts.AsNoTracking().FirstOrDefaultAsync(c => c.Id == q.ContactId && c.TenantId == tenantId, ct);
@@ -51,11 +66,12 @@ public sealed class OutboundQueueService(CrmContext crm, IContactEligibilityServ
         string? chatId;
         if (conv is null)
         {
-            chatId = ChatIds.FromE164(contact!.PhoneE164);
-            if (chatId is null) return Result.Failure<Message>(Error.Validation("The contact has no valid phone number."));
+            var phone = q.TestPhoneE164 ?? contact!.PhoneE164;
+            chatId = ChatIds.FromE164(phone);
+            if (chatId is null) return Result.Failure<Message>(Error.Validation(q.TestPhoneE164 is null ? "The contact has no valid phone number." : "The test number is not a valid phone number."));
             conv = await db.Conversations.FirstOrDefaultAsync(c => c.TenantId == tenantId && c.ChannelAccountId == account.Id && c.ExternalChatId == chatId, ct);
-            if (conv is null) { conv = Conversation.Create(tenantId, account.Id, chatId, contact.PhoneE164, contact.Name, now); conv.LinkContact(contact.Id, now); db.Conversations.Add(conv); }
-            else if (conv.ContactId is null) conv.LinkContact(contact.Id, now);
+            if (conv is null) { conv = Conversation.Create(tenantId, account.Id, chatId, phone, contact?.Name, now); if (contact is not null) conv.LinkContact(contact.Id, now); db.Conversations.Add(conv); }
+            else if (conv.ContactId is null && contact is not null) conv.LinkContact(contact.Id, now);
         }
         else chatId = conv.ExternalChatId;
         if (!ChatIds.IsDirectChat(chatId)) return Result.Failure<Message>(Error.Validation("Only direct chats can be messaged."));
@@ -66,7 +82,7 @@ public sealed class OutboundQueueService(CrmContext crm, IContactEligibilityServ
 
         // --- text / template
         var text = q.Text?.Trim();
-        if (q.TemplateId is { } tid)
+        if (q.TemplateId is { } tid && !q.TextIsRendered)
         {
             var template = await db.MessageTemplates.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tid && t.TenantId == tenantId, ct);
             if (template is null) return Result.Failure<Message>(Error.NotFound("Message template"));
@@ -81,7 +97,7 @@ public sealed class OutboundQueueService(CrmContext crm, IContactEligibilityServ
 
         // --- compliance
         var window = OutboundPolicy.ParseWindow(await settings.GetValueAsync(OutboundPolicy.WindowSettingKey, ct));
-        var purpose = OutboundPolicy.PurposeFor(conv.LastInboundAtUtc, now, window);
+        var purpose = q.ForcedPurpose ?? OutboundPolicy.PurposeFor(conv.LastInboundAtUtc, now, window);
         var denied = await CheckComplianceAsync(conv, contact, purpose, ct);
         if (denied is not null) return Result.Failure<Message>(denied);
         if (conv.LastInboundAtUtc is null && account.NewContactBlockedUntilUtc > now)
@@ -92,6 +108,7 @@ public sealed class OutboundQueueService(CrmContext crm, IContactEligibilityServ
         if (limit is not null) return Result.Failure<Message>(limit);
 
         var message = Message.Outbound(tenantId, conv.Id, account.Id, contact?.Id, purpose, text, key, request.CorrelationId ?? Guid.NewGuid().ToString("N"), q.TemplateId, crm.UserId, now);
+        if (q.CampaignId is { } campaignId) message.SetCampaign(campaignId, q.CampaignRecipientId);
         db.Messages.Add(message);
         db.MessageStatusEvents.Add(MessageStatusEvent.Create(tenantId, message.Id, MessageStatus.Queued, "queue", null, true, now, now));
         conv.RegisterOutbound(now, text, now);
@@ -178,7 +195,7 @@ public sealed class OutboundQueueService(CrmContext crm, IContactEligibilityServ
 /// </summary>
 public sealed class OutboundSendRunner(
     CrmContext crm, GatewayConnections connections, IWhatsAppGateway gateway, IContactEligibilityService eligibility, IAccountHealthService health, IMessagingJobScheduler jobs,
-    IOptions<MessagingOptions> options, ILogger<OutboundSendRunner> logger) : IOutboundSendRunner
+    ICampaignSendGuard campaignGuard, ICampaignEvents campaignEvents, IOptions<MessagingOptions> options, ILogger<OutboundSendRunner> logger) : IOutboundSendRunner
 {
     public async Task SendAsync(Guid messageId, CancellationToken ct = default)
     {
@@ -187,6 +204,13 @@ public sealed class OutboundSendRunner(
         if (message is null) { logger.LogWarning("Send job for unknown message {MessageId} ignored", messageId); return; }
         if (message.Status != MessageStatus.Queued) { logger.LogInformation("Message {MessageId} is {Status}; nothing to send", messageId, message.Status); return; }
         if (message.NextAttemptAtUtc is { } due && due > now.AddSeconds(1)) return;   // an early duplicate job: the job scheduled for the due time (or the maintenance sweep) handles it
+
+        // campaign messages: is the campaign still running, the kill switch off, the recipient still waiting for exactly this message? (the guard also records the send-time eligibility decision)
+        if (message.CampaignRecipientId is not null)
+        {
+            var block = await campaignGuard.CheckBeforeSendAsync(message, ct);
+            if (block is not null) { await FailAsync(messageId, block.Code, block.Reason, ct); return; }
+        }
 
         var loaded = await connections.LoadAsync(message.ChannelAccountId, tracked: false, ct);
         if (loaded is null) { await FailAsync(messageId, "account_missing", "The WhatsApp account no longer exists.", ct); return; }
@@ -345,7 +369,17 @@ public sealed class OutboundSendRunner(
             // the gateway id is already attached to another row of this account: keep this message Unknown for a person instead of double-linking
             db.ChangeTracker.Clear();
             await MarkUnknownAsync(messageId, "The gateway id was already linked to another message.", ct);
+            return;
         }
+        await NotifyCampaignAsync(m.CampaignRecipientId, messageId, ct);
+    }
+
+    /// <summary>Campaign messages report their outcome to campaign tracking (recipient status, usage ledger, rollup event). Best effort: the campaign tick repairs anything missed.</summary>
+    private async Task NotifyCampaignAsync(Guid? recipientId, Guid messageId, CancellationToken ct)
+    {
+        if (recipientId is null) return;
+        try { await campaignEvents.OnOutboundChangedAsync(messageId, ct: ct); }
+        catch (Exception ex) { logger.LogWarning(ex, "Campaign tracking of message {MessageId} failed; the campaign tick will repair it", messageId); }
     }
 
     private async Task ApplyDeliveryAsync(Guid messageId, MessageStatus status, DateTime at, int? ack, CancellationToken ct)
@@ -356,6 +390,7 @@ public sealed class OutboundSendRunner(
         var applied = m.ApplyDelivery(status, at);
         db.MessageStatusEvents.Add(MessageStatusEvent.Create(tenantId, messageId, status, "reconcile", ack, applied, at, crm.Now));
         await db.SaveChangesAsync(ct);
+        await NotifyCampaignAsync(m.CampaignRecipientId, messageId, ct);
     }
 
     private async Task MarkUnknownAsync(Guid messageId, string reason, CancellationToken ct)
@@ -380,5 +415,6 @@ public sealed class OutboundSendRunner(
         db.MessageStatusEvents.Add(MessageStatusEvent.Create(tenantId, messageId, MessageStatus.Failed, "send", null, true, now, now));
         crm.Record("Message.Failed", "Message", messageId, $"Message not sent ({code}): {reason}");
         await db.SaveChangesAsync(ct);
+        await NotifyCampaignAsync(m.CampaignRecipientId, messageId, ct);
     }
 }

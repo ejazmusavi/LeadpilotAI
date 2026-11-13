@@ -10,10 +10,10 @@ Rule: implement one phase at a time; no phase starts until the previous meets it
 | 2 | Tenancy, users, roles, permissions, audit, isolation tests | 1 | — |
 | 3 | CRM: leads, contacts, pipeline, import/export, scoring, consent, suppression | 2 | — |
 | 4 | Discovery & enrichment (Google Places, websites, imports) | 3 | Google Places key |
-| 5 | WhatsApp gateway adapter, conversations, webhooks, outbox/RabbitMQ | 3 | **Gateway docs** |
+| 5 | WhatsApp gateway adapter, conversations, webhooks, outbox/RabbitMQ | 3 | WAHA docs + deployment details |
 | 6 | Campaigns, eligibility at send time, Hangfire scheduling | 3, 5 | — |
-| 7 | AI engine, knowledge base, RAG | 2, 5 | LLM + embedding provider, ERP product info |
-| 8 | AI sales agent, controlled tools, human handoff | 7, 3, 5 | ERP pricing/features, demo process |
+| 7 | AI engine, knowledge base, RAG | 2, 5 | Claude API key, embedding provider, product info (any product) |
+| 8 | AI sales agent, controlled tools, human handoff | 7, 3, 5 | Product pricing/features, demo process |
 | 9 | Workflow engine, follow-ups | 6, 8 | — |
 | 10 | Demo, trial, conversion, payment verification | 8, 9 | Payment method info |
 | 11 | Analytics & reports | 3–10 (grows incrementally) | — |

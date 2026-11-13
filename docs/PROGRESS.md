@@ -23,10 +23,10 @@
 
 ### Environment observations
 - Repository contained only README.md at start.
-- `dotnet` SDK is **not installed** in this sandbox; Phase 1 needs .NET 10 SDK (and Docker) to verify build/migrations. Not yet verified whether it can be installed here.
+- (Resolved in Phase 1) .NET 10 SDK was installed in the sandbox after allowing the SDK/NuGet hosts; MySQL 8.0.46 installed via apt for verification. No Docker daemon is available here.
 
 ### Needed from owner before the relevant phase
-WhatsApp gateway documentation (Phase 5) · School ERP product/pricing/demo info (Phase 7–8) · Google Places key (Phase 4) · LLM/embedding provider (Phase 7) · payment method info (Phase 10) · hosting target (Phase 15). See PROJECT_OVERVIEW.md.
+WAHA deployment details: URL, API key, engine, webhook secret (Phase 5) · product/pricing/demo info for any product (Phase 7–8) · Google Places key (Phase 4) · Claude API key (decided) + embedding provider (Phase 7) · payment method info (Phase 10) · hosting target (Phase 15). See PROJECT_OVERVIEW.md.
 
 ## Phase 1 — Project Foundation
 **Status: Partially completed** — everything verified in this sandbox passed; Docker environment could **not** be verified (no Docker daemon here).

@@ -1,0 +1,33 @@
+@model TemplatesViewModel
+@using LeadPilot.Domain.Messaging
+@{ ViewData["Title"] = "Message templates"; }
+<div class="d-flex flex-wrap justify-content-between align-items-start mb-3 gap-2">
+    <div><h1 class="h3 mb-1">Message templates</h1><p class="text-muted mb-0">Reusable texts with placeholders. WhatsApp via WAHA has no official templates: LeadPilot fills the placeholders and sends the result as a normal message.</p></div>
+    @if (Model.CanManage) { <a asp-action="New" class="btn btn-primary">New template</a> }
+</div>
+@if (Model.Templates.Count == 0)
+{
+    <div class="card"><partial name="_EmptyState" model='("No templates yet", Model.CanManage ? "Create a template, for example a greeting that uses {{first_name}}." : "Ask an administrator to create templates.")' /></div>
+}
+else
+{
+    <div class="card"><div class="table-responsive"><table class="table align-middle mb-0">
+        <thead><tr><th>Name</th><th>Text</th><th>Category</th><th>Status</th><th></th></tr></thead><tbody>
+        @foreach (var t in Model.Templates)
+        {
+            <tr>
+                <td class="fw-semibold">@t.Name</td><td class="small" style="white-space:pre-wrap;max-width:32rem">@t.Body</td><td>@t.Category</td>
+                <td>@if (t.IsActive) { <span class="badge text-bg-success">On</span> } else { <span class="badge text-bg-secondary">Off</span> }</td>
+                <td class="text-end text-nowrap">
+                    @if (Model.CanManage)
+                    {
+                        <a asp-action="Edit" asp-route-id="@t.Id" class="btn btn-sm btn-outline-primary">Edit</a>
+                        <form asp-action="Toggle" asp-route-id="@t.Id" method="post" class="d-inline"><input type="hidden" name="active" value="@((!t.IsActive).ToString().ToLowerInvariant())" /><button type="submit" class="btn btn-sm btn-outline-secondary">@(t.IsActive ? "Switch off" : "Switch on")</button></form>
+                        <form asp-action="Delete" asp-route-id="@t.Id" method="post" class="d-inline"><button type="submit" class="btn btn-sm btn-outline-danger" data-confirm="Delete the template '@t.Name'?" data-confirm-label="Delete">Delete</button></form>
+                    }
+                </td>
+            </tr>
+        }
+        </tbody></table></div></div>
+}
+<p class="small text-muted mt-3">Placeholders: @string.Join(", ", Model.KnownVariables.Select(v => "{{" + v + "}}")). A template cannot be used for a contact that has no value for a placeholder it contains.</p>

@@ -1,0 +1,83 @@
+# Development stack. Copy docker/.env.example to docker/.env first.
+#   docker compose -f docker/docker-compose.yml --env-file docker/.env up --build
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set in docker/.env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-leadpilot}
+      MYSQL_USER: ${MYSQL_USER:-leadpilot}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set in docker/.env}
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_ai_ci"]
+    volumes: [mysql-data:/var/lib/mysql]
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    # Not published to the host: only other containers can reach the database.
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-leadpilot}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?set in docker/.env}
+    volumes: [rabbitmq-data:/var/lib/rabbitmq]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+    # Not published to the host (management UI included): only other containers can reach the broker.
+
+  web:
+    build: { context: .., dockerfile: docker/Dockerfile, args: { PROJECT: LeadPilot.Web } }
+    restart: unless-stopped
+    depends_on: { mysql: { condition: service_healthy }, rabbitmq: { condition: service_healthy } }
+    environment: &appenv
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      ConnectionStrings__Default: "Server=mysql;Port=3306;Database=${MYSQL_DATABASE:-leadpilot};User=${MYSQL_USER:-leadpilot};Password=${MYSQL_PASSWORD};"
+      Database__MigrateOnStartup: ${MIGRATE_ON_STARTUP:-true}
+      Seed__AdminEmail: ${SEED_ADMIN_EMAIL:-}
+      Seed__AdminPassword: ${SEED_ADMIN_PASSWORD:-}
+      # Public URL of the dashboard: used for links in invitation e-mails (Api and Web).
+      App__PublicWebUrl: ${PUBLIC_WEB_URL:-http://localhost:8080}
+      # Shared key ring so encrypted tenant secrets can be read by every app.
+      DataProtection__KeysPath: /keys
+      # Uploaded import files (shared so a file uploaded in the dashboard can be run through the API and vice versa).
+      Crm__StorageRoot: /data/files
+      # Messaging: broker, and the address WAHA must be able to reach the Api on (webhooks). Set PUBLIC_API_URL to the Api's public https address.
+      RabbitMq__Host: rabbitmq
+      RabbitMq__UserName: ${RABBITMQ_USER:-leadpilot}
+      RabbitMq__Password: ${RABBITMQ_PASSWORD:?set in docker/.env}
+      Messaging__PublicWebhookBaseUrl: ${PUBLIC_API_URL:-http://localhost:8081}
+      # false (default) = a tenant-supplied WAHA address must be public. Set true ONLY if WAHA runs next to the app on a private network.
+      Messaging__Waha__AllowPrivateHosts: ${WAHA_ALLOW_PRIVATE_HOSTS:-false}
+    volumes: [dp-keys:/keys, crm-files:/data/files]
+    ports: ["8080:8080"]
+
+  api:
+    build: { context: .., dockerfile: docker/Dockerfile, args: { PROJECT: LeadPilot.Api } }
+    restart: unless-stopped
+    depends_on: { web: { condition: service_started }, mysql: { condition: service_healthy }, rabbitmq: { condition: service_healthy } }
+    environment:
+      <<: *appenv
+      Swagger__Enabled: ${SWAGGER_ENABLED:-true}
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:?set a random key of at least 32 characters in docker/.env (required outside Development)}
+    volumes: [dp-keys:/keys, crm-files:/data/files]
+    ports: ["8081:8080"]
+
+  worker:
+    build: { context: .., dockerfile: docker/Dockerfile, args: { PROJECT: LeadPilot.Worker } }
+    restart: unless-stopped
+    depends_on: { web: { condition: service_started }, mysql: { condition: service_healthy }, rabbitmq: { condition: service_healthy } }
+    environment: *appenv
+    volumes: [dp-keys:/keys]
+
+volumes:
+  rabbitmq-data:
+  mysql-data:
+  dp-keys:
+  crm-files:

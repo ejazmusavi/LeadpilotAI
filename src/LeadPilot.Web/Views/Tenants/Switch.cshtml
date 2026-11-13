@@ -1,0 +1,29 @@
+@model SwitchViewModel
+@{ ViewData["Title"] = "Switch workspace"; }
+<h1 class="h3 mb-3">Switch workspace</h1>
+@if (Model.Tenants.Count == 0)
+{
+    <div class="card"><partial name="_EmptyState" model='("No workspaces", "You are not a member of any workspace.")' /></div>
+}
+else
+{
+    <div class="card"><div class="table-responsive"><table class="table align-middle mb-0">
+        <thead><tr><th>Workspace</th><th>Access</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+        @foreach (var t in Model.Tenants)
+        {
+            <tr>
+                <td class="fw-semibold">@t.Name <span class="text-muted small">@t.Slug</span></td>
+                <td>@(t.ViaPlatformAccess ? "Platform access (audited)" : "Member")</td>
+                <td><span class="badge @(t.Status == "Active" ? "text-bg-success" : "text-bg-danger")">@t.Status</span></td>
+                <td class="text-end">
+                    @if (t.IsCurrent) { <span class="badge text-bg-primary">Current</span> }
+                    else if (t.Status == "Active")
+                    {
+                        <form asp-action="Switch" asp-route-id="@t.TenantId" method="post"><button type="submit" class="btn btn-sm btn-outline-primary">Switch</button></form>
+                    }
+                </td>
+            </tr>
+        }
+        </tbody></table></div></div>
+}

@@ -1,0 +1,42 @@
+@model DiscoveryListViewModel
+@using LeadPilot.Domain.Discovery
+@{
+    ViewData["Title"] = "Discovery";
+    string Badge(DiscoveryJobStatus s) => s switch { DiscoveryJobStatus.Completed => "text-bg-success", DiscoveryJobStatus.Failed => "text-bg-danger", DiscoveryJobStatus.Running => "text-bg-primary", DiscoveryJobStatus.Cancelled => "text-bg-secondary", _ => "text-bg-info" };
+}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <div><h1 class="h3 mb-0">Discovery</h1><p class="text-muted mb-0">Find businesses by place and category. Results are reviewed by you before anything reaches the CRM.</p></div>
+    <div class="d-flex gap-2">
+        <a asp-controller="DiscoveryResults" asp-action="Index" class="btn btn-outline-primary">Review results</a>
+        @if (Model.CanRun) { <a asp-action="New" class="btn btn-primary">New search</a> }
+    </div>
+</div>
+<form method="get" class="card card-body mb-3"><div class="row g-2 align-items-end">
+    <div class="col-12 col-md-4 col-xl-3"><label class="form-label" for="status">Status</label>
+        <select id="status" name="status" class="form-select"><option value="">All</option>@foreach (var s in Enum.GetValues<DiscoveryJobStatus>()) { <option value="@s" selected="@(Model.Status == s)">@s</option> }</select></div>
+    <div class="col-auto"><button type="submit" class="btn btn-outline-primary">Apply</button> @if (Model.Status is not null) { <a asp-action="Index" class="btn btn-link">Clear</a> }</div>
+</div></form>
+@if (Model.Result.Items.Count == 0)
+{
+    <div class="card"><partial name="_EmptyState" model='(Model.Status is null ? "No searches yet" : "No searches with this status", Model.Status is null ? (Model.CanRun ? (Model.HasReadyConnector ? "Start a search for a city and a category." : "No connector is ready yet. A workspace administrator needs to add a Google Places API key under Connectors & usage, or you can search public websites you provide.") : "Nobody has run a search yet.") : "Try another status.")' /></div>
+}
+else
+{
+    <div class="card"><div class="table-responsive"><table class="table align-middle mb-0 table-hover">
+        <thead><tr><th>Search</th><th>Status</th><th style="min-width:9rem">Progress</th><th>Results</th><th>Calls</th><th>Started</th></tr></thead>
+        <tbody>
+        @foreach (var j in Model.Result.Items)
+        {
+            var where = string.Join(", ", new[] { j.Area, j.District, j.City, j.Province, j.Country }.Where(x => !string.IsNullOrWhiteSpace(x)));
+            <tr>
+                <td><a asp-action="Details" asp-route-id="@j.Id" class="fw-semibold text-decoration-none">@(j.CategoryName ?? j.Keywords ?? "Website search")@(string.IsNullOrEmpty(where) ? "" : " · " + where)</a><div class="small text-muted">@j.ConnectorName · @j.CreatedBy</div></td>
+                <td><span class="badge @Badge(j.Status)">@j.Status</span>@if (j.CancelRequested && j.Status == DiscoveryJobStatus.Running) { <div class="small text-muted">stopping…</div> }</td>
+                <td><div class="progress" role="progressbar" aria-label="Progress" aria-valuenow="@j.Progress" aria-valuemin="0" aria-valuemax="100"><div class="progress-bar" style="width:@(j.Progress)%">@j.Progress%</div></div></td>
+                <td>@j.ResultsNew new<div class="small text-muted">@j.PendingResults awaiting review@(j.DuplicatesFlagged > 0 ? $" · {j.DuplicatesFlagged} possible duplicate(s)" : "")</div></td>
+                <td class="small">@j.ApiCalls<div class="text-muted">≈ @j.EstimatedCostUsd.ToString("0.00") USD</div></td>
+                <td class="small text-muted">@j.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm") UTC</td>
+            </tr>
+        }
+        </tbody></table></div></div>
+    <partial name="_Pager" model='new PagerModel(Model.Result.Page, Model.Result.TotalPages, Model.Result.TotalCount, "Index", Model.QueryValues)' />
+}

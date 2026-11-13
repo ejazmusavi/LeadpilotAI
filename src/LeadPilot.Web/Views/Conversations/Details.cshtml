@@ -44,6 +44,10 @@
     }
     @if (Model.Messages.Page > 1) { <div class="text-center"><a asp-action="Details" asp-route-id="@s.Id" asp-route-page="@(Model.Messages.Page - 1)" class="btn btn-sm btn-outline-secondary">Newer messages</a></div> }
 </div></div>
+@if (Model.Suggestion is not null && (Model.Suggestion.Status == LeadPilot.Domain.Ai.DraftStatus.Pending || Model.Suggestion.Decision == LeadPilot.Domain.Ai.AiDecision.Escalate))
+{
+    <partial name="_AiSuggestion" model="(Model.Suggestion, s.Id, Model.CanReply)" />
+}
 @if (Model.CanReply)
 {
     <div class="card"><div class="card-body">
@@ -53,7 +57,7 @@
             <p class="small text-muted mb-2">@if (c.InsideServiceWindow) { <span>The customer wrote within the last @c.ServiceWindowHours hours, so this is a <strong>service reply</strong>.</span> } else { <span class="text-danger">The customer has not written in the last @c.ServiceWindowHours hours: this message counts as <strong>marketing</strong> and is only sent because the contact has recorded consent.</span> } Replies are sent in the background with a human-like pause, within the account's limits.</p>
             <form asp-action="Reply" asp-route-id="@s.Id" method="post" data-loading-form novalidate>
                 <input type="hidden" name="IdempotencyKey" value="@Model.Reply.IdempotencyKey" />
-                <div class="mb-2"><label class="form-label" for="reply-text">Message</label><textarea id="reply-text" name="Text" class="form-control" rows="3" maxlength="@Message.MaxBodyLength"></textarea></div>
+                <div class="mb-2"><label class="form-label" for="reply-text">Message</label><textarea id="reply-text" name="Text" class="form-control" rows="3" maxlength="@Message.MaxBodyLength">@Model.DraftText</textarea></div>
                 @if (Model.Templates.Count > 0 && s.ContactId is not null)
                 {
                     <div class="mb-2"><label class="form-label" for="reply-template">…or use a template (replaces the text above)</label><select id="reply-template" name="TemplateId" class="form-select"><option value="">No template</option>@foreach (var t in Model.Templates) { <option value="@t.Id">@t.Name</option> }</select></div>

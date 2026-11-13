@@ -74,6 +74,16 @@
             <a class="nav-link @(Nav("/CampaignSettings") ? "active" : "")" asp-controller="CampaignSettings" asp-action="Index">Campaign settings</a>
         </nav>
     }
+    @if (perms.Has(PermissionCodes.KnowledgeView) || perms.Has(PermissionCodes.AiTest) || perms.Has(PermissionCodes.AiView) || perms.Has(PermissionCodes.AiSettings))
+    {
+        <div class="nav-section">AI</div>
+        <nav class="nav flex-column px-2">
+            @if (perms.Has(PermissionCodes.KnowledgeView)) { <a class="nav-link @(Nav("/Knowledge") ? "active" : "")" asp-controller="Knowledge" asp-action="Index">Knowledge base</a> }
+            @if (perms.Has(PermissionCodes.AiTest)) { <a class="nav-link @(Nav("/AiTester") ? "active" : "")" asp-controller="AiTester" asp-action="Index">Retrieval tester</a> }
+            @if (perms.Has(PermissionCodes.AiView)) { <a class="nav-link @(Nav("/Ai/Activity") ? "active" : "")" asp-controller="Ai" asp-action="Activity">AI activity</a><a class="nav-link @(Nav("/Ai/Usage") ? "active" : "")" asp-controller="Ai" asp-action="Usage">AI usage</a> }
+            @if (perms.Has(PermissionCodes.AiSettings)) { <a class="nav-link @(Nav("/AiSettings") ? "active" : "")" asp-controller="AiSettings" asp-action="Index">AI settings</a> }
+        </nav>
+    }
     @if (perms.Has(PermissionCodes.SuppressionManage))
     {
         <div class="nav-section">Compliance</div>

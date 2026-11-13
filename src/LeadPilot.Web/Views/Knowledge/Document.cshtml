@@ -1,0 +1,76 @@
+@model KnowledgeDocumentViewModel
+@using LeadPilot.Domain.Ai
+@{ var d = Model.Document; var s = d.Summary; ViewData["Title"] = s.Title + " · Knowledge base"; }
+<div class="d-flex flex-wrap justify-content-between align-items-start mb-3 gap-2">
+    <div>
+        <h1 class="h3 mb-1">@s.Title @if (!s.IsEnabled) { <span class="badge text-bg-secondary align-middle">disabled</span> }</h1>
+        <div class="text-muted small">@s.Kind · @s.SourceName · <partial name="_IndexStatus" model="s.Status" />@if (s.SourceUrl is not null) { <span> · <span class="text-break">@s.SourceUrl</span></span> }</div>
+        @if (s.Error is not null && s.Status == IndexStatus.Failed) { <div class="text-danger small mt-1">@s.Error</div> }
+    </div>
+    @if (Model.CanManage)
+    {
+        <div class="d-flex flex-wrap gap-2">
+            <form asp-action="Reindex" asp-route-id="@s.Id" method="post"><button class="btn btn-outline-primary btn-sm" type="submit" data-confirm="Re-index this document now? It is briefly unavailable to the AI while it is rebuilt." data-confirm-label="Re-index">Re-index</button></form>
+            <form asp-action="SetEnabled" asp-route-id="@s.Id" method="post"><input type="hidden" name="enabled" value="@((!s.IsEnabled).ToString().ToLowerInvariant())" /><button class="btn btn-outline-secondary btn-sm" type="submit">@(s.IsEnabled ? "Disable" : "Enable")</button></form>
+            <form asp-action="Delete" asp-route-id="@s.Id" method="post"><button class="btn btn-outline-danger btn-sm" type="submit" data-confirm="Delete '@s.Title' with all @d.Versions.Count version(s), its passages and vectors? This cannot be undone." data-confirm-label="Delete document">Delete</button></form>
+        </div>
+    }
+</div>
+<div class="row g-3 mb-3">
+    <div class="col-12 col-lg-7">
+        <div class="card h-100"><div class="card-header">Text the AI reads @if (s.Status != IndexStatus.Indexed) { <span class="small text-muted">(the newest version is not searchable yet)</span> }</div><div class="card-body">
+            @if (Model.Document.CurrentContentPreview is null) { <p class="text-muted mb-0">No version is searchable yet.</p> }
+            else { <pre class="mb-0 small" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:22rem;overflow:auto">@Model.Document.CurrentContentPreview</pre><div class="form-text">First 4,000 characters of the current version.</div> }
+        </div></div>
+    </div>
+    <div class="col-12 col-lg-5">
+        @if (Model.CanManage)
+        {
+            <div class="card mb-3"><div class="card-header">New version</div><div class="card-body">
+                @if (d.IsEditableText)
+                {
+                    <form asp-action="UpdateText" asp-route-id="@s.Id" method="post" data-loading-form novalidate>
+                        <div class="mb-2"><label asp-for="Edit.Title" class="form-label">Title</label><input asp-for="Edit.Title" class="form-control" maxlength="200" /></div>
+                        <div class="mb-2"><label asp-for="Edit.Kind" class="form-label">Kind</label><select asp-for="Edit.Kind" asp-items="Html.GetEnumSelectList<DocumentKind>()" class="form-select"></select></div>
+                        <div class="mb-2"><label asp-for="Edit.Content" class="form-label">New text</label><textarea asp-for="Edit.Content" class="form-control" rows="6" placeholder="Paste the complete new text; it replaces the current version once indexed."></textarea></div>
+                        <button class="btn btn-primary btn-sm" type="submit"><span class="spinner-border spinner-border-sm d-none" aria-hidden="true"></span> Save as new version</button>
+                    </form>
+                }
+                else if (s.SourceUrl is null)
+                {
+                    <form asp-action="Upload" method="post" enctype="multipart/form-data" data-loading-form novalidate>
+                        <input type="hidden" name="Upload.ReplaceDocumentId" value="@s.Id" />
+                        <div class="mb-2"><label class="form-label" for="up-file">Replace with a newer file</label><input id="up-file" name="Upload.File" type="file" class="form-control" accept=".txt,.md,.markdown,.html,.htm,.pdf,.docx" /><div class="form-text">Up to @Model.MaxUploadMb MB. The old version stays as history.</div></div>
+                        <input type="hidden" name="Upload.Kind" value="@s.Kind" />
+                        <button class="btn btn-primary btn-sm" type="submit"><span class="spinner-border spinner-border-sm d-none" aria-hidden="true"></span> Upload new version</button>
+                    </form>
+                }
+                else { <p class="text-muted small mb-0">Website pages are updated by syncing their source: changed pages become new versions automatically.</p> }
+            </div></div>
+        }
+        <div class="card"><div class="card-header">Versions</div><div class="table-responsive"><table class="table table-sm align-middle mb-0">
+            <thead><tr><th>Version</th><th>Status</th><th class="text-end">Passages</th><th>Added</th></tr></thead><tbody>
+            @foreach (var v in d.Versions)
+            {
+                <tr class="@(v.Id == Model.ShownVersionId ? "table-active" : "")">
+                    <td>v@(v.VersionNumber)@if (v.IsCurrent) { <span class="badge text-bg-success ms-1">current</span> }<div class="small text-muted">@(v.FileName ?? v.MimeType) · @v.ContentChars.ToString("N0") chars</div></td>
+                    <td><partial name="_IndexStatus" model="v.Status" />@if (v.Error is not null) { <div class="small text-danger">@v.Error</div> }</td>
+                    <td class="text-end">@v.ChunkCount</td><td class="small text-nowrap">@v.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm")<div class="text-muted">@v.CreatedBy</div></td>
+                </tr>
+            }
+            </tbody></table></div></div>
+    </div>
+</div>
+<div class="card"><div class="card-header">Passages (what is searched)</div>
+    @if (Model.Chunks.Items.Count == 0) { <partial name="_EmptyState" model='("No passages", "Passages appear once the version is indexed.")' /> }
+    else
+    {
+        <ul class="list-group list-group-flush">
+        @foreach (var c in Model.Chunks.Items)
+        {
+            <li class="list-group-item"><div class="small text-muted">#@(c.Ordinal + 1)@(c.Heading is null ? "" : " · " + c.Heading) · @c.CharCount chars</div><div style="white-space:pre-wrap;overflow-wrap:anywhere">@c.Text</div></li>
+        }
+        </ul>
+    }
+</div>
+<partial name="_Pager" model='new PagerModel(Model.Chunks.Page, Model.Chunks.TotalPages, Model.Chunks.TotalCount, "Document", new Dictionary<string, string?> { ["id"] = s.Id.ToString(), ["versionId"] = Model.ShownVersionId?.ToString() })' />

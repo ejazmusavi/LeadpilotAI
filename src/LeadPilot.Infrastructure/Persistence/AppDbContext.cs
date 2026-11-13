@@ -1,5 +1,6 @@
 using System.Reflection;
 using LeadPilot.Application.Abstractions;
+using LeadPilot.Domain.Ai;
 using LeadPilot.Domain.Campaigns;
 using LeadPilot.Domain.Common;
 using LeadPilot.Domain.Crm;
@@ -87,6 +88,19 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
     public DbSet<CampaignConversion> CampaignConversions => Set<CampaignConversion>();
     public DbSet<CampaignUsageEntry> CampaignUsageEntries => Set<CampaignUsageEntry>();
     public DbSet<CampaignTenantSettings> CampaignTenantSettings => Set<CampaignTenantSettings>();
+
+    // AI engine and knowledge base (Phase 7)
+    public DbSet<KnowledgeSource> KnowledgeSources => Set<KnowledgeSource>();
+    public DbSet<KnowledgeDocument> KnowledgeDocuments => Set<KnowledgeDocument>();
+    public DbSet<DocumentVersion> DocumentVersions => Set<DocumentVersion>();
+    public DbSet<DocumentChunk> DocumentChunks => Set<DocumentChunk>();
+    public DbSet<EmbeddingRecord> EmbeddingRecords => Set<EmbeddingRecord>();
+    public DbSet<RetrievalLog> RetrievalLogs => Set<RetrievalLog>();
+    public DbSet<AiTenantSettings> AiTenantSettings => Set<AiTenantSettings>();
+    public DbSet<AiUsageEntry> AiUsageEntries => Set<AiUsageEntry>();
+    public DbSet<ConversationSummary> ConversationSummaries => Set<ConversationSummary>();
+    public DbSet<AiInteraction> AiInteractions => Set<AiInteraction>();
+    public DbSet<AiToolExecution> AiToolExecutions => Set<AiToolExecution>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -232,6 +246,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
         DiscoveryModel.Configure(builder);
         MessagingModel.Configure(builder);
         CampaignModel.Configure(builder);
+        AiModel.Configure(builder);
 
         // Every tenant-owned entity: mandatory FK to Tenant (restrict), indexed TenantId and the global tenant filter.
         foreach (var type in builder.Model.GetEntityTypes().Select(e => e.ClrType).Where(t => typeof(ITenantOwned).IsAssignableFrom(t)).ToList())

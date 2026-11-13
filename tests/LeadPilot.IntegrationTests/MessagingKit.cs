@@ -147,20 +147,23 @@ public static class WahaEvents
 
 public static class MessagingKit
 {
-    public static void RegisterTestServices(IServiceCollection s, OffsetClock clock, RecordingMessagingScheduler scheduler, RecordingCampaignScheduler? campaigns = null)
+    public static void RegisterTestServices(IServiceCollection s, OffsetClock clock, RecordingMessagingScheduler scheduler, RecordingCampaignScheduler? campaigns = null, AiTestControls? ai = null)
     {
+        if (ai is not null) AiKit.Register(s, ai);
         s.RemoveAll<IClock>(); s.AddSingleton<IClock>(clock);
         s.RemoveAll<IMessagingJobScheduler>(); s.AddSingleton<IMessagingJobScheduler>(scheduler);
         if (campaigns is not null) { s.RemoveAll<LeadPilot.Application.Campaigns.ICampaignJobScheduler>(); s.AddSingleton<LeadPilot.Application.Campaigns.ICampaignJobScheduler>(campaigns); }
     }
 
-    public static WorkerHarness BuildWorker(AppFixture app, bool realBroker = false)
+    public static WorkerHarness BuildWorker(AppFixture app, bool realBroker = false, Action<IServiceCollection>? configure = null, Dictionary<string, string?>? extraConfig = null)
     {
         var b = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings { EnvironmentName = "Development" });   // Development: ValidateOnBuild proves every registration resolves without the HTTP edge
         b.Configuration.AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:Default"] = Environment.GetEnvironmentVariable("ConnectionStrings__Default"), ["Discovery:Hangfire:PollSeconds"] = "1" });
+        if (extraConfig is not null) b.Configuration.AddInMemoryCollection(extraConfig);
         b.Services.AddApplication(); b.Services.AddInfrastructure(b.Configuration, b.Environment); b.Services.AddWorkerServices(b.Configuration);
         var publisher = new InMemoryPublisher();
-        RegisterTestServices(b.Services, app.Clock, app.Messaging, app.Campaigns);
+        RegisterTestServices(b.Services, app.Clock, app.Messaging, app.Campaigns, app.Ai);
+        configure?.Invoke(b.Services);
         if (!realBroker) { b.Services.RemoveAll<IEventPublisher>(); b.Services.AddSingleton<IEventPublisher>(publisher); }
         return new WorkerHarness { Host = b.Build(), Publisher = publisher };
     }

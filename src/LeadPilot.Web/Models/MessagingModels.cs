@@ -1,3 +1,4 @@
+using LeadPilot.Application.Ai;
 using System.ComponentModel.DataAnnotations;
 using LeadPilot.Application.Common;
 using LeadPilot.Application.Messaging;
@@ -64,6 +65,8 @@ public class ThreadViewModel
     public IReadOnlyList<TemplateDto> Templates { get; set; } = [];
     public bool CanReply { get; set; }
     public ReplyFormModel Reply { get; set; } = new();
+    public AiSuggestionDto? Suggestion { get; set; }
+    public string? DraftText { get; set; }
 }
 
 public class ReplyFormModel

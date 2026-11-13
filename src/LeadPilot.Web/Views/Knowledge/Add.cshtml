@@ -1,0 +1,42 @@
+@model KnowledgeAddViewModel
+@using LeadPilot.Domain.Ai
+@{ ViewData["Title"] = "Add knowledge"; string Active(string t) => Model.Tab == t ? "active" : ""; }
+<h1 class="h3 mb-1">Add knowledge</h1>
+<p class="text-muted">Write it, upload it, or point the AI at your website. Everything you add is private to this workspace.</p>
+<ul class="nav nav-tabs mb-3" role="tablist">
+    <li class="nav-item"><a class="nav-link @Active("text")" asp-action="Add" asp-route-tab="text">Write text</a></li>
+    <li class="nav-item"><a class="nav-link @Active("upload")" asp-action="Add" asp-route-tab="upload">Upload a file</a></li>
+    <li class="nav-item"><a class="nav-link @Active("website")" asp-action="Add" asp-route-tab="website">Website</a></li>
+</ul>
+@if (Model.Tab == "text")
+{
+    <form asp-action="AddText" method="post" data-loading-form novalidate class="card card-body"><div class="row g-3">
+        <div asp-validation-summary="ModelOnly" class="text-danger col-12"></div>
+        <div class="col-12 col-md-8"><label asp-for="Text.Title" class="form-label">Title</label><input asp-for="Text.Title" class="form-control" maxlength="200" /><span asp-validation-for="Text.Title" class="text-danger"></span></div>
+        <div class="col-12 col-md-4"><label asp-for="Text.Kind" class="form-label">Kind</label><select asp-for="Text.Kind" asp-items="Html.GetEnumSelectList<DocumentKind>()" class="form-select"></select></div>
+        @if (Model.Sources.Count > 0) { <div class="col-12 col-md-6"><label asp-for="Text.SourceId" class="form-label">Group under</label><select asp-for="Text.SourceId" class="form-select"><option value="">Written documents (default)</option>@foreach (var s in Model.Sources) { <option value="@s.Id">@s.Name</option> }</select></div> }
+        <div class="col-12"><label asp-for="Text.Content" class="form-label">Content</label><textarea asp-for="Text.Content" class="form-control" rows="12"></textarea><span asp-validation-for="Text.Content" class="text-danger"></span><div class="form-text">Plain text or Markdown (# headings help). One topic per document works best. Write prices exactly as customers may be told them: the AI never quotes a number that is not in a document.</div></div>
+        <div class="col-12"><button class="btn btn-primary" type="submit"><span class="spinner-border spinner-border-sm d-none" aria-hidden="true"></span> Save and index</button> <a asp-action="Index" class="btn btn-link">Cancel</a></div>
+    </div></form>
+}
+else if (Model.Tab == "upload")
+{
+    <form asp-action="Upload" method="post" enctype="multipart/form-data" data-loading-form novalidate class="card card-body"><div class="row g-3">
+        <div asp-validation-summary="ModelOnly" class="text-danger col-12"></div>
+        <div class="col-12 col-md-6"><label asp-for="Upload.File" class="form-label">File</label><input asp-for="Upload.File" type="file" class="form-control" accept="@string.Join(",", Model.SupportedExtensions)" /><span asp-validation-for="Upload.File" class="text-danger"></span><div class="form-text">@string.Join(", ", Model.SupportedExtensions) · up to @Model.MaxUploadMb MB. Scanned PDFs (images) cannot be read.</div></div>
+        <div class="col-12 col-md-6"><label asp-for="Upload.Title" class="form-label">Title (optional)</label><input asp-for="Upload.Title" class="form-control" maxlength="200" /><div class="form-text">Defaults to the document's title or file name.</div></div>
+        <div class="col-12 col-md-4"><label asp-for="Upload.Kind" class="form-label">Kind</label><select asp-for="Upload.Kind" asp-items="Html.GetEnumSelectList<DocumentKind>()" class="form-select"></select></div>
+        @if (Model.Sources.Count > 0) { <div class="col-12 col-md-4"><label asp-for="Upload.SourceId" class="form-label">Group under</label><select asp-for="Upload.SourceId" class="form-select"><option value="">Uploaded files (default)</option>@foreach (var s in Model.Sources) { <option value="@s.Id">@s.Name</option> }</select></div> }
+        <div class="col-12"><button class="btn btn-primary" type="submit"><span class="spinner-border spinner-border-sm d-none" aria-hidden="true"></span> Upload and index</button> <a asp-action="Index" class="btn btn-link">Cancel</a></div>
+    </div></form>
+}
+else
+{
+    <form asp-action="AddWebsite" method="post" data-loading-form novalidate class="card card-body"><div class="row g-3">
+        <div asp-validation-summary="ModelOnly" class="text-danger col-12"></div>
+        <div class="col-12 col-md-4"><label asp-for="Website.Name" class="form-label">Name</label><input asp-for="Website.Name" class="form-control" maxlength="150" /><span asp-validation-for="Website.Name" class="text-danger"></span></div>
+        <div class="col-12 col-md-8"><label asp-for="Website.Url" class="form-label">Web address</label><input asp-for="Website.Url" class="form-control" placeholder="https://www.example.com" /><span asp-validation-for="Website.Url" class="text-danger"></span></div>
+        <div class="col-12"><div class="form-text">Reads the page and up to a few linked pages of the <strong>same site</strong>, respecting robots.txt and noindex, never logging in and never following links to other sites. Addresses inside private networks are refused. Run <em>Sync now</em> later to pick up changes (changed pages become new versions).</div></div>
+        <div class="col-12"><button class="btn btn-primary" type="submit"><span class="spinner-border spinner-border-sm d-none" aria-hidden="true"></span> Add website</button> <a asp-action="Index" class="btn btn-link">Cancel</a></div>
+    </div></form>
+}

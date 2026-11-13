@@ -1,0 +1,26 @@
+@model (LeadPilot.Application.Ai.AiSuggestionDto S, Guid ConversationId, bool CanReply)
+@using LeadPilot.Domain.Ai
+@{ var s = Model.S; var pending = s.Status == DraftStatus.Pending; }
+<div class="card mb-3 @(s.Decision == AiDecision.Escalate ? "border-warning" : "border-success")"><div class="card-header d-flex flex-wrap gap-2 align-items-center">
+    <strong>AI suggestion</strong>
+    <span class="badge @(s.Decision == AiDecision.Draft ? "text-bg-success" : "text-bg-warning")">@(s.Decision == AiDecision.Draft ? "Suggested reply" : "Needs a person")</span>
+    <span class="badge text-bg-light border">@s.Intent.Replace('_', ' ')</span><span class="badge text-bg-light border">confidence @s.Confidence.ToString("0.00")</span>
+    @if (s.InjectionSuspected) { <span class="badge text-bg-danger">manipulation attempt suspected</span> }
+    <span class="badge text-bg-secondary ms-auto">@s.Status@(s.HandledByName is null ? "" : " by " + s.HandledByName)</span></div>
+<div class="card-body">
+    @if (s.Decision == AiDecision.Escalate) { <p class="mb-1"><strong>The AI handed this over@(s.EscalationReason is null ? "" : ": " + s.EscalationReason.Replace('_', ' '))</strong>. It answers nothing further in this conversation until you switch AI mode back on.</p> }
+    @if (!string.IsNullOrWhiteSpace(s.DraftText)) { <div class="p-2 rounded bg-body-secondary mb-2" style="white-space:pre-wrap;overflow-wrap:anywhere">@s.DraftText</div> }
+    @if (s.NextAction is not null) { <p class="small mb-1"><strong>Next step:</strong> @s.NextAction</p> }
+    @if (s.Citations.Count > 0) { <p class="small mb-1"><strong>Based on:</strong> @foreach (var c in s.Citations) { <a asp-controller="Knowledge" asp-action="Document" asp-route-id="@c.DocumentId" class="me-2">@c.DocumentTitle (v@(c.VersionNumber))</a> }</p> }
+    @if (s.Issues.Count > 0) { <p class="small text-warning-emphasis mb-1"><strong>Safety checks:</strong> the AI's own wording was rejected (@string.Join(", ", s.Issues.Select(i => i.Code.Replace('_', ' ')))); the text above is the safe fallback.</p> }
+    @if (s.Extracted.Count > 0) { <p class="small mb-1"><strong>Customer said:</strong> @string.Join("; ", s.Extracted.Select(e => e.Key.Replace('_', ' ') + ": " + e.Value))</p> }
+    @if (s.Tools.Count > 0) { <p class="small text-muted mb-1">Actions: @string.Join(", ", s.Tools.Select(t => t.Tool + " (" + t.Outcome.ToString().ToLowerInvariant() + ")"))</p> }
+    <p class="small text-muted mb-2">Never sent automatically. Check it before you use it.</p>
+    @if (Model.CanReply && pending && !string.IsNullOrWhiteSpace(s.DraftText))
+    {
+        <div class="d-flex flex-wrap gap-2">
+            <form asp-controller="Conversations" asp-action="UseSuggestion" asp-route-id="@Model.ConversationId" method="post"><input type="hidden" name="suggestionId" value="@s.Id" /><button class="btn btn-primary btn-sm" type="submit">Use as reply draft</button></form>
+            <form asp-controller="Conversations" asp-action="DismissSuggestion" asp-route-id="@Model.ConversationId" method="post"><input type="hidden" name="suggestionId" value="@s.Id" /><button class="btn btn-outline-secondary btn-sm" type="submit" data-confirm="Dismiss this suggestion?" data-confirm-label="Dismiss">Dismiss</button></form>
+        </div>
+    }
+</div></div>

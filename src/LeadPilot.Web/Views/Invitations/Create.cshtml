@@ -1,0 +1,14 @@
+@model InviteFormModel
+@{ ViewData["Title"] = "Invite user"; }
+<h1 class="h3 mb-3">Invite user</h1>
+<form asp-action="Create" method="post" data-loading-form novalidate class="card card-body">
+    <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+    <div class="row g-3">
+        <div class="col-12 col-md-6 col-xl-3"><label asp-for="Email" class="form-label">E-mail</label><input asp-for="Email" type="email" class="form-control" /><span asp-validation-for="Email" class="text-danger small"></span></div>
+        <div class="col-12 col-md-6 col-xl-3"><label asp-for="RoleId" class="form-label">Role</label>
+            <select asp-for="RoleId" class="form-select"><option value="">Select a role…</option>@foreach (var r in Model.Roles) { <option value="@r.Id" selected="@(Model.RoleId == r.Id)">@r.Name</option> }</select>
+            <span asp-validation-for="RoleId" class="text-danger small"></span></div>
+    </div>
+    <p class="form-text mt-3 mb-0">The invitation link expires and works once. You can only invite into roles whose permissions you hold yourself.</p>
+    <div class="mt-3 d-flex gap-2"><button type="submit" class="btn btn-primary"><span class="spinner-border spinner-border-sm d-none" aria-hidden="true"></span> Send invitation</button><a asp-action="Index" class="btn btn-outline-secondary">Cancel</a></div>
+</form>

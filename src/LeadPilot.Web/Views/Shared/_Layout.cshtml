@@ -1,0 +1,138 @@
+@using LeadPilot.Application.Security
+@using LeadPilot.Infrastructure.Web
+@inject LeadPilot.Application.Contracts.IPermissionEvaluator Permissions
+@{
+    var path = Context.Request.Path.Value ?? "/";
+    var perms = await Permissions.GetCurrentAsync();
+    var tenantName = Context.Items[TenantResolutionMiddleware.TenantNameItem] as string;
+    var viaPlatform = Context.Items[TenantResolutionMiddleware.PlatformAccessItem] as bool? == true;
+    bool Nav(string prefix) => path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+    var crumbs = ViewData["Breadcrumbs"] as IEnumerable<(string Title, string? Url)> ?? Enumerable.Empty<(string, string?)>();
+    var title = ViewData["Title"] as string ?? "LeadPilot AI";
+    var name = User.Identity?.Name ?? "";
+    var initial = name.Length > 0 ? name[..1].ToUpperInvariant() : "?";
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@title · LeadPilot AI</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body class="app-shell">
+<div id="page-loading" class="page-loading" hidden><div class="progress" style="height:3px"><div class="progress-bar progress-bar-striped progress-bar-animated w-100"></div></div></div>
+
+<aside class="offcanvas-lg offcanvas-start sidebar" tabindex="-1" id="sidebar" aria-label="Main navigation">
+    <div class="sidebar-brand">
+        <a asp-controller="Home" asp-action="Index" class="text-decoration-none"><span class="brand-mark">LP</span> LeadPilot AI</a>
+        <button type="button" class="btn-close btn-close-white d-lg-none" data-bs-dismiss="offcanvas" data-bs-target="#sidebar" aria-label="Close"></button>
+    </div>
+    <nav class="nav flex-column px-2">
+        <a class="nav-link @(path == "/" || Nav("/Home") ? "active" : "")" asp-controller="Home" asp-action="Index">Dashboard</a>
+    </nav>
+    @if (perms.Has(PermissionCodes.LeadsView))
+    {
+        <div class="nav-section">Leads</div>
+        <nav class="nav flex-column px-2">
+            <a class="nav-link @(Nav("/Leads") && !Nav("/Leads/Board") ? "active" : "")" asp-controller="Leads" asp-action="Index">All leads</a>
+            <a class="nav-link @(Nav("/Leads/Board") ? "active" : "")" asp-controller="Leads" asp-action="Board">Pipeline board</a>
+            @if (perms.Has(PermissionCodes.LeadsImport)) { <a class="nav-link @(Nav("/Imports") ? "active" : "")" asp-controller="Imports" asp-action="Index">Imports</a> }
+            <a class="nav-link @(Nav("/Tags") ? "active" : "")" asp-controller="Tags" asp-action="Index">Tags</a>
+        </nav>
+    }
+    @if (perms.Has(PermissionCodes.SuppressionManage))
+    {
+        <div class="nav-section">Compliance</div>
+        <nav class="nav flex-column px-2">
+            <a class="nav-link @(Nav("/Suppression") ? "active" : "")" asp-controller="Suppression" asp-action="Index">Suppression list</a>
+        </nav>
+    }
+    @if (perms.Has(PermissionCodes.PipelinesManage) || perms.Has(PermissionCodes.ScoringManage))
+    {
+        <div class="nav-section">CRM setup</div>
+        <nav class="nav flex-column px-2">
+            @if (perms.Has(PermissionCodes.PipelinesManage))
+            {
+                <a class="nav-link @(Nav("/Pipelines") ? "active" : "")" asp-controller="Pipelines" asp-action="Index">Pipelines</a>
+                <a class="nav-link @(Nav("/Categories") ? "active" : "")" asp-controller="Categories" asp-action="Index">Categories &amp; statuses</a>
+            }
+            @if (perms.Has(PermissionCodes.ScoringManage)) { <a class="nav-link @(Nav("/Scoring") ? "active" : "")" asp-controller="Scoring" asp-action="Index">Scoring rules</a> }
+        </nav>
+    }
+    @if (perms.Has(PermissionCodes.UsersManage) || perms.Has(PermissionCodes.SettingsManage) || perms.Has(PermissionCodes.AuditView))
+    {
+        <div class="nav-section">Administration</div>
+        <nav class="nav flex-column px-2">
+            @if (perms.Has(PermissionCodes.UsersManage))
+            {
+                <a class="nav-link @(Nav("/Users") ? "active" : "")" asp-controller="Users" asp-action="Index">Users</a>
+                <a class="nav-link @(Nav("/Invitations") ? "active" : "")" asp-controller="Invitations" asp-action="Index">Invitations</a>
+                <a class="nav-link @(Nav("/Roles") ? "active" : "")" asp-controller="Roles" asp-action="Index">Roles &amp; permissions</a>
+            }
+            @if (perms.Has(PermissionCodes.SettingsManage)) { <a class="nav-link @(Nav("/Settings") ? "active" : "")" asp-controller="Settings" asp-action="Index">Settings</a> }
+            @if (perms.Has(PermissionCodes.AuditView)) { <a class="nav-link @(Nav("/Audit") ? "active" : "")" asp-controller="Audit" asp-action="Index">Audit log</a> }
+        </nav>
+    }
+    @if (perms.Has(PermissionCodes.TenantsManage))
+    {
+        <div class="nav-section">Platform</div>
+        <nav class="nav flex-column px-2">
+            <a class="nav-link @(Nav("/Tenants") && !Nav("/Tenants/Switch") ? "active" : "")" asp-controller="Tenants" asp-action="Index">Tenants</a>
+        </nav>
+    }
+    <div class="sidebar-footer small">Discover. Engage. Convert.</div>
+</aside>
+
+<div class="main-col">
+    <header class="topbar">
+        <button class="btn btn-outline-secondary d-lg-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebar" aria-controls="sidebar" aria-label="Open navigation">☰</button>
+        @if (tenantName is not null)
+        {
+            <a asp-controller="Tenants" asp-action="Switch" class="tenant-badge text-decoration-none" title="Switch workspace">
+                <span class="fw-semibold">@tenantName</span>
+                @if (viaPlatform) { <span class="badge text-bg-warning ms-1">platform access</span> }
+            </a>
+        }
+        <div class="ms-auto d-flex align-items-center gap-2">
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary position-relative" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-label="Notifications" aria-expanded="false">🔔</button>
+                <div class="dropdown-menu dropdown-menu-end p-0" style="min-width:18rem" id="notification-area">
+                    <div class="px-3 py-2 border-bottom fw-semibold">Notifications</div>
+                    <partial name="_EmptyState" model='("No notifications", "You are all caught up.")' />
+                </div>
+            </div>
+            <div class="dropdown">
+                <button class="btn btn-light d-flex align-items-center gap-2" data-bs-toggle="dropdown" aria-expanded="false">
+                    <span class="avatar">@initial</span><span class="d-none d-md-inline">@name</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><span class="dropdown-item-text small text-muted">Signed in as<br />@name</span></li>
+                    <li><a class="dropdown-item" href="/Profile">My profile</a></li>
+                    <li><a class="dropdown-item" asp-controller="Tenants" asp-action="Switch">Switch workspace</a></li>
+                    <li><hr class="dropdown-divider" /></li>
+                    <li>
+                        <form asp-controller="Account" asp-action="Logout" method="post" class="px-3">
+                            <button type="submit" class="btn btn-sm btn-outline-danger w-100">Sign out</button>
+                        </form>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </header>
+
+    <main class="content container-fluid py-4">
+        <partial name="_Breadcrumbs" model="crumbs" />
+        <partial name="_Toasts" />
+        @RenderBody()
+    </main>
+</div>
+
+<partial name="_ConfirmModal" />
+<script src="~/lib/jquery/dist/jquery.min.js"></script>
+<script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+<script src="~/js/site.js" asp-append-version="true"></script>
+@await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

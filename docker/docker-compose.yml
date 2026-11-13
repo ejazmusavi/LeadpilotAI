@@ -1,0 +1,61 @@
+# Development stack. Copy docker/.env.example to docker/.env first.
+#   docker compose -f docker/docker-compose.yml --env-file docker/.env up --build
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set in docker/.env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-leadpilot}
+      MYSQL_USER: ${MYSQL_USER:-leadpilot}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set in docker/.env}
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_ai_ci"]
+    volumes: [mysql-data:/var/lib/mysql]
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    # Not published to the host: only other containers can reach the database.
+
+  web:
+    build: { context: .., dockerfile: docker/Dockerfile, args: { PROJECT: LeadPilot.Web } }
+    restart: unless-stopped
+    depends_on: { mysql: { condition: service_healthy } }
+    environment: &appenv
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      ConnectionStrings__Default: "Server=mysql;Port=3306;Database=${MYSQL_DATABASE:-leadpilot};User=${MYSQL_USER:-leadpilot};Password=${MYSQL_PASSWORD};"
+      Database__MigrateOnStartup: ${MIGRATE_ON_STARTUP:-true}
+      Seed__AdminEmail: ${SEED_ADMIN_EMAIL:-}
+      Seed__AdminPassword: ${SEED_ADMIN_PASSWORD:-}
+      # Public URL of the dashboard: used for links in invitation e-mails (Api and Web).
+      App__PublicWebUrl: ${PUBLIC_WEB_URL:-http://localhost:8080}
+      # Shared key ring so encrypted tenant secrets can be read by every app.
+      DataProtection__KeysPath: /keys
+      # Uploaded import files (shared so a file uploaded in the dashboard can be run through the API and vice versa).
+      Crm__StorageRoot: /data/files
+    volumes: [dp-keys:/keys, crm-files:/data/files]
+    ports: ["8080:8080"]
+
+  api:
+    build: { context: .., dockerfile: docker/Dockerfile, args: { PROJECT: LeadPilot.Api } }
+    restart: unless-stopped
+    depends_on: { web: { condition: service_started }, mysql: { condition: service_healthy } }
+    environment:
+      <<: *appenv
+      Swagger__Enabled: ${SWAGGER_ENABLED:-true}
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:?set a random key of at least 32 characters in docker/.env (required outside Development)}
+    volumes: [dp-keys:/keys, crm-files:/data/files]
+    ports: ["8081:8080"]
+
+  worker:
+    build: { context: .., dockerfile: docker/Dockerfile, args: { PROJECT: LeadPilot.Worker } }
+    restart: unless-stopped
+    depends_on: { web: { condition: service_started }, mysql: { condition: service_healthy } }
+    environment: *appenv
+    volumes: [dp-keys:/keys]
+
+volumes:
+  mysql-data:
+  dp-keys:
+  crm-files:

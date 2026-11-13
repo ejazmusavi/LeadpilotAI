@@ -1,0 +1,203 @@
+using System.Reflection;
+using LeadPilot.Application.Abstractions;
+using LeadPilot.Domain.Common;
+using LeadPilot.Domain.Tenancy;
+using LeadPilot.Infrastructure.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace LeadPilot.Infrastructure.Persistence;
+
+public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext tenant)
+    : IdentityDbContext<ApplicationUser, ApplicationRole, Guid>(options)
+{
+    internal ITenantContext Tenant => tenant;
+
+    /// <summary>Referenced by the global query filter. Null (no tenant) matches nothing: reads fail closed.</summary>
+    internal Guid? CurrentTenantId => tenant.TenantId;
+
+    public DbSet<Tenant> Tenants => Set<Tenant>();
+    public DbSet<TenantSetting> TenantSettings => Set<TenantSetting>();
+    public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
+    public DbSet<Permission> Permissions => Set<Permission>();
+    public DbSet<Role> TenantRoles => Set<Role>();
+    public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
+    public DbSet<UserRole> TenantUserRoles => Set<UserRole>();
+    public DbSet<UserTenant> UserTenants => Set<UserTenant>();
+    public DbSet<TenantInvitation> TenantInvitations => Set<TenantInvitation>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        configurationBuilder.Properties<DateTime>().HavePrecision(6);
+        configurationBuilder.Properties<DateTime?>().HavePrecision(6);
+    }
+
+    protected override void OnModelCreating(ModelBuilder builder)
+    {
+        base.OnModelCreating(builder);
+
+        builder.Entity<ApplicationUser>(b =>
+        {
+            b.Property(u => u.DisplayName).HasMaxLength(200).IsRequired();
+            b.Property(u => u.CreatedAtUtc).HasPrecision(6);
+            b.Property(u => u.LastLoginAtUtc).HasPrecision(6);
+        });
+
+        builder.Entity<Tenant>(b =>
+        {
+            b.ToTable("Tenants");
+            b.Property(t => t.Name).HasMaxLength(200).IsRequired();
+            b.Property(t => t.Slug).HasMaxLength(63).IsRequired();
+            b.Property(t => t.Status).HasConversion<string>().HasMaxLength(20);
+            b.Property(t => t.Industry).HasMaxLength(100);
+            b.Property(t => t.Timezone).HasMaxLength(64).IsRequired();
+            b.Property(t => t.Locale).HasMaxLength(16).IsRequired();
+            b.Property(t => t.SuspensionReason).HasMaxLength(500);
+            b.Property(t => t.CreatedBy).HasMaxLength(256);
+            b.Property(t => t.UpdatedBy).HasMaxLength(256);
+            b.HasIndex(t => t.Slug).IsUnique();
+            b.HasIndex(t => t.Status);
+        });
+
+        builder.Entity<TenantSetting>(b =>
+        {
+            b.ToTable("TenantSettings");
+            b.Property(x => x.Key).HasMaxLength(100).IsRequired();
+            b.Property(x => x.Value).HasMaxLength(4000).IsRequired();
+            b.Property(x => x.CreatedBy).HasMaxLength(256);
+            b.Property(x => x.UpdatedBy).HasMaxLength(256);
+            b.HasIndex(x => new { x.TenantId, x.Key }).IsUnique();
+        });
+
+        builder.Entity<UserProfile>(b =>
+        {
+            b.ToTable("UserProfiles");
+            b.Property(x => x.DisplayName).HasMaxLength(200).IsRequired();
+            b.Property(x => x.Phone).HasMaxLength(32);
+            b.Property(x => x.CreatedBy).HasMaxLength(256);
+            b.Property(x => x.UpdatedBy).HasMaxLength(256);
+            b.HasIndex(x => x.UserId).IsUnique();
+            b.HasOne<ApplicationUser>().WithOne().HasForeignKey<UserProfile>(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<Permission>(b =>
+        {
+            b.ToTable("Permissions");
+            b.Property(x => x.Code).HasMaxLength(100).IsRequired();
+            b.Property(x => x.Name).HasMaxLength(150).IsRequired();
+            b.Property(x => x.Description).HasMaxLength(500);
+            b.Property(x => x.Group).HasMaxLength(50).IsRequired();
+            b.HasIndex(x => x.Code).IsUnique();
+        });
+
+        builder.Entity<Role>(b =>
+        {
+            b.ToTable("Roles");
+            b.Property(x => x.Name).HasMaxLength(100).IsRequired();
+            b.Property(x => x.Description).HasMaxLength(500);
+            b.Property(x => x.CreatedBy).HasMaxLength(256);
+            b.Property(x => x.UpdatedBy).HasMaxLength(256);
+            b.HasIndex(x => new { x.TenantId, x.Name }).IsUnique();
+        });
+
+        builder.Entity<RolePermission>(b =>
+        {
+            b.ToTable("RolePermissions");
+            b.HasIndex(x => new { x.RoleId, x.PermissionId }).IsUnique();
+            b.HasOne<Role>().WithMany().HasForeignKey(x => x.RoleId).OnDelete(DeleteBehavior.Cascade);
+            b.HasOne<Permission>().WithMany().HasForeignKey(x => x.PermissionId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<UserRole>(b =>
+        {
+            b.ToTable("UserRoles");
+            b.HasIndex(x => new { x.TenantId, x.UserId, x.RoleId }).IsUnique();
+            b.HasIndex(x => x.UserId);
+            b.HasIndex(x => x.RoleId);
+            b.HasOne<Role>().WithMany().HasForeignKey(x => x.RoleId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<UserTenant>(b =>
+        {
+            b.ToTable("UserTenants");
+            b.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+            b.HasIndex(x => new { x.TenantId, x.UserId }).IsUnique();
+            b.HasIndex(x => x.UserId);
+            b.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<TenantInvitation>(b =>
+        {
+            b.ToTable("TenantInvitations");
+            b.Property(x => x.Email).HasMaxLength(256).IsRequired();
+            b.Property(x => x.TokenHash).HasMaxLength(64).IsRequired();
+            b.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+            b.Property(x => x.CreatedBy).HasMaxLength(256);
+            b.Property(x => x.UpdatedBy).HasMaxLength(256);
+            b.HasIndex(x => x.TokenHash).IsUnique();
+            b.HasIndex(x => new { x.TenantId, x.Email, x.Status });
+            b.HasOne<Role>().WithMany().HasForeignKey(x => x.RoleId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<AuditLog>(b =>
+        {
+            b.ToTable("AuditLogs");
+            b.Property(x => x.ActorEmail).HasMaxLength(256);
+            b.Property(x => x.Action).HasMaxLength(100).IsRequired();
+            b.Property(x => x.EntityType).HasMaxLength(100);
+            b.Property(x => x.EntityId).HasMaxLength(64);
+            b.Property(x => x.Summary).HasMaxLength(1000).IsRequired();
+            b.Property(x => x.IpAddress).HasMaxLength(64);
+            b.Property(x => x.CorrelationId).HasMaxLength(64);
+            b.HasIndex(x => new { x.TenantId, x.CreatedAtUtc });
+            b.HasIndex(x => new { x.TenantId, x.Action });
+        });
+
+        builder.Entity<RefreshToken>(b =>
+        {
+            b.ToTable("RefreshTokens");
+            b.Property(x => x.TokenHash).HasMaxLength(64).IsRequired();
+            b.Property(x => x.ReplacedByTokenHash).HasMaxLength(64);
+            b.Property(x => x.CreatedByIp).HasMaxLength(64);
+            b.HasIndex(x => x.TokenHash).IsUnique();
+            b.HasIndex(x => x.UserId);
+            b.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+            b.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Every tenant-owned entity: mandatory FK to Tenant (restrict), indexed TenantId and the global tenant filter.
+        foreach (var type in builder.Model.GetEntityTypes().Select(e => e.ClrType).Where(t => typeof(ITenantOwned).IsAssignableFrom(t)).ToList())
+        {
+            ApplyTenantOwnership.MakeGenericMethod(type).Invoke(this, [builder]);
+        }
+    }
+
+    private static readonly MethodInfo ApplyTenantOwnership =
+        typeof(AppDbContext).GetMethod(nameof(ConfigureTenantOwned), BindingFlags.NonPublic | BindingFlags.Instance)!;
+
+    private void ConfigureTenantOwned<T>(ModelBuilder builder) where T : class, ITenantOwned
+    {
+        var entity = builder.Entity<T>();
+        entity.HasOne<Tenant>().WithMany().HasForeignKey(nameof(ITenantOwned.TenantId)).OnDelete(DeleteBehavior.Restrict);
+        entity.HasIndex(nameof(ITenantOwned.TenantId));
+        entity.HasQueryFilter(e => EF.Property<Guid>(e, nameof(ITenantOwned.TenantId)) == CurrentTenantId);
+    }
+}
+
+public static class DatabaseInitializer
+{
+    /// <summary>Applies pending migrations when Database:MigrateOnStartup is true (Development/docker). Production uses an explicit migration step.</summary>
+    public static async Task MigrateIfConfiguredAsync(IServiceProvider services, IConfiguration config)
+    {
+        if (!config.GetValue<bool>("Database:MigrateOnStartup")) return;
+        using var scope = services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await db.Database.MigrateAsync();
+    }
+}

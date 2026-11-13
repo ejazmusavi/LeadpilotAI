@@ -1,0 +1,55 @@
+@model TenantDetailsViewModel
+@{ ViewData["Title"] = Model.Tenant.Name; ViewData["Breadcrumbs"] = new[] { ("Tenants", (string?)Url.Action("Index")), (Model.Tenant.Name, (string?)null) }.AsEnumerable(); var t = Model.Tenant; }
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <h1 class="h3 mb-0">@t.Name <span class="badge @(t.Status == "Active" ? "text-bg-success" : "text-bg-danger") align-middle fs-6">@t.Status</span></h1>
+    @if (!t.IsPlatform)
+    {
+        @if (t.Status == "Active")
+        {
+            <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#suspend-modal">Suspend tenant</button>
+        }
+        else
+        {
+            <form asp-action="Activate" asp-route-id="@t.Id" method="post"><button type="submit" class="btn btn-success" data-confirm="Activate this tenant? Its users regain access immediately." data-confirm-label="Activate">Activate tenant</button></form>
+        }
+    }
+</div>
+@if (t.Status == "Suspended")
+{
+    <div class="alert alert-warning">Suspended @t.SuspendedAtUtc?.ToString("yyyy-MM-dd HH:mm") UTC. @(t.SuspensionReason is null ? "" : "Reason: " + t.SuspensionReason)</div>
+}
+<div class="row g-3">
+    <div class="col-12 col-xl-8">
+        <form asp-action="Edit" asp-route-id="@t.Id" method="post" data-loading-form novalidate class="card card-body">
+            <h2 class="h6 mb-3">Profile</h2>
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+            <div class="row g-3">
+                <div class="col-12 col-md-6"><label asp-for="Form.Name" class="form-label">Name</label><input asp-for="Form.Name" class="form-control" /><span asp-validation-for="Form.Name" class="text-danger small"></span></div>
+                <div class="col-12 col-md-6"><label asp-for="Form.Industry" class="form-label">Industry</label><input asp-for="Form.Industry" class="form-control" /></div>
+                <div class="col-12 col-md-6"><label asp-for="Form.Timezone" class="form-label">Timezone</label><input asp-for="Form.Timezone" class="form-control" /></div>
+                <div class="col-12 col-md-6"><label asp-for="Form.Locale" class="form-label">Locale</label><input asp-for="Form.Locale" class="form-control" /></div>
+            </div>
+            <div class="mt-3"><button type="submit" class="btn btn-primary"><span class="spinner-border spinner-border-sm d-none" aria-hidden="true"></span> Save</button></div>
+        </form>
+    </div>
+    <div class="col-12 col-xl-4">
+        <div class="card"><ul class="list-group list-group-flush">
+            <li class="list-group-item d-flex justify-content-between"><span>Slug</span><code>@t.Slug</code></li>
+            <li class="list-group-item d-flex justify-content-between"><span>Active members</span><span>@t.MemberCount</span></li>
+            <li class="list-group-item d-flex justify-content-between"><span>Created</span><span>@t.CreatedAtUtc.ToString("yyyy-MM-dd")</span></li>
+        </ul></div>
+        @if (t.Status == "Active")
+        {
+            <form asp-controller="Tenants" asp-action="Switch" asp-route-id="@t.Id" method="post" class="mt-3"><button type="submit" class="btn btn-outline-primary w-100" data-confirm="Work inside '@t.Name'? This is recorded in the tenant's audit log." data-confirm-label="Switch">Switch into this tenant</button></form>
+        }
+    </div>
+</div>
+@if (!t.IsPlatform && t.Status == "Active")
+{
+    <div class="modal fade" id="suspend-modal" tabindex="-1" aria-labelledby="suspend-title" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><form asp-action="Suspend" asp-route-id="@t.Id" method="post" class="modal-content">
+        <div class="modal-header"><h2 class="modal-title h5" id="suspend-title">Suspend @t.Name?</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+        <div class="modal-body"><p>All users of this tenant are blocked immediately and API refresh tokens are revoked. Data is kept.</p>
+            <label class="form-label" for="reason">Reason (optional, recorded in the audit log)</label><textarea id="reason" name="Reason" class="form-control" maxlength="500" rows="3"></textarea></div>
+        <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-danger">Suspend</button></div>
+    </form></div></div>
+}

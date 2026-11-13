@@ -347,3 +347,53 @@ Pages checked at 1366 px and 390 px: campaign list, new-campaign wizard (live pr
 
 ### Next
 Phase 7 — AI agent (Claude API). Not started. Merge order: PRs #1–#5 first, then this one.
+
+
+---
+# Phase 7 — AI engine and knowledge base
+
+**Status: Completed against test doubles; live Claude, live Voyage and a real Qdrant are NOT verified.**
+
+### Implemented
+- Ports `IAIProvider`, `IEmbeddingProvider`, `IVectorStore`, `IKnowledgeRetriever`, `IConversationMemory`, `IAIOrchestrator`; adapters for Claude (Messages API, prompt caching, retries/timeouts/circuit breaker, usage metering), Voyage AI, a MySQL-backed vector store (default) and Qdrant; per-tenant encrypted keys.
+- Knowledge base: sources (upload, written text, website via the Phase 4 SSRF-safe fetcher), documents, immutable versions, passages, embeddings; txt/md/html/pdf/docx extraction with safe limits; Hangfire indexing with atomic claim, retry, stale takeover and sweep; re-index, disable, delete (removes vectors).
+- RAG workflow on the `ai.reply.requested` event (new queue `{prefix}.ai`): history + rolling summary, deterministic triage, intent/query call, tenant-isolated retrieval, quarantine of instruction-like passages, grounded generation, deterministic validation, permitted actions (`escalate_to_human`, `add_lead_note`) with a tool log, stored as a staff-visible suggestion. **Nothing is ever sent by the AI** (architecture test: the AI module cannot reach the send pipeline).
+- UI + API: knowledge base (sources, documents, versions, passages, re-index, delete, confirm dialogs, empty states, breadcrumbs), retrieval tester, AI settings, AI usage, AI activity, suggestion panel on the conversation page; `/api/v1/knowledge/*` and `/api/v1/ai/*`.
+- Permissions `Knowledge.View/Manage`, `Ai.View/Test/Settings` with default role mappings that reach existing tenants (migration test on a Phase 6 database).
+- First evaluation harness (12 sales scenarios, JSON format for Phase 8's 100) with a live mode behind explicit environment variables.
+
+### Files (important ones)
+`src/LeadPilot.Domain/Ai/Ai.cs`; `src/LeadPilot.Application/Ai/{Ports,Contracts,Logic,Options}.cs`; `src/LeadPilot.Infrastructure/Ai/{Providers,Stores,Extraction,Services,Jobs}/*`; `Persistence/AiModel.cs` + migration `Phase7AiKnowledge`; `Messaging/Broker/Topology.cs` (AI queue); `Api/Controllers/AiControllers.cs`; `Web/Controllers/AiControllers.cs`, `Models/AiModels.cs`, `Views/{Knowledge,AiTester,AiSettings,Ai}/*`, `Views/Shared/_AiSuggestion.cshtml`; tests `Ai*Tests.cs`, `AiKit.cs`, `QdrantVectorStoreTests.cs`, `Evaluation/sales-scenarios.json`; docs listed in the PR. One Phase 5 test (`The_ai_extension_event_is_published_only_for_active_conversations…`) was updated because the event now has a consumer.
+
+### Database changes
+Migration `Phase7AiKnowledge` (earlier migrations untouched): 11 tenant-owned tables, uniques for one AI run per inbound message, document versions, passages, embeddings per model, one settings row per tenant, one summary per conversation; append-only `RetrievalLogs`, `AiUsageEntries`, `AiToolExecutions`. Verified on an empty MySQL 8 database (no pending model changes) and on a Phase 6 database with data. Details: DATABASE_DESIGN.md.
+
+### Tests (MySQL 8.0.46 + RabbitMQ 3.12.1, `dotnet test LeadPilotAI.sln`)
+| Suite | Result |
+|---|---|
+| Build | succeeded, 0 warnings, 0 errors |
+| Unit | **930 passed** (was 795): chunker, prompt guard (15 attacks, 8 benign), sensitivity rules, response validator (price/percent/discount/completion/leak/link/contact), model-output parsing, Claude/Voyage request+response shapes, breaker, HTTP pipeline (429/5xx/401/timeout/connection), extractors (docx XXE and zip bomb, pdf limit, type-by-content), Qdrant adapter incl. tenant filter on every request and a server that ignores filters |
+| Architecture | **70 passed** (was 53) |
+| Integration | **368 passed, 1 skipped, 0 failed** (was 308): ingestion/versions/re-index/delete/disable/website sync/SSRF; RAG end to end through the real webhook, consumers and orchestrator; no invented prices/discounts/demo or payment claims; injection in customer text and in documents; unauthorized actions denied and logged; history, summary, stale and duplicate events; provider failures and retries; usage ledger and limits; retrieval isolation with identical text in two tenants, adversarial cross-tenant prompts, tampered vector store, forged ids on API/MVC/jobs/consumer, DB guard on all 11 entities; permission matrix for 6 roles; MVC pages; real Claude/Voyage adapters against a local server; real Hangfire server; migrations; evaluation skeleton (12/12 with the scripted model) |
+| Skipped (not passed) | `LIVE_the_skeleton_suite_against_the_real_claude_and_voyage_services` (needs `LEADPILOT_EVAL_LIVE=1` and real keys) |
+| Not executed | live Claude, live Voyage, real Qdrant (a binary was downloaded but the sandbox refused to run it), Docker build/compose, live WAHA, load tests |
+
+### Playwright render check (Chromium, scratch database)
+Knowledge base (empty and with documents), add (text/upload/website), document, retrieval tester (error state), AI settings, usage, activity at 1366 px and 390 px: all 200, no horizontal overflow, breadcrumbs present; HTML in a document title is shown encoded. The conversation suggestion panel was not screenshotted (it needs a connected WhatsApp account); its HTML is covered by integration tests. In the tester check a real request with a throwaway key went to Anthropic and returned 401 (no cost).
+
+### Acceptance criteria
+| Criterion | Result |
+|---|---|
+| AI answers from tenant-specific knowledge | **Passed** (scripted model, local provider server): answers quote and cite the tenant's own passages; prices only from cited passages. Real model quality not verified |
+| Unsupported questions trigger an appropriate response | **Passed**: configured safe reply, no model call, escalation |
+| Tenant isolation works for retrieval | **Passed** (store, retriever, API, MVC, jobs, consumer, DB guard) — MySQL store; Qdrant only against a fake |
+| AI cannot execute unauthorized actions | **Passed**: two permitted actions, all others denied and logged; the AI cannot reach the send pipeline |
+| Conversation history is maintained correctly | **Passed**: ordered, bounded, failed messages excluded, rolling summary, no cross-conversation leakage |
+
+### Outstanding / known limits
+1. Live Claude/Voyage never run (runbook in DEVELOPMENT.md); `ServerSideFallback` stays off until then.
+2. Qdrant adapter verified only against a local fake; the MySQL store is brute force (fine up to a few thousand passages, refuses beyond 20,000).
+3. Validation proves numbers, offers, actions and links are backed by cited text, not that every sentence is true; a false statement inside the tenant's own document is "grounded".
+4. PDFs that are scans need OCR (refused with a clear message). Website sources read ≤ 10 pages of one host.
+5. Per-agent model choice, automatic sending, demo scheduling and trial creation are Phase 8.
+6. Owner decisions taken by default: docs/OWNER_DECISIONS.md.

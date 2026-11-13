@@ -1,0 +1,14 @@
+@model IEnumerable<(string Title, string? Url)>
+@if (Model.Any())
+{
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index">Home</a></li>
+            @foreach (var c in Model)
+            {
+                if (c.Url is null) { <li class="breadcrumb-item active" aria-current="page">@c.Title</li> }
+                else { <li class="breadcrumb-item"><a href="@c.Url">@c.Title</a></li> }
+            }
+        </ol>
+    </nav>
+}

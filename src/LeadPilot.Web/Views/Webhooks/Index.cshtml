@@ -1,0 +1,32 @@
+@model WebhooksViewModel
+@using LeadPilot.Domain.Messaging
+@{
+    ViewData["Title"] = "Webhook events"; var q = Model.Query;
+    string Badge(WebhookEventStatus s) => s switch { WebhookEventStatus.Processed => "text-bg-success", WebhookEventStatus.Failed => "text-bg-danger", WebhookEventStatus.Ignored => "text-bg-secondary", _ => "text-bg-info" };
+}
+<h1 class="h3 mb-1">Webhook events</h1>
+<p class="text-muted">Events sent by WAHA to this workspace's accounts. Each event is stored once, then processed in the background. Raw payloads are kept for a limited time.</p>
+@if (!Model.Status.BrokerConfigured || !Model.Status.BrokerReachable) { <div class="alert alert-danger" role="alert">@Model.Status.BrokerNote</div> }
+<div class="row g-3 mb-3">
+    <div class="col-6 col-md"><div class="card card-body"><div class="small text-muted">Waiting to be processed</div><div class="h4 mb-0">@Model.Stats.Received</div></div></div>
+    <div class="col-6 col-md"><div class="card card-body"><div class="small text-muted">Processed</div><div class="h4 mb-0">@Model.Stats.Processed</div></div></div>
+    <div class="col-6 col-md"><div class="card card-body"><div class="small text-muted">Ignored</div><div class="h4 mb-0">@Model.Stats.Ignored</div></div></div>
+    <div class="col-6 col-md"><div class="card card-body"><div class="small text-muted">Outbox: waiting / failed</div><div class="h4 mb-0">@Model.Stats.PendingOutbox / @Model.Stats.FailedOutbox</div></div></div>
+</div>
+<form method="get" asp-action="Index" class="card card-body mb-3"><div class="row g-3 align-items-end">
+    <div class="col-6 col-md-3"><label class="form-label" for="status">Status</label><select id="status" name="status" class="form-select"><option value="">All</option>@foreach (var s in Enum.GetValues<WebhookEventStatus>()) { <option value="@s" selected="@(q.Status == s)">@s</option> }</select></div>
+    <div class="col-6 col-md-3"><label class="form-label" for="eventType">Event</label><select id="eventType" name="eventType" class="form-select"><option value="">All</option>@foreach (var e in new[] { "message", "message.any", "message.ack", "session.status" }) { <option value="@e" selected="@(q.EventType == e)">@e</option> }</select></div>
+    <div class="col-12 col-md-3"><button type="submit" class="btn btn-outline-primary">Filter</button></div>
+</div></form>
+@if (Model.Result.Items.Count == 0) { <div class="card"><partial name="_EmptyState" model='("No events", "No webhook has been received for the selected filters.")' /></div> }
+else
+{
+    <div class="card"><div class="table-responsive"><table class="table align-middle mb-0 small">
+        <thead><tr><th>Received</th><th>Event</th><th>Account</th><th>Status</th><th>Note</th><th>Correlation</th></tr></thead><tbody>
+        @foreach (var w in Model.Result.Items)
+        {
+            <tr><td class="text-nowrap">@w.ReceivedAtUtc.ToString("yyyy-MM-dd HH:mm:ss")</td><td><code>@w.EventType</code></td><td>@w.AccountName</td><td><span class="badge @Badge(w.Status)">@w.Status</span></td><td>@w.Note</td><td><code>@w.CorrelationId</code></td></tr>
+        }
+        </tbody></table></div></div>
+    <partial name="_Pager" model='new PagerModel(Model.Result.Page, Model.Result.TotalPages, Model.Result.TotalCount, "Index", Model.QueryValues)' />
+}

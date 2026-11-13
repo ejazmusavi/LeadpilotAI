@@ -1,0 +1,25 @@
+@model AuditViewModel
+@{ ViewData["Title"] = "Audit log"; }
+<h1 class="h3 mb-3">Audit log</h1>
+<form method="get" asp-action="Index" class="card card-body mb-3"><div class="row g-3 align-items-end">
+    <div class="col-12 col-md-6 col-xl-3"><label class="form-label" for="q">Action contains</label><input id="q" name="q" value="@Model.Query" class="form-control" placeholder="e.g. Role." /></div>
+    <div class="col-12 col-md-6 col-xl-3"><label class="form-label" for="from">From</label><input id="from" name="from" type="date" value="@Model.From?.ToString("yyyy-MM-dd")" class="form-control" /></div>
+    <div class="col-12 col-md-6 col-xl-3"><label class="form-label" for="to">To</label><input id="to" name="to" type="date" value="@Model.To?.ToString("yyyy-MM-dd")" class="form-control" /></div>
+    <div class="col-12 col-md-6 col-xl-3"><button type="submit" class="btn btn-outline-primary">Filter</button></div>
+</div></form>
+@if (Model.Result.Items.Count == 0)
+{
+    <div class="card"><partial name="_EmptyState" model='("No audit entries", "Nothing matches the filter yet.")' /></div>
+}
+else
+{
+    <div class="card"><div class="table-responsive"><table class="table table-sm align-middle mb-0">
+        <thead><tr><th>When (UTC)</th><th>Action</th><th>Actor</th><th>Summary</th></tr></thead>
+        <tbody>
+        @foreach (var a in Model.Result.Items)
+        {
+            <tr><td class="text-nowrap">@a.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm:ss")</td><td><code>@a.Action</code></td><td>@(a.ActorEmail ?? "system")</td><td>@a.Summary</td></tr>
+        }
+        </tbody></table></div></div>
+    <partial name="_Pager" model='new PagerModel(Model.Result.Page, Model.Result.TotalPages, Model.Result.TotalCount, "Index", new Dictionary<string, string?> { ["q"] = Model.Query, ["from"] = Model.From?.ToString("yyyy-MM-dd"), ["to"] = Model.To?.ToString("yyyy-MM-dd") })' />
+}

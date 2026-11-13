@@ -74,3 +74,19 @@ Cross-tenant data leakage (IDOR, filter bypass, cache/vector leakage) · credent
 **Hangfire dashboard:** `/hangfire`, authenticated users only, further restricted to `Tenants.Manage` or `Platform.SwitchTenant`; it can enqueue/delete jobs, so it stays platform-only. Hangfire job arguments contain ids only.
 
 **Known residual risks:** the Google caching question (INTEGRATIONS.md); `Hangfire.MySqlStorage` is unmaintained; website enrichment depends on the host's DNS answering truthfully for the *validation* only (the connect itself is pinned); a very large site could still return 1 MB per request (bounded by `MaxWebsitesPerJob`).
+
+
+## Phase 5 — WhatsApp / WAHA security
+**Ban and policy risk (read first).** WAHA drives a normal WhatsApp account through WhatsApp Web. That is not an official Business API integration; WhatsApp can restrict or ban the number, and a ban removes the customer's chat history and relationship. The UI shows this warning on the accounts pages and the docs list it in INTEGRATIONS.md. Code-level mitigations: consent-gated marketing (`IContactEligibilityService`), service replies only inside a 24 h customer window, suppression/opt-out blocks everything, warm-up (20 first day, +20/day), conservative caps (30/h, 150/day, 30 s gap; hard ceilings 120/h, 1000/day, 10 s), new-contact blocks on 463/475, auto-pause on 3 consecutive failures / session FAILED or STOPPED / unconfirmed delivery, humans resume. The owner should use a dedicated number, never one that holds the business's only customer history, and move to the official API for volume.
+
+**Webhook authentication.** Two independent secrets: the 192-bit key in the URL (identifies the account) and HMAC-SHA512 over the raw body with the account's own secret (`X-Webhook-Hmac`, constant-time compare). The signed session name must match the account. Body ≤ 256 KB, per (key, IP) rate limit, unknown key = ignored with nothing stored, bad signature = 401 and nothing stored. **Replay:** WAHA does not sign the timestamp header, so a captured valid request can be replayed; replays are harmless because storage is idempotent (unique WAHA event id / message id) and ack handling is monotonic. Keep the endpoint on HTTPS.
+
+**SSRF.** The WAHA base URL is operator-supplied, so it is validated (http/https, no credentials/query), resolved and checked inside the connect callback. Link-local and cloud-metadata addresses are always refused; private addresses are refused unless `Messaging:Waha:AllowPrivateHosts=true` (needed for WAHA on the same docker network; default false in compose).
+
+**Secrets.** Base URL, API key and webhook secret are encrypted with Data Protection, bound to tenant+account; masked everywhere (hint only), absent from DTOs, audit and logs. The Worker must share the key ring with Web.
+
+**Inbound content is untrusted.** Messages are stored and HTML-encoded on output; attachments are metadata only (size/MIME checked, no content downloaded in this phase); no inbound text is ever executed or sent to a model (the AI event is a stub).
+
+**Dead-letter queues** are shared by all tenants, so they are visible to platform operators only and show headers, never message bodies. **Opt-out:** keywords STOP/UNSUBSCRIBE/etc. in English, Roman Urdu and Urdu (whole message or short phrase; ordinary sentences containing the word are not opt-outs) create a suppression entry, revoke consent and are audited.
+
+**Residual risks:** WAHA is a third-party gateway with its own security posture (run it on a private network, set its API key); session loss needs a human QR scan; `sendText` has no idempotency key, so "unknown outcome" messages are reconciled rather than resent (a message that was truly lost is marked failed, not resent); live behaviour was not verified against a real WAHA.

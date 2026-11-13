@@ -18,10 +18,24 @@ services:
       retries: 20
     # Not published to the host: only other containers can reach the database.
 
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-leadpilot}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?set in docker/.env}
+    volumes: [rabbitmq-data:/var/lib/rabbitmq]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+    # Not published to the host (management UI included): only other containers can reach the broker.
+
   web:
     build: { context: .., dockerfile: docker/Dockerfile, args: { PROJECT: LeadPilot.Web } }
     restart: unless-stopped
-    depends_on: { mysql: { condition: service_healthy } }
+    depends_on: { mysql: { condition: service_healthy }, rabbitmq: { condition: service_healthy } }
     environment: &appenv
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
       ConnectionStrings__Default: "Server=mysql;Port=3306;Database=${MYSQL_DATABASE:-leadpilot};User=${MYSQL_USER:-leadpilot};Password=${MYSQL_PASSWORD};"
@@ -34,13 +48,20 @@ services:
       DataProtection__KeysPath: /keys
       # Uploaded import files (shared so a file uploaded in the dashboard can be run through the API and vice versa).
       Crm__StorageRoot: /data/files
+      # Messaging: broker, and the address WAHA must be able to reach the Api on (webhooks). Set PUBLIC_API_URL to the Api's public https address.
+      RabbitMq__Host: rabbitmq
+      RabbitMq__UserName: ${RABBITMQ_USER:-leadpilot}
+      RabbitMq__Password: ${RABBITMQ_PASSWORD:?set in docker/.env}
+      Messaging__PublicWebhookBaseUrl: ${PUBLIC_API_URL:-http://localhost:8081}
+      # false (default) = a tenant-supplied WAHA address must be public. Set true ONLY if WAHA runs next to the app on a private network.
+      Messaging__Waha__AllowPrivateHosts: ${WAHA_ALLOW_PRIVATE_HOSTS:-false}
     volumes: [dp-keys:/keys, crm-files:/data/files]
     ports: ["8080:8080"]
 
   api:
     build: { context: .., dockerfile: docker/Dockerfile, args: { PROJECT: LeadPilot.Api } }
     restart: unless-stopped
-    depends_on: { web: { condition: service_started }, mysql: { condition: service_healthy } }
+    depends_on: { web: { condition: service_started }, mysql: { condition: service_healthy }, rabbitmq: { condition: service_healthy } }
     environment:
       <<: *appenv
       Swagger__Enabled: ${SWAGGER_ENABLED:-true}
@@ -51,11 +72,12 @@ services:
   worker:
     build: { context: .., dockerfile: docker/Dockerfile, args: { PROJECT: LeadPilot.Worker } }
     restart: unless-stopped
-    depends_on: { web: { condition: service_started }, mysql: { condition: service_healthy } }
+    depends_on: { web: { condition: service_started }, mysql: { condition: service_healthy }, rabbitmq: { condition: service_healthy } }
     environment: *appenv
     volumes: [dp-keys:/keys]
 
 volumes:
+  rabbitmq-data:
   mysql-data:
   dp-keys:
   crm-files:

@@ -3,6 +3,7 @@ using LeadPilot.Application.Contracts;
 using LeadPilot.Infrastructure.Persistence;
 using LeadPilot.Infrastructure.Discovery;
 using LeadPilot.Infrastructure.Discovery.Jobs;
+using LeadPilot.Infrastructure.Messaging;
 using LeadPilot.Infrastructure.Services;
 using LeadPilot.Infrastructure.Services.Tenancy;
 using LeadPilot.Infrastructure.Services.Crm;
@@ -84,6 +85,7 @@ public static class DependencyInjection
         services.AddCrmServices(config);
         services.AddDiscovery(config);
         services.AddDiscoveryHangfire(config, server: false);   // Web/Api only enqueue; the Worker processes
+        services.AddMessaging(config);
         return services;
     }
 

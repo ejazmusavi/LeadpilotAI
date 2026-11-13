@@ -242,3 +242,60 @@ SSRF, robots, credential handling, tenant isolation and compliance rules are des
 
 ### Next
 Phase 5 — WhatsApp gateway (WAHA) adapter, conversations, webhooks, outbox/RabbitMQ. Do not start before the owner approves Phase 4.
+
+
+## Phase 5 — WhatsApp Gateway Integration (WAHA)
+**Status: Built; every check that could be run here passed (see §4 for counts). NOT verified: a live WAHA instance (none available, no owner credentials), Docker/compose (no daemon).**
+
+### 1. Implemented
+- **WAHA docs read first** (https://waha.devlike.pro, 2026-11-13) and recorded in INTEGRATIONS.md *before* the adapter was written: endpoints, `X-Api-Key`, webhook HMAC-SHA512 (`X-Webhook-Hmac`), ack values, engines, Core/Plus, error 463/475, `@lid`, and six ambiguities with the defensive choice for each.
+- **Provider-independent port `IWhatsAppGateway`** + single adapter `WahaGateway` (SSRF-safe HTTP client, circuit breaker, typed failures, reads retried, **sends never retried**). Architecture tests fail if WAHA specifics appear outside the adapter.
+- **13 entities / tables**: Channel, ChannelAccount, ChannelCredential, Conversation, ConversationAssignment, Message, MessageAttachment, MessageStatusEvent, WebhookEvent, MessageTemplate, OutboxMessage, ProcessedMessage (+ ChannelAccountNotification). Migration `Phase5Messaging`.
+- **Inbound:** `POST /api/v1/webhooks/waha/{key}` → secret key + HMAC verification → tenant/account resolution → normalise → ONE transaction (WebhookEvent + Conversation + Message + OutboxMessage) → Hangfire outbox dispatcher → RabbitMQ (publisher confirms, topology with retry queues and DLQs) → idempotent Worker consumers (tenant scope first; missing/forged TenantId ⇒ DLQ) → conversation update, contact link by E.164, opt-out detection (STOP / UNSUBSCRIBE, English/Roman Urdu/Urdu) with suppression + consent revocation, and an `ai.reply.requested` extension event (no AI logic; Phase 7/8).
+- **Outbound:** eligibility gate (24 h service window vs consent-gated marketing, suppression/opt-out), per-account warm-up, hourly/daily caps and minimum gap, queued message with idempotency key, Hangfire send job (`AutomaticRetry` 0) with an atomic `Queued→Sending` claim, acks applied monotonically (Sent < Delivered < Read), reconcile of unknown outcomes (never auto-resent), sweep for lost jobs, auto-pause (3 consecutive failures, session FAILED/STOPPED, unconfirmed delivery, 463/475 blocks new contacts).
+- **Policy/ban-risk:** conservative defaults and hard ceilings, visible warning on the account pages, docs in SECURITY.md / INTEGRATIONS.md.
+- **Permissions:** `Channels.View`, `Channels.Manage`, `Messages.Send`, `Webhooks.View` added to the catalog and role defaults (existing tenants receive them when Web starts).
+- **UI + REST API:** accounts (add/test/connect/QR/pause/resume/credentials/delete), minimal inbox (list, thread, reply, mark read, close/reopen, assign), templates, webhook events, platform-only dead-letter page; matching `/api/v1` controllers.
+- **Docs updated:** INTEGRATIONS, ARCHITECTURE, DATABASE_DESIGN, MULTI_TENANCY, SECURITY, IMPLEMENTATION_ROADMAP, DEVELOPMENT (owner runbook), this file.
+
+### 2. Files created or modified (important ones)
+`src/LeadPilot.Domain/Messaging/*`; `src/LeadPilot.Application/Messaging/{Gateway,Rules,Contracts}.cs`, `Security/Permissions.cs`; `src/LeadPilot.Infrastructure/Messaging/{Waha,Broker,Services,Jobs}/*`, `Messaging/{MessagingOptions,MessagingServiceCollection}.cs`, `Persistence/{MessagingModel,AppDbContext}.cs`, `Persistence/Migrations/*Phase5Messaging*`, `Discovery/{DiscoveryServiceCollection,Jobs/HangfireIntegration}.cs`, `DependencyInjection.cs`, `LeadPilot.Infrastructure.csproj` (RabbitMQ.Client 7.2.2); `src/LeadPilot.Api/{Controllers/MessagingControllers.cs,ApiControllerBase.cs,Program.cs}`; `src/LeadPilot.Web/{Controllers/MessagingControllers.cs,Models/MessagingModels.cs,Views/{Channels,Conversations,Templates,Webhooks,DeadLetters}/*,Views/Shared/{_WhatsAppRisk,_Layout}.cshtml}`; `docker/docker-compose.yml` (rabbitmq service, env vars); appsettings.Development.json (3 hosts); tests `Messaging*Tests.cs`, `FakeWahaServer.cs`, `MessagingKit.cs`, `Infrastructure.cs`.
+
+### 3. Database changes
+Migration **`Phase5Messaging`** (earlier migrations untouched): 13 tables, all tenant-owned with FK, query filter and cross-tenant FK guard. Global uniques: `ChannelAccounts.GatewayAccountId`, `WebhookKey`; per-tenant uniques on message gateway id, idempotency key, template name, conversation chat id, processed-message consumer key. Applied and checked on (a) an empty MySQL 8 database and (b) a database at the Phase 4 schema holding data (nothing lost; roles gained the new permissions); `HasPendingModelChanges` is false. Details: DATABASE_DESIGN.md §4.
+
+### 4. Tests (MySQL 8.0.46 and RabbitMQ 3.12.1 locally, `dotnet test LeadPilotAI.sln`)
+- **Build:** succeeded, 0 warnings (TreatWarningsAsErrors).
+- **Unit: 685 passed** (was 365): HMAC-SHA512 signature, webhook processing and normalisation (incl. non-numeric ack), error classification (463/475, timeouts, 5xx), endpoint/SSRF policy, circuit breaker, opt-out detector, ack monotonicity, rate/warm-up policy, chat ids, idempotency keys, template renderer, outbound policy, `MessageProcessor` ack/retry/DLQ decisions, RabbitMq options regression.
+- **Architecture: 41 passed** (was 32): messaging entities tenant-owned, WAHA specifics only in the adapter, sends never retried, jobs use the tenant scope runner with no automatic retry, `IgnoreQueryFilters` allow-list, no secrets in DTOs, permission/verb rules for the new controllers.
+- **Integration: 244 passed** (was 147; run with `LEADPILOT_TEST_CONNECTION` and `LEADPILOT_TEST_RABBITMQ` set): inbound flow end to end, duplicate/concurrent webhook storage, outbound (gate, caps, warm-up, idempotency, no duplicate on retry, unknown-outcome reconcile, acks), opt-out and consent, security (bad/missing HMAC, foreign session, suspended tenant, size cap, credential swap), permissions for five roles, tenant isolation (API, MVC, database guard on every new entity, webhooks, consumers), outbox durability, **real RabbitMQ** (confirms, retry queues, DLQ, forged/missing TenantId), Phase 4→5 migration with data and on a clean database, MVC pages.
+- **Failed: 0. Skipped: 0.** One test assertion was wrong on the first full run (it counted deliberate wrong-key calls from other tests on the shared fake); the assertion was corrected and the full suite re-run green.
+- **Browser check** (Playwright + Chromium, 1280 px and 390 px, real Web app on a scratch MySQL database, platform operator switched into an Education workspace): accounts, add-account form, account details, credentials, conversations, conversation thread, templates, new template, webhook events and dead-letter pages all returned 200 with correct titles, **no console errors and no horizontal scroll at either width**; the ban-risk warning shows on the account pages; connection test against an unreachable address showed a clear error. A scratch stand-in answered the connection test, and **the conversation, message and webhook-event rows were inserted by SQL** (labelled "RENDER CHECK") — no real WAHA produced them. The thread correctly said replies are blocked because the account is not connected. Not checked: other browsers, screen readers, QR display, live inbox refresh.
+
+### 5. Security and architecture review
+See SECURITY.md, MULTI_TENANCY.md and ARCHITECTURE.md (Phase 5 sections): two-secret webhook authentication, SSRF-safe adapter, credentials bound to tenant+account, consumer tenant scope, platform-only DLQ, no-duplicate-send design.
+
+### 6. Outstanding issues / decisions for the owner
+1. **Live WAHA: NOT verified.** No instance or credentials were available. The adapter follows the documentation and passes against a fake we wrote from it; run the manual live check in DEVELOPMENT.md and report differences (response shape of `sendText`, ack timing, `@lid` ids, session update verb).
+2. **Ban/policy risk is inherent to WAHA.** Use a dedicated number; consider the official Business Platform for volume (second adapter behind the same port).
+3. **WAHA does not sign the webhook timestamp**, so replays are possible but harmless (idempotent). Keep the endpoint on HTTPS.
+4. **Unconfirmed sends are never re-sent automatically**; after 10 minutes unconfirmed they are marked failed and the account is paused, a person decides.
+5. Attachments are metadata only; content download/storage and sending media are later work. Groups, status and channels are ignored by design.
+6. Webhook payloads are stored for a retention period then purged (row kept); AI behaviour is only the `ai.reply.requested` event.
+7. `Messaging:PublicWebhookBaseUrl` must be set to a URL WAHA can reach, and the Worker must share the Data Protection key ring with Web.
+8. **Docker still unverified** (no daemon); compose gained a `rabbitmq` service and env vars that were only YAML-validated. The Phase 4 live Google check is untouched.
+
+### 7. Acceptance criteria
+| Criterion | Result |
+|---|---|
+| Gateway connection works using actual documentation | **Passed against the fake only** (written from the docs); **live: NOT verified** |
+| Incoming messages are stored once and update conversations | **Passed** (duplicates and concurrent deliveries tested, incl. real RabbitMQ) |
+| Outgoing messages queued with idempotency, no duplicates on retry | **Passed** (atomic claim, no adapter retry, reconcile) |
+| Delivery status updates applied monotonically | **Passed** |
+| Opt-out stops further sends | **Passed** |
+| Tenant isolation for all new data, webhooks and consumers | **Passed** |
+| Failed/forged events visible and dead-lettered | **Passed** |
+| Ban risk documented with conservative defaults and UI warning | **Passed** |
+
+### Next
+Phase 6 — campaigns (consent-gated, uses the outbound pipeline). Do not start before the owner approves Phase 5.

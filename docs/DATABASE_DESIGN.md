@@ -67,8 +67,26 @@ All tables are tenant-owned (global filter + SaveChanges guard + cross-tenant FK
 
 Defaults are data, not code paths: the "Education — Pakistan" starter pack (the school categories — Private, Primary, Secondary, Higher secondary schools, Colleges, Academies, Educational institutions — their search phrases, and 11 Pakistani cities) is installed automatically only for workspaces whose industry is *Education*, or on demand for any workspace; installing is idempotent and never overwrites edits. Existing `LeadSources` rows get `(Discovery, "<connector>:<externalId>")`, reusing the Phase 3 unique `(TenantId, Type, ExternalId)`.
 
-## 4. Messaging (Phase 5)
-Channel (G catalog: WhatsApp…) · ChannelAccount (T: gateway account id **unique globally** for webhook→tenant resolution, Status) · ChannelCredential (T: encrypted) · Conversation (T: ContactId, ChannelAccountId, Status Open/Pending/Closed, AiMode Active/Paused/HumanControl, AssignedUserId, last message timestamps) · Message (T: ConversationId, Direction, ExternalMessageId, Body, Status, CorrelationId, IdempotencyKey; unique `(TenantId, ChannelAccountId, ExternalMessageId)` and unique outbound idempotency key) · MessageAttachment · MessageStatusEvent (Sent/Delivered/Read/Failed) · WebhookEvent (T: payload, `(ChannelAccountId, ExternalEventId)` unique, ProcessedAt) · MessageTemplate (T) · OutboxMessage (T) · ProcessedMessage (consumer idempotency) · ConversationAssignment (history), InternalNote.
+## 4. Messaging (Phase 5) — implemented, migration `Phase5Messaging`
+All 13 tables are tenant-owned (`TenantId` NOT NULL + FK to `Tenants` + query filter + SaveChanges guard incl. cross-tenant FK rejection). Enums are stored as strings.
+
+| Table | Purpose / key columns | Constraints and indexes |
+|---|---|---|
+| `Channels` | per-tenant catalog entry (WhatsApp via WAHA), created with the first account | unique `(TenantId, Type, Provider)` |
+| `ChannelAccounts` | one WAHA session: `DisplayName`, `GatewayAccountId` (session name), `WebhookKey` (random 24 bytes hex in the webhook URL), `ConnectionStatus`, `PhoneE164`, pause state (`IsPaused`, `PausedAutomatically`, `PauseReason`), `ConsecutiveFailures`, `NewContactBlockedUntilUtc`, `HourlyCap`/`DailyCap`/`MinDelaySeconds`, `WarmupStartedAtUtc`, `LastSendAtUtc`, soft delete | **unique `GatewayAccountId` across ALL tenants**, **unique `WebhookKey`**, FK → `Channels` |
+| `ChannelCredentials` | `ProtectedBaseUrl`, `ProtectedApiKey`, `ProtectedWebhookSecret` (Data Protection, ciphertext bound to tenant+account), `KeyHint` | unique `ChannelAccountId`; there is no plain-text column |
+| `Conversations` | `ExternalChatId`, `PeerPhoneE164`, `PeerName`, `ContactId?`, `Status`, `AiMode` (default Paused), `AssignedUserId?`, `LastMessageAtUtc`/`LastInboundAtUtc`/`LastOutboundAtUtc`, `LastMessagePreview`, `UnreadCount`, `OptedOutAtUtc?` | unique `(TenantId, ChannelAccountId, ExternalChatId)`, index `(TenantId, LastMessageAtUtc)`, `(TenantId, ContactId)`; FK → account, contact (RESTRICT) |
+| `ConversationAssignments` | append-only assignment history | index `(TenantId, ConversationId, AssignedAtUtc)` |
+| `Messages` | `Direction`, `Purpose` (Service/Marketing), `Status` (Queued, Sending, Unknown, Sent, Delivered, Read, Failed, Received), `ExternalMessageId`, `Body`, `CorrelationId`, `IdempotencyKey`, `SendAttempts`, `NextAttemptAtUtc`, `SendStartedAtUtc`, sent/delivered/read/failed timestamps, `FailureCode/Message`, `Version` (concurrency token) | **unique `(TenantId, ChannelAccountId, ExternalMessageId)`** (exactly-once storage; NULLs allowed), **unique `(TenantId, IdempotencyKey)`**, index `(Status, NextAttemptAtUtc)` (sweeper), `(TenantId, ChannelAccountId, SentAtUtc)` (rate counts), `(TenantId, ConversationId, OccurredAtUtc)` |
+| `MessageAttachments` | metadata only (`FileName`, `MimeType`, `SizeBytes`, `Status` NotDownloaded/Rejected, `StorageKey` stays empty until a later phase stores content through `ITenantFileStore`) | size ≤ 16 MB and a MIME allow-list are applied when the row is created |
+| `MessageStatusEvents` | **append-only** history of every status (`Source` queue/send/ack/reconcile, `GatewayAck`, `Applied`) | index `(TenantId, MessageId, RecordedAtUtc)` |
+| `WebhookEvents` | raw payload (`longtext`, purged after `ExpiresAtUtc` but the row stays), `ExternalEventId` (WAHA event id, or `sha256:<body hash>` when there is none), `EventType`, `Status`, `Note`, `CorrelationId`, `SourceIp` | **unique `(ChannelAccountId, ExternalEventId)`**, index `ExpiresAtUtc` |
+| `MessageTemplates` | tenant-managed text with `{{placeholders}}`, `Category`, `IsActive` | unique `(TenantId, Name)` |
+| `OutboxMessages` | transactional outbox: `Type` (= routing key), `PayloadJson`, `CorrelationId`, `CausationId`, `Status`, `Attempts`, `NextAttemptAtUtc` (also the dispatcher lease), `PublishedAtUtc`, `LastError` | index `(Status, NextAttemptAtUtc)` |
+| `ProcessedMessages` | consumer idempotency | **unique `(TenantId, ConsumerName, MessageId)`** |
+| `ChannelAccountNotifications` | auto-pause / disconnect / restriction notices shown on the account page | index `(TenantId, ChannelAccountId, CreatedAtUtc)` |
+
+Not created on purpose: `InternalNote` (Phase 8 hand-off UI needs it, nothing in Phase 5 does), Hangfire tables (Hangfire owns them), RabbitMQ topology (declared by the broker layer).
 
 ## 5. Campaigns (Phase 6)
 Campaign (T: Type, Status, ScheduleAtUtc, TemplateId, AudienceDefinition JSON, Limits) · CampaignRecipient (T: CampaignId, ContactId, Status, EligibilitySnapshot JSON, MessageId?; **unique `(CampaignId, ContactId)`** prevents duplicates) · CampaignExecutionLog (T) · CampaignStats read model (aggregations from events).

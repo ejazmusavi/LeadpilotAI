@@ -66,3 +66,69 @@ Source base (structured provider 35, authorized directory 30, user supplied 30, 
 
 ### Extension points
 `authorized_directory`, `leadgen_integration` and `meta_lead_ads` are descriptor-only connectors: creating a search with them answers 409 `connector_not_configured` with the reason; their `SearchAsync` throws and contains no data path (architecture-tested). To add one: implement `IDiscoveryConnector` in Infrastructure, register it, give it a descriptor with `Kind = Search`, and document its terms here first.
+
+
+## Phase 5 — WAHA documentation findings (read 2026-11-13, BEFORE the adapter was written)
+Source pages (all under `https://waha.devlike.pro/docs/`, fetched 2026-11-13): `overview/how-to-avoid-blocking/`, `overview/quick-start/`, `how-to/sessions/`, `how-to/send-messages/`, `how-to/receive-messages/`, `how-to/events/`, `how-to/chats/`, `how-to/contacts/`, `how-to/security/`, `how-to/engines/`, `how-to/waha-plus/`, `how-to/swagger/`, `engines/noweb/`, `engines/gows/`, `engines/webjs/`. The live OpenAPI/Swagger document is served **by the user's own WAHA instance** (`/` Swagger UI, `/-json` OpenAPI) and could not be fetched here (no instance), so response bodies that the prose docs do not show are marked *undocumented* and handled defensively.
+
+### What WAHA is (and is not)
+WAHA is a self-hosted Node.js REST wrapper over community WhatsApp **Web** engines (WEBJS/WPP = headless Chromium, NOWEB = Node websocket, GOWS = Go websocket). It is **not** the WhatsApp Business Platform: there are no official templates, no 24-hour-window enforcement by the provider, no delivery SLA. The docs' own "How to Avoid Blocking" page says a bot should **never initiate a conversation**, should only reply, should send *seen* → *typing* → *stop typing* → *text*, and that accounts are banned after a handful of spam reports. See "Operational / policy risk" below and SECURITY.md.
+
+### Authentication
+- Header `X-Api-Key: <WAHA_API_KEY>` on every API call (also accepted as `?x-api-key=` query, which we never use because URLs are logged). Media download (`/api/files/...`) needs the key too. Keys API (admin keys / per-session scoped keys) exists; we only need one key.
+- Dashboard/Swagger have separate basic-auth credentials; irrelevant to the adapter.
+- WAHA docs: "Do not expose the API on public networks"; use HTTPS via a reverse proxy.
+
+### Endpoints used (all prefixed `/api`)
+| Port operation | Endpoint | Notes |
+|---|---|---|
+| list sessions | `GET /api/sessions?all=true` | array of `{name,status,config,me:{id,pushName},engine:{engine}}`; `all=true` includes STOPPED |
+| session status | `GET /api/sessions/{session}` | same object |
+| create session | `POST /api/sessions` body `{name,start?,config:{webhooks:[{url,events,hmac:{key},retries,customHeaders}],metadata,ignore,...}}` | session `name` is WAHA's id. `start:false` postpones start |
+| update session | docs inconsistent: prose says `PUT /api/sessions/{session}`, feature table says `POST /api/sessions/{name}/` | **ambiguous** – adapter uses PUT (prose + examples) and the fake mirrors it; verify on a live instance |
+| start / stop / restart / logout / delete | `POST /api/sessions/{s}/start`, `/stop`, `/restart`, `/logout`; `DELETE /api/sessions/{s}` | |
+| QR | `GET /api/{session}/auth/qr?format=raw` → `{value}`; `Accept: application/json` with default format → `{mimetype,data(base64)}`; default is a binary PNG | QR expires: first 60 s, then 20 s each, max 6, then status FAILED; refetch on every `SCAN_QR_CODE` status event |
+| pairing code | `POST /api/{session}/auth/request-code` body `{phoneNumber}` → `{code}` | "not always available" – QR is the fallback |
+| me | `GET /api/sessions/{s}/me` | `{id,pushName,reachoutTimelock,messageCapping}` or `null` when stopped |
+| reachout timelock | `GET /api/sessions/{s}/timelock` → `{enforcementType,isActive,timeEnforcementEnds(unix s)}` | send error 463 to *new* contacts; do **not** restart/re-pair |
+| message capping | `GET /api/sessions/{s}/capping` → `{cappingStatus: NONE\|FIRST_WARNING\|SECOND_WARNING\|CAPPED,totalQuota,usedQuota,cycleStart,cycleEnd,...}` | send error 475 when CAPPED; open set of values |
+| send text | `POST /api/sendText` body `{session,chatId,text,reply_to?,linkPreview?}` | chatId = digits + `@c.us` (no `+`). **Response body shape is not shown in the prose docs** (Swagger only). We expect a message object with `id` like `true_<chat>_<HEX>`; the adapter accepts `id` as string or `id._serialized`/`_data.id._serialized`/`key.id`, and if no id can be read the send is classified **Unknown** (not failed, not sent) |
+| seen | `POST /api/sendSeen` body `{session,chatId,messageIds?[],participant?}`. Without ids: all unread (≤30 DM). `messageIds` honoured only by NOWEB/GOWS | |
+| typing | `POST /api/startTyping`, `/api/stopTyping` body `{session,chatId}` | used before replies (docs recommendation) |
+| message lookup | `GET /api/{session}/chats/{chatId}/messages/{messageId}` (full `true_..`/`false_..` id on any engine; plain id on GOWS/NOWEB) and `GET /api/{session}/chats/{chatId}/messages?limit=&filter.fromMe=&filter.timestamp.gte=` → `[{id,timestamp,from,fromMe,body,hasMedia,ack,ackName,replyTo,_data}]` | NOWEB needs its store enabled to list; used for ack lookup and crash-window reconciliation |
+| number check | `GET /api/contacts/check-exists?phone=&session=` → `{numberExists,chatId,pn}` | Brazil 9-digit quirk; optional |
+| webhooks | per-session `config.webhooks[]` (or global env `WHATSAPP_HOOK_*`) | see below |
+No endpoint accepts a **client-supplied idempotency key** or client message id. WAHA therefore cannot de-duplicate a retried `sendText` — that guarantee must come from us (see ARCHITECTURE.md Phase 5).
+
+### Webhook delivery
+- Envelope (documented): `{"id":"evt_<ulid>","timestamp":<ms>,"event":"message","session":"default","metadata":{...},"me":{"id":"7911@c.us","pushName":"~"},"payload":{...},"environment":{"tier":"CORE","version":"..."},"engine":"WEBJS"}`. Older examples omit `id`/`timestamp`, so `id` is treated as **optional**; when absent we derive a deterministic hash (see below).
+- Headers: `X-Webhook-Request-Id` (unique per delivery request, changes on retry), `X-Webhook-Timestamp` (unix **ms**), and when `hmac.key` is configured `X-Webhook-Hmac` (hex digest of the **raw request body**) and `X-Webhook-Hmac-Algorithm: sha512`. Algorithm = **HMAC-SHA512**, key = the configured secret, input = raw bytes, output = lowercase hex (docs example: body `{"event":"message","session":"default","engine":"WEBJS"}`, key `my-secret-key`, signature `208f8a55…fa89`; our unit test asserts this vector).
+- **Replay protection is not provided by WAHA's scheme** (the timestamp header is not part of the signed input). We add: reject timestamps outside a tolerance window (default ±5 min, configurable) *as a defence-in-depth check only*, and rely on event-id/hash uniqueness for idempotency.
+- Retries: configurable per webhook (`constant|linear|exponential`, default none unless set) → **duplicates and out-of-order delivery must be expected**. We configure `exponential`, 2 s, 8 attempts when registering the webhook.
+- Events relevant to us: `message` (incoming; `payload`: `id` `false_<chat>_<HEX>`, `timestamp` (unix **seconds**), `from`, `fromMe`, `to`, `body`, `hasMedia`, `media{url,mimetype,filename,error}`, `ack`, `replyTo`, `source: app|api`, `_data`), `message.any` (fires for every creation **including our own sent messages**; `source:"api"` for ones sent via the API), `message.ack` (`payload`: `id`, `from`, `participant`, `fromMe`, `ack`, `ackName`), `session.status` (`payload.status`, `payload.statuses[]`, `payload.data` e.g. `reachoutTimelock`/`messageCapping`/passkey), `message.reaction`, `message.edited`, `message.revoked`, `message.waiting`, `engine.event`, group/label/call/presence events (ignored by us).
+- Ack values: `-1 ERROR`, `0 PENDING`, `1 SERVER` (sent), `2 DEVICE` (delivered), `3 READ`, `4 PLAYED`. **WEBJS only emits `message.ack` when the session config sets `webjs.tagsEventsOn=true`** (docs warn of stability impact). Group acks use `message.ack.group` semantic (id carries `_participant`); we ignore group chats.
+- Identifiers: `123@c.us` user, `123@lid` hidden user id (WhatsApp is migrating to it; the real phone may only be in `check-exists.pn` or engine-specific `_data`), `@g.us` group, `@newsletter` channel, `status@broadcast`. **Design consequence:** a `@lid` sender whose phone cannot be derived is stored as a conversation without a linked Contact and is never auto-linked by guesswork.
+- The `fromMe` flag: `message` is documented as "incoming"; in the sample payload `fromMe` can still be `true` (sample copied across events). We **trust `fromMe=false` only** for inbound and ignore `fromMe=true` on `message`.
+
+### Engines and Core vs Plus (as documented 2026-11-13)
+- WEBJS/WPP (Chromium; heavy), NOWEB and GOWS (websocket; light). Payloads "may differ significantly" between engines. GOWS/NOWEB support `messageIds` in seen; NOWEB needs `config.noweb.store.enabled` for message lookup; GOWS has storage flags; passkey pairing only on GOWS. Default recommendation here: **GOWS or NOWEB**, test before switching engines.
+- **WAHA Plus no longer exists**: since WAHA 2026.6.1 everything formerly Plus (multiple sessions, media, storages, security) is in the free Core image `devlikeapro/waha`. Older Core builds (< 2026.6.1) allow **one session only** – the account page tells the owner to check. We do not depend on Plus features beyond multi-session.
+
+### Limits / error behaviour
+No numeric API rate limit is documented. WhatsApp-side restrictions: error **463** (reachout timelock) and **475** (message capping) on sends to new contacts, session stays WORKING. Error response bodies are *undocumented*; the adapter classifies by HTTP status first (401/403 auth, 404 unknown session/chat, 422 validation, 429 and 5xx/timeouts transient) and then by message text containing `463`/`475`/`timelock`/`capping`.
+
+### Ambiguities handled defensively
+1. `sendText` response shape (undocumented in prose) → id extraction fallbacks; missing id ⇒ send outcome *Unknown* ⇒ reconciliation, never an automatic re-send.
+2. Update-session verb (PUT vs POST) → PUT; failure reported as a typed error.
+3. Webhook event `id` optional in older payload samples → deterministic hash fallback.
+4. `message.ack` for WEBJS needs `tagsEventsOn` → account setup sets it for WEBJS and the UI warns; delivery tracking also has a polling fallback (`GetMessageStatusAsync`) used by reconciliation.
+5. `@lid` identifiers → no guess-linking.
+6. `fromMe` on `message` events → only `false` accepted as inbound.
+
+### Operational / policy risk (WAHA specific — shown to the owner in the UI and SECURITY.md)
+Automating WhatsApp Web violates WhatsApp's terms for unofficial clients; **accounts can be restricted or permanently banned without notice**, sessions drop (status FAILED/STOPPED) and need a human to re-scan a QR code, and delivery/read events can be incomplete. WAHA's own guidance: reply-only, small volumes, human-like pacing. LeadPilot therefore ships conservative defaults and does not offer a "bulk send" feature in Phase 5: per-account **hourly cap 30 and daily cap 150 by default (hard ceilings 120/h and 1000/day)**, a minimum random delay of 20–45 s between sends from one account, **warm-up** (day-1 cap 20 growing +20/day to the configured cap), **only contacts that pass `IContactEligibilityService` receive marketing**, opt-outs create suppression immediately, and an account **auto-pauses** after 3 consecutive send failures, a FAILED/STOPPED status, or a 463/475 signal. Use of the official WhatsApp Business Platform is the right answer for bulk/cold marketing and remains a future adapter behind the same `IWhatsAppGateway` port.
+
+
+### Phase 5 — adapter as built and verification status
+`WahaGateway` (Infrastructure/Messaging/Waha) implements `IWhatsAppGateway` from the findings above: `X-Api-Key`; session create/start/stop/update; QR; `sendText`; `sendSeen`/typing; chat message lookup for reconciliation; webhook registration with HMAC, retries and `ignore` of groups/status/channels/broadcast; normalisation of `message`, `message.ack`, `session.status`. Ambiguities were handled defensively: unknown `sendText` response shapes are accepted only if a message id can be found (else outcome Unknown → reconcile); PUT is used for session update; unknown events are stored and ignored.
+**Verified:** against a loopback fake WAHA with fault injection (timeouts, 5xx, 401, 463/475, missing id) — request shapes follow the documentation but the fake is our reading of it. **NOT verified:** a real WAHA (any engine), real QR pairing, real ack ordering, real `@lid` behaviour, real webhook retries. Run the manual live check in DEVELOPMENT.md before trusting production behaviour.

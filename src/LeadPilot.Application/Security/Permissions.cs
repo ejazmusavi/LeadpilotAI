@@ -28,6 +28,10 @@ public static class PermissionCodes
     public const string DiscoveryReview = "Discovery.Review";
     public const string DiscoveryManage = "Discovery.Manage";
     public const string IntegrationsManage = "Integrations.Manage";
+    public const string ChannelsView = "Channels.View";
+    public const string ChannelsManage = "Channels.Manage";
+    public const string MessagesSend = "Messages.Send";
+    public const string WebhooksView = "Webhooks.View";
     // Platform (operator) permissions: grantable only by roles of the platform tenant.
     public const string TenantsManage = "Tenants.Manage";
     public const string PlatformSwitchTenant = "Platform.SwitchTenant";
@@ -66,6 +70,10 @@ public static class PermissionCatalog
         new(PermissionCodes.DiscoveryReview, "Review discovery results", "Discovery", "Approve results into the CRM or reject them."),
         new(PermissionCodes.DiscoveryManage, "Manage discovery setup", "Discovery", "Edit category search phrases, saved locations and starter packs."),
         new(PermissionCodes.IntegrationsManage, "Manage integrations", "Administration", "Store connector API keys and set monthly usage limits."),
+        new(PermissionCodes.ChannelsView, "View messaging channels", "Messaging", "See WhatsApp accounts, their status and the message templates."),
+        new(PermissionCodes.ChannelsManage, "Manage messaging channels", "Messaging", "Add, connect, pause and remove WhatsApp accounts, change sending limits and manage message templates."),
+        new(PermissionCodes.MessagesSend, "Send messages", "Messaging", "Send WhatsApp messages to contacts (consent and suppression rules always apply)."),
+        new(PermissionCodes.WebhooksView, "View webhook events", "Messaging", "See received gateway events and the messaging queue health of this workspace."),
         new(PermissionCodes.TenantsManage, "Manage tenants", "Platform", "Create, edit, suspend and activate tenants.", IsPlatform: true),
         new(PermissionCodes.PlatformSwitchTenant, "Switch into tenants", "Platform", "Operate inside any active tenant (audited).", IsPlatform: true),
     ];
@@ -104,7 +112,7 @@ public static class SystemRoles
         new(TenantStaff, "Day-to-day work with leads and conversations.", false,
         [
             PermissionCodes.LeadsView, PermissionCodes.LeadsCreate, PermissionCodes.LeadsUpdate, PermissionCodes.CampaignsView,
-            PermissionCodes.ConversationsView, PermissionCodes.ConversationsReply, PermissionCodes.ReportsView, PermissionCodes.DiscoveryView
+            PermissionCodes.ConversationsView, PermissionCodes.ConversationsReply, PermissionCodes.ReportsView, PermissionCodes.DiscoveryView, PermissionCodes.ChannelsView
         ]),
         new(SalesManager, "Manages the sales team, leads and conversations.", false,
         [
@@ -112,18 +120,20 @@ public static class SystemRoles
             PermissionCodes.ConversationsView, PermissionCodes.ConversationsReply, PermissionCodes.ReportsView,
             PermissionCodes.LeadsImport, PermissionCodes.LeadsExport, PermissionCodes.LeadsAssign, PermissionCodes.ConsentManage,
             PermissionCodes.SuppressionManage, PermissionCodes.PipelinesManage, PermissionCodes.ScoringManage,
-            PermissionCodes.DiscoveryView, PermissionCodes.DiscoveryRun, PermissionCodes.DiscoveryReview, PermissionCodes.DiscoveryManage
+            PermissionCodes.DiscoveryView, PermissionCodes.DiscoveryRun, PermissionCodes.DiscoveryReview, PermissionCodes.DiscoveryManage,
+            PermissionCodes.ChannelsView, PermissionCodes.MessagesSend
         ]),
         new(SalesAgent, "Works leads and conversations.", false,
         [
             PermissionCodes.LeadsView, PermissionCodes.LeadsCreate, PermissionCodes.LeadsUpdate, PermissionCodes.ConversationsView, PermissionCodes.ConversationsReply,
-            PermissionCodes.DiscoveryView
+            PermissionCodes.DiscoveryView, PermissionCodes.ChannelsView
         ]),
         new(MarketingManager, "Plans and runs campaigns.", false,
         [
             PermissionCodes.LeadsView, PermissionCodes.CampaignsView, PermissionCodes.CampaignsCreate, PermissionCodes.CampaignsExecute,
             PermissionCodes.ConversationsView, PermissionCodes.ReportsView,
-            PermissionCodes.LeadsExport, PermissionCodes.ConsentManage, PermissionCodes.SuppressionManage, PermissionCodes.DiscoveryView, PermissionCodes.DiscoveryRun
+            PermissionCodes.LeadsExport, PermissionCodes.ConsentManage, PermissionCodes.SuppressionManage, PermissionCodes.DiscoveryView, PermissionCodes.DiscoveryRun,
+            PermissionCodes.ChannelsView, PermissionCodes.MessagesSend
         ]),
         new(ReadOnly, "Can view everything operational but change nothing.", false,
         [

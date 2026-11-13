@@ -5,6 +5,7 @@ using LeadPilot.Infrastructure.Discovery.Connectors;
 using LeadPilot.Infrastructure.Discovery.Jobs;
 using LeadPilot.Infrastructure.Discovery.Services;
 using LeadPilot.Infrastructure.Discovery.Website;
+using LeadPilot.Infrastructure.Messaging;
 using LeadPilot.Infrastructure.Services.Tenancy;
 using LeadPilot.Infrastructure.Tenancy;
 using LeadPilot.Infrastructure.Web;
@@ -62,6 +63,8 @@ public static class DiscoveryServiceCollection
         services.AddCrmServices(config);
         services.AddDiscovery(config);
         services.AddDiscoveryHangfire(config, server: true);
+        services.AddMessaging(config);
+        services.AddMessagingConsumers();
         return services;
     }
 

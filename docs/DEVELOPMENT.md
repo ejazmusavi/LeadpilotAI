@@ -131,3 +131,33 @@ Cost: **one** Text Search request (pageSize 5, Enterprise SKU because the field 
 3. Run: `SSL_CERT_FILE=/root/.ccr/ca-bundle.crt dotnet run --project tools/LiveGoogleCheck` (drop `SSL_CERT_FILE` outside the sandbox).
 4. Expected: `OK http=200 calls=1 candidates=<1..5>`, a line of field counts (name/address/website/phone/city/province/country/sourceUrl), types such as `school`, place ids starting with `ChIJ`, attribution `Place data from Google Maps`, retention 30 days.
 5. Errors the adapter reports: 400 `API key not valid` = the key (or the proxy substitution) is wrong; 403 = API not enabled/billing off/key restricted; 429 = quota. In the app itself: Connectors & usage → paste the key → Discovery → New search (Pakistan / Lahore / Private schools, max results 5) and watch the usage page.
+
+
+## Configuration added in Phase 5
+| Key | Where | Meaning |
+|---|---|---|
+| `RabbitMq:Host` / `Port` (5672) / `VirtualHost` (/) / `Username` / `Password` / `Prefix` (`leadpilot.messaging`) | Api, Web, Worker | Broker. Without `Host` events stay in the outbox and `/health/ready` omits the broker check. Compose adds a `rabbitmq` service (management UI on 15672). |
+| `RabbitMq:RetryDelaysSeconds` | Worker | Optional list; default 5, 30, 120, 600. Leave unset unless you need to change it. |
+| `Messaging:PublicWebhookBaseUrl` | Api, Web, Worker | **Public https URL of the Api** that WAHA can reach (compose: `PUBLIC_API_URL`). Used to build the webhook URL registered in WAHA. |
+| `Messaging:Waha:AllowPrivateHosts` (false) | Api, Web, Worker | Allow a WAHA on a private address (same docker network / localhost). Link-local/metadata always refused. Compose: `WAHA_ALLOW_PRIVATE_HOSTS`. |
+| `Messaging:*` caps and timing | all | Defaults are conservative (30/h, 150/day, 30 s gap, warm-up); see `MessagingOptions`. Per-account overrides are limited to the hard ceilings. |
+| Tenant settings `messaging.optout_keywords`, `messaging.auto_create_leads`, `messaging.service_window_hours` | per tenant | Extra opt-out words, create a lead for unknown senders (off), service window (24). |
+
+## Owner runbook: connecting WAHA (WhatsApp)
+**Read the ban-risk warning first** (SECURITY.md / the accounts page). Use a dedicated number you can afford to lose.
+1. **Run WAHA** (Core, WEBJS engine): `docker run -d --name waha -p 3000:3000 -e WAHA_API_KEY=<long-random-key> -e WHATSAPP_DEFAULT_ENGINE=WEBJS devlikeapro/waha`. Check the current image/tag and engine options at https://waha.devlike.pro; keep the port private (bind to localhost or a private network).
+2. **Settings you need:** base URL (e.g. `http://waha:3000` from compose, or `http://localhost:3000`), the API key from step 1, engine (WEBJS/NOWEB/GOWS), a session name (letters, digits, `-`, `_`; e.g. `school-main`; must be unique across the whole platform), and a webhook secret (generated for you by LeadPilot unless you type one; it is the HMAC key).
+3. **Prerequisites:** `Messaging:PublicWebhookBaseUrl` set to an address WAHA can reach (for local WAHA with `AllowPrivateHosts=true`, `http://localhost:5100` works). RabbitMQ and the Worker running (`docker compose up`, or `dotnet run` the three projects).
+4. **Add the account:** sign in as an administrator → Messaging → Channels → New account → enter the settings above. The credentials are encrypted and never shown again.
+5. **Webhook registration** happens when you press **Connect** (LeadPilot calls WAHA to create/start the session with the webhook URL `…/api/v1/webhooks/waha/<key>`, events `message`, `message.ack`, `session.status`, HMAC secret and retry policy). You do not register it by hand; if you must, use the URL and secret shown on the account page.
+6. **Scan the QR** shown on the account page with the phone (WhatsApp → Linked devices). Status moves to Working.
+7. **Minimal manual live check** (about 5 minutes, one conversation):
+   a. From another phone send "Hello" to the connected number → within seconds it appears under Conversations, and the Webhooks page lists a `message` event as Processed.
+   b. Reply from the conversation page → the message shows Sent, then Delivered/Read after the other phone opens it.
+   c. From the other phone send "STOP" → the conversation shows opted-out, the contact is suppressed and a further reply is refused.
+   d. Stop the Worker, send "Hello" again, start the Worker → the message appears (outbox/queue durability).
+   e. Compare each step with the fake-based tests; report anything that differs (response shapes, ack timing, `@lid` ids) so the adapter can be corrected.
+8. **Troubleshooting:** webhook 401 = wrong secret; nothing arrives = WAHA cannot reach the webhook URL (check `PublicWebhookBaseUrl`) or `Waha:AllowPrivateHosts`; events stuck in the outbox = broker unreachable (health check); account paused = read the notification on the account page, fix the cause, then Resume.
+
+## Tests for Phase 5
+`dotnet test` as before. Broker tests need a RabbitMQ: set `LEADPILOT_TEST_RABBITMQ=<host>` (e.g. `localhost`, default guest/guest; otherwise they are skipped and reported as skipped). The WAHA fake is test-only (`FakeWahaServer`).

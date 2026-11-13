@@ -53,6 +53,19 @@
             @if (perms.Has(PermissionCodes.IntegrationsManage)) { <a class="nav-link @(Nav("/Connectors") ? "active" : "")" asp-controller="Connectors" asp-action="Index">Connectors &amp; usage</a> }
         </nav>
     }
+    @if (perms.Has(PermissionCodes.ConversationsView) || perms.Has(PermissionCodes.ChannelsView) || perms.Has(PermissionCodes.WebhooksView))
+    {
+        <div class="nav-section">Messaging</div>
+        <nav class="nav flex-column px-2">
+            @if (perms.Has(PermissionCodes.ConversationsView))
+            {
+                <a class="nav-link @(Nav("/Conversations") ? "active" : "")" asp-controller="Conversations" asp-action="Index">Conversations</a>
+                <a class="nav-link @(Nav("/Templates") ? "active" : "")" asp-controller="Templates" asp-action="Index">Message templates</a>
+            }
+            @if (perms.Has(PermissionCodes.ChannelsView)) { <a class="nav-link @(Nav("/Channels") ? "active" : "")" asp-controller="Channels" asp-action="Index">WhatsApp accounts</a> }
+            @if (perms.Has(PermissionCodes.WebhooksView)) { <a class="nav-link @(Nav("/Webhooks") ? "active" : "")" asp-controller="Webhooks" asp-action="Index">Webhook events</a> }
+        </nav>
+    }
     @if (perms.Has(PermissionCodes.SuppressionManage))
     {
         <div class="nav-section">Compliance</div>
@@ -91,6 +104,7 @@
         <div class="nav-section">Platform</div>
         <nav class="nav flex-column px-2">
             <a class="nav-link @(Nav("/Tenants") && !Nav("/Tenants/Switch") ? "active" : "")" asp-controller="Tenants" asp-action="Index">Tenants</a>
+            <a class="nav-link @(Nav("/DeadLetters") ? "active" : "")" asp-controller="DeadLetters" asp-action="Index">Dead-letter queues</a>
             <a class="nav-link" href="/hangfire" target="_blank" rel="noopener">Background jobs</a>
         </nav>
     }

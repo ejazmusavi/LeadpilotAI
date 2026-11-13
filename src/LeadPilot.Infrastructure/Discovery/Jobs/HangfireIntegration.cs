@@ -92,13 +92,16 @@ public static class HangfireSetup
         if (server)
             services.AddHangfireServer(o =>
             {
-                o.Queues = [DiscoveryQueues.Discovery, "default"];
+                o.Queues = [DiscoveryQueues.Discovery, Messaging.Jobs.MessagingQueues.Messaging, "default"];
                 o.WorkerCount = Math.Clamp(config.GetValue("Discovery:Hangfire:Workers", 2), 1, 16);
                 o.ServerName = $"leadpilot-{Environment.MachineName}";
             });
         return services;
     }
 
-    public static void ScheduleRecurring(IRecurringJobManager recurring) =>
+    public static void ScheduleRecurring(IRecurringJobManager recurring)
+    {
         recurring.AddOrUpdate<DiscoveryRetentionJob>(DiscoveryRetentionJob.JobId, x => x.RunAsync(CancellationToken.None), Cron.Daily(3));
+        Messaging.Jobs.MessagingJobs.ScheduleRecurring(recurring);
+    }
 }

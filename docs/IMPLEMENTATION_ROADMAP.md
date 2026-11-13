@@ -36,7 +36,11 @@ Build green · unit + integration tests green (incl. tenant-isolation tests for 
 |---|---|
 | .NET 10 package compatibility (Pomelo, Hangfire MySQL) | Verify in Phase 1 before committing versions; fallback to latest stable-compatible with documented note |
 | Gateway docs delayed | Phase 5 blocked, not faked; Phases 3/4/7 continue |
-| WhatsApp account bans | Rate caps, consent gate, monitoring, auto-pause (see INTEGRATIONS.md) |
+| WhatsApp account bans | Rate caps, consent gate, monitoring, auto-pause (see INTEGRATIONS.md). **Phase 5 built these; live WAHA verification pending** |
 | AI hallucination of price/features | Grounding + tool-only facts + validation + escalation + 100-scenario test suite |
 | Duplicate sends on retry | Idempotency keys, unique recipient/message constraints, outbox |
 | Scope creep | README Rule 5/10; changes to stack require approval |
+
+
+## Status after Phase 5
+Phase 5 (WhatsApp gateway via WAHA) is **built and tested against a fake WAHA and a real RabbitMQ/MySQL; not verified against a live WAHA instance** (no instance available, owner runbook in DEVELOPMENT.md). Docker/compose remains unverified. Phase 6 (campaigns) may use the outbound pipeline (`IOutboundQueueService`, eligibility gate, caps); Phase 7/8 consume the `ai.reply.requested` event. Not started.

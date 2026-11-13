@@ -85,3 +85,19 @@ The `IgnoreQueryFilters` allow-list did not grow in Phase 3.
 - **Background jobs:** the Hangfire payload is `(tenantId, jobId)`; `ITenantScopeRunner` fails closed on an empty/unknown/suspended tenant; a payload pairing tenant A with tenant B's job id finds nothing in A's scope and does nothing (tested with a real Hangfire server).
 - Monthly limits and usage are per tenant and per connector; the dashboard `/hangfire` is platform-only.
 - Test coverage: `DiscoverySecurityTests` (every endpoint 401/403, A↔B 404 for read/approve/reject/cancel/retry/rerun/delete, bulk, lists, spoofed `TenantId` in body/query/header, credentials, runner, DB guard on each entity).
+
+
+## Phase 5 additions (messaging)
+| Item | Implementation | Verified by |
+|---|---|---|
+| 13 new tenant-owned tables | `ITenantOwned` → FK, index, query filter and SaveChanges guard generated automatically; architecture test requires every entity in `Domain.Messaging` to be tenant-owned | `MessagingArchitectureTests`, `Every_messaging_table_returns_nothing_without_a_tenant_and_only_own_rows_with_one` |
+| Cross-tenant FKs | the Phase 2 guard rejects all 11 new relationships (Conversation→Account/Contact, Message→Conversation/Account/Template, Attachment/StatusEvent→Message, WebhookEvent/Credential/Notification→Account, Assignment→Conversation, Account→Channel) | `The_database_guard_rejects_a_cross_tenant_reference_for_every_messaging_entity` |
+| Webhook → tenant | secret URL key + per-account HMAC + signed session name; the lookup is the only new cross-tenant read (`MessagingDirectory`, on the `IgnoreQueryFilters` allow-list, together with the outbox/sweep scans); everything after it runs in the resolved tenant's scope | `A_webhook_for_one_tenants_account_can_never_write_into_another_tenant`, unknown-account, suspended-tenant tests |
+| Global uniqueness | `ChannelAccounts.GatewayAccountId` and `WebhookKey` are unique across all tenants; every other uniqueness is per tenant (same template name, idempotency key or gateway message id may exist in two tenants) | `Uniqueness_is_per_tenant_except_for_the_global_session_and_webhook_keys…`, migration test |
+| Credentials | ciphertext bound to `tenant:account`; a swapped ciphertext is not opened and the gateway is not called | `One_tenants_stored_credentials_are_never_opened_or_used_for_another_tenant` |
+| Hangfire jobs | arguments are `(tenantId, messageId)`; jobs run through `ITenantScopeRunner` (fails closed for empty/unknown/suspended tenants); `AutomaticRetry` is 0 for every messaging job | architecture test, send-runner tests |
+| RabbitMQ consumers | `TenantId` header parsed first; missing/forged/mismatching/unknown/suspended ⇒ dead-letter; data access only inside the tenant scope with explicit tenant predicates | `MessageProcessorTests` (unit), `Consumers_dead_letter_forged_or_missing_tenant_ids…`, `A_message_without_a_tenant_header_or_with_a_forged_one_lands_in_the_dead_letter_queue…` (real broker) |
+| Outbox dispatcher | scans for tenants with due rows, then publishes **per tenant inside that tenant's scope**; suspended tenants' events wait | `A_suspended_tenants_events_wait_in_the_outbox…` |
+| Dead-letter queues | the queues are shared by all tenants, so **only platform operators** (`Tenants.Manage`) can see them, and only headers (tenant id, type, reason, attempts), never payloads | permission matrix tests, `/DeadLetters` page tests |
+| API/MVC | every service query repeats `TenantId == context tenant`; foreign ids answer 404 for every conversation, message, template, account and webhook-event endpoint, with the data and the gateway verified untouched | `MessagingSecurityTests`, `MessagingWebTests.The_mvc_pages_answer_404…` |
+| Settings | `messaging.optout_keywords`, `messaging.auto_create_leads`, `messaging.service_window_hours` are ordinary per-tenant settings (Settings page) | opt-out / auto-create tests |

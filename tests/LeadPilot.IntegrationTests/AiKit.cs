@@ -65,8 +65,11 @@ public sealed class ScriptedLlm : IRawAIProvider
     {
         var chunks = Chunks(r);
         if (chunks.Count == 0) return Json(new { answer = "Hello! How can I help you today?", citations = Array.Empty<string>(), confidence = 0.9, needs_human = false, reason = "", next_action = "Wait for the customer's question.", actions = Array.Empty<object>() });
-        var first = chunks[0].Text.Split('.')[0].Trim() + ".";
-        return Json(new { answer = first + " Would you like more details?", citations = new[] { chunks[0].Ref }, confidence = 0.9, needs_human = false, reason = "", next_action = "Offer a demo.", actions = Array.Empty<object>() });
+        // like a grounded model: answer with the sentence of the passages that fits the question best
+        var words = Regex.Split(Latest(r).ToLowerInvariant(), "[^\\p{L}\\p{Nd}]+").Where(w => w.Length >= 4).ToHashSet();
+        var best = chunks.SelectMany(c => Regex.Split(c.Text, "(?<=\\.)\\s+|\\n+").Select(sentence => (c.Ref, Sentence: sentence.Trim(), Score: words.Count(w => sentence.ToLowerInvariant().Contains(w))))).Where(x => x.Sentence.Length > 10 && !x.Sentence.StartsWith('#')).OrderByDescending(x => x.Score).First();
+        var first = best.Sentence.TrimEnd('.') + ".";
+        return Json(new { answer = first + " Would you like more details?", citations = new[] { best.Ref }, confidence = 0.9, needs_human = false, reason = "", next_action = "Offer a demo.", actions = Array.Empty<object>() });
     }
 }
 
@@ -237,6 +240,9 @@ public sealed class AiWorld : IAsyncDisposable
         if (configure) await w.ConfigureAsync(enable);
         return w;
     }
+
+    /// <summary>The same tenant seen through another worker composition (for example one with a tampered vector store). Disposing it disposes only that worker.</summary>
+    public AiWorld WithWorker(WorkerHarness worker) => new() { App = App, TenantId = TenantId, AdminUser = AdminUser, Admin = Admin, Worker = worker };
 
     public static WorkerHarness BuildWorker(AppFixture app, Action<IServiceCollection>? configure = null, Dictionary<string, string?>? config = null) =>
         MessagingKit.BuildWorker(app, configure: configure, extraConfig: config);

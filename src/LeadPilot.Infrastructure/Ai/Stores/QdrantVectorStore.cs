@@ -74,10 +74,11 @@ public sealed class QdrantVectorStore(IHttpClientFactory httpFactory, ITenantCon
 
     public async Task<long> CountAsync(CancellationToken ct)
     {
+        var filter = Filter();      // the tenant is resolved BEFORE any request is made
         long total = 0;
         foreach (var c in await CollectionsAsync(ct))
         {
-            using var r = await SendAsync(HttpMethod.Post, $"collections/{c}/points/count", new { filter = Filter(), exact = true }, ct, allowNotFound: true);
+            using var r = await SendAsync(HttpMethod.Post, $"collections/{c}/points/count", new { filter, exact = true }, ct, allowNotFound: true);
             if (r is null) continue;
             using var doc = JsonDocument.Parse(await r.Content.ReadAsStringAsync(ct));
             total += doc.RootElement.GetProperty("result").GetProperty("count").GetInt64();

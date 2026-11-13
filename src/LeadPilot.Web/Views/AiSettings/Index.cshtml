@@ -30,7 +30,7 @@
     <div class="alert alert-info" role="alert">@s.DocumentsNeedingReindex document version(s) were indexed with another embedding model. <a asp-controller="Knowledge" asp-action="Index">Re-index them in the knowledge base</a>.</div>
 }
 <form asp-action="Save" method="post" data-loading-form novalidate class="card card-body mb-3">
-    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+    <div asp-validation-summary="All" class="text-danger"></div>
     <h2 class="h5">Models</h2>
     <div class="row g-3 mb-3">
         <div class="col-12 col-md-6 col-lg-3"><label asp-for="Form.ChatModel" class="form-label">Answer model</label><input asp-for="Form.ChatModel" class="form-control" list="models" /><span asp-validation-for="Form.ChatModel" class="text-danger"></span></div>

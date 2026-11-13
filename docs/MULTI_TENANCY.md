@@ -104,3 +104,10 @@ The `IgnoreQueryFilters` allow-list did not grow in Phase 3.
 
 ## Phase 6 additions (campaigns)
 All eight new tables are `ITenantOwned` (architecture test); services use the tenant predicate (foreign ids are 404) on top of the global filter. Jobs carry ids only and run in `ITenantScopeRunner` (fails closed for unknown/empty tenants); a campaign or message id of tenant A executed in B's scope finds nothing (tested). The `campaigns.events` consumer reads the verified `TenantId` header first; a forged tenant with another tenant's campaign id is dead-lettered (`campaign_not_found_for_tenant`). A campaign cannot reference another tenant's template, account, contact or parent (service validation + DB guard). The kill switch, approval policy and cool-down are per tenant. `CampaignDirectory` is the only new `IgnoreQueryFilters` user (tenant ids only). Tests: API, MVC, jobs, consumer, DB guard for each entity, spoofed `tenantId` on every body/query.
+
+
+## Phase 7 additions
+- All 11 AI entities are `ITenantOwned` (global filter + save guard); cross-tenant references (a chunk of tenant A pointing at tenant B's version, an interaction for B's conversation, a tool log for B's interaction, spoofed tenant ids) are refused; `RetrievalLog`, `AiUsageEntry` and `AiToolExecution` are append-only.
+- The vector store takes the tenant from `ITenantContext` itself: no method has a tenant parameter, so callers can neither omit nor change it. The retriever re-checks every hit against the database. A test replaces the store with one that returns foreign, disabled and outdated chunks: none is returned.
+- Jobs (`KnowledgeJob`) and the AI consumer run inside `ITenantScopeRunner` / the verified `TenantId` header; ids of another tenant are no-ops or dead-letters. The only cross-tenant query is `KnowledgeDirectory` (ids only, allow-listed).
+- Per-tenant circuit breakers: one workspace's bad key or exhausted quota never opens the breaker of another.

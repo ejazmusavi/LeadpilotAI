@@ -32,11 +32,12 @@ public sealed class TenantSaveChangesInterceptor : SaveChangesInterceptor
     {
         var tenant = db.Tenant;
         var entries = db.ChangeTracker.Entries().Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted).ToList();
+        var lookups = new LookupCache(db);
 
         foreach (var entry in entries)
         {
-            if (entry.Entity is AuditLog && entry.State != EntityState.Added)
-                throw new InvalidOperationException("Audit log entries are append-only.");
+            if (entry.Entity is IAppendOnly && entry.State != EntityState.Added)
+                throw new InvalidOperationException($"{entry.Metadata.ShortName()} rows are append-only: they cannot be changed or deleted.");
 
             if (entry.Entity is not ITenantOwned) continue;
 
@@ -51,14 +52,14 @@ public sealed class TenantSaveChangesInterceptor : SaveChangesInterceptor
                         prop.CurrentValue = tid = tenant.TenantId.Value;
                     }
                     EnsureActiveTenantOrPlatform(tenant, tid, entry);
-                    await EnsureForeignKeysSameTenantAsync(db, entry, tid, async, ct);
+                    await EnsureForeignKeysSameTenantAsync(db, lookups, entry, tid, async, ct);
                     break;
 
                 case EntityState.Modified:
                     if (prop.IsModified) throw new CrossTenantViolationException($"TenantId of {entry.Metadata.ShortName()} is immutable.");
                     EnsureActiveTenantOrPlatform(tenant, (Guid)prop.OriginalValue!, entry);
                     if (entry.Properties.Any(p => p.IsModified && p.Metadata.IsForeignKey()))
-                        await EnsureForeignKeysSameTenantAsync(db, entry, (Guid)prop.CurrentValue!, async, ct);
+                        await EnsureForeignKeysSameTenantAsync(db, lookups, entry, (Guid)prop.CurrentValue!, async, ct);
                     break;
 
                 case EntityState.Deleted:
@@ -76,7 +77,7 @@ public sealed class TenantSaveChangesInterceptor : SaveChangesInterceptor
             throw new CrossTenantViolationException($"Attempted to write {entry.Metadata.ShortName()} belonging to another tenant.");
     }
 
-    private static async Task EnsureForeignKeysSameTenantAsync(AppDbContext db, EntityEntry entry, Guid entityTenantId, bool async, CancellationToken ct)
+    private static async Task EnsureForeignKeysSameTenantAsync(AppDbContext db, LookupCache cache, EntityEntry entry, Guid entityTenantId, bool async, CancellationToken ct)
     {
         foreach (var fk in entry.Metadata.GetForeignKeys())
         {
@@ -86,22 +87,52 @@ public sealed class TenantSaveChangesInterceptor : SaveChangesInterceptor
             var value = entry.Property(fk.Properties[0].Name).CurrentValue as Guid?;
             if (value is null || value == Guid.Empty) continue;
 
-            // Principal tracked in the same unit of work? Compare directly; otherwise ask the database.
-            var tracked = db.ChangeTracker.Entries().FirstOrDefault(e => e.Metadata == fk.PrincipalEntityType
-                && Equals(e.Property(fk.PrincipalKey.Properties[0].Name).CurrentValue, value));
+            // Principal tracked in the same unit of work? Compare directly; otherwise ask the database (once per principal per save).
             Guid? principalTenant;
-            if (tracked is not null) principalTenant = (Guid)tracked.Property(nameof(ITenantOwned.TenantId)).CurrentValue!;
+            if (cache.TryGetTracked(fk.PrincipalEntityType, fk.PrincipalKey.Properties[0].Name, value.Value, out var trackedTenant)) principalTenant = trackedTenant;
+            else if (cache.TryGetLooked(principalType, value.Value, out var cached)) principalTenant = cached;
             else
             {
                 var method = (async ? LookupAsyncMethod : LookupSyncMethod).MakeGenericMethod(principalType);
                 principalTenant = async
                     ? await (Task<Guid?>)method.Invoke(null, [db, value.Value, ct])!
                     : (Guid?)method.Invoke(null, [db, value.Value, ct]);
+                cache.RememberLooked(principalType, value.Value, principalTenant);
             }
 
             if (principalTenant is not null && principalTenant != entityTenantId)
                 throw new CrossTenantViolationException($"{entry.Metadata.ShortName()} references a {fk.PrincipalEntityType.ShortName()} that belongs to another tenant.");
         }
+    }
+
+    /// <summary>Per-save memo: tenant of tracked principals (indexed once) and of principals already fetched from the database.</summary>
+    private sealed class LookupCache(AppDbContext db)
+    {
+        private Dictionary<(IEntityType, string, Guid), Guid>? _tracked;
+        private readonly Dictionary<(Type, Guid), Guid?> _looked = [];
+
+        public bool TryGetTracked(IEntityType type, string keyName, Guid id, out Guid tenant)
+        {
+            _tracked ??= BuildTracked();
+            return _tracked.TryGetValue((type, keyName, id), out tenant);
+        }
+
+        private Dictionary<(IEntityType, string, Guid), Guid> BuildTracked()
+        {
+            var map = new Dictionary<(IEntityType, string, Guid), Guid>();
+            foreach (var e in db.ChangeTracker.Entries())
+            {
+                if (e.Entity is not ITenantOwned || e.State == EntityState.Detached) continue;
+                var key = e.Metadata.FindPrimaryKey();
+                if (key is null || key.Properties.Count != 1) continue;
+                if (e.Property(key.Properties[0].Name).CurrentValue is Guid id && e.Property(nameof(ITenantOwned.TenantId)).CurrentValue is Guid t)
+                    map[(e.Metadata, key.Properties[0].Name, id)] = t;
+            }
+            return map;
+        }
+
+        public bool TryGetLooked(Type type, Guid id, out Guid? tenant) => _looked.TryGetValue((type, id), out tenant);
+        public void RememberLooked(Type type, Guid id, Guid? tenant) => _looked[(type, id)] = tenant;
     }
 
     private static readonly MethodInfo LookupAsyncMethod = typeof(TenantSaveChangesInterceptor).GetMethod(nameof(LookupTenantAsync), BindingFlags.NonPublic | BindingFlags.Static)!;

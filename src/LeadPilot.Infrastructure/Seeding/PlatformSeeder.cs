@@ -43,7 +43,23 @@ public static class PlatformSeeder
             await RoleProvisioner.SyncSystemRolesAsync(db, tenant, permissions, now, ct);
         await db.SaveChangesAsync(ct);
 
+        await EnsureCrmDefaultsAsync(db, now, ct);
         await EnsurePlatformOwnerAsync(db, users, config, platform, now, logger, ct);
+    }
+
+    /// <summary>Gives every customer tenant that predates the CRM (or lost it) its default pipeline, lead statuses and scoring rules. Idempotent.</summary>
+    private static async Task EnsureCrmDefaultsAsync(AppDbContext db, DateTime now, CancellationToken ct)
+    {
+        var withPipeline = (await db.Pipelines.IgnoreQueryFilters().Select(p => p.TenantId).Distinct().ToListAsync(ct)).ToHashSet();
+        var withStatuses = (await db.LeadStatuses.IgnoreQueryFilters().Select(p => p.TenantId).Distinct().ToListAsync(ct)).ToHashSet();
+        var withScoring = (await db.ScoringRuleSets.IgnoreQueryFilters().Select(p => p.TenantId).Distinct().ToListAsync(ct)).ToHashSet();
+        foreach (var tenant in await db.Tenants.Where(t => !t.IsPlatform).ToListAsync(ct))
+        {
+            if (!withPipeline.Contains(tenant.Id)) Services.Crm.CrmDefaults.AddPipeline(db, tenant.Id, now);
+            if (!withStatuses.Contains(tenant.Id)) Services.Crm.CrmDefaults.AddStatuses(db, tenant.Id, now);
+            if (!withScoring.Contains(tenant.Id)) Services.Crm.CrmDefaults.AddScoring(db, tenant.Id, now);
+        }
+        await db.SaveChangesAsync(ct);
     }
 
     private static async Task EnsurePlatformOwnerAsync(AppDbContext db, UserManager<ApplicationUser> users, IConfiguration config, Tenant platform, DateTime now, ILogger logger, CancellationToken ct)

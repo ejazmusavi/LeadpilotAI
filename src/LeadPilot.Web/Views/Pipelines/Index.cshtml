@@ -1,0 +1,58 @@
+@model PipelinesViewModel
+@using LeadPilot.Domain.Crm
+@{ ViewData["Title"] = "Pipelines"; }
+<h1 class="h3 mb-1">Pipelines</h1>
+<p class="text-muted">A pipeline is the ordered list of stages a lead moves through. Every workspace starts with the default 14 stages; rename, reorder, add and remove them to fit your business. New leads start in the default pipeline.</p>
+@foreach (var p in Model.Pipelines)
+{
+    <div class="card mb-3">
+        <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div><strong>@p.Name</strong> @if (p.IsDefault) { <span class="badge text-bg-primary">default</span> } @if (!p.IsActive) { <span class="badge text-bg-secondary">inactive</span> } <span class="text-muted small ms-2">@p.LeadCount active lead(s)</span></div>
+            <div class="d-flex flex-wrap gap-2">
+                <form asp-action="Rename" asp-route-id="@p.Id" method="post" class="d-flex gap-1"><input name="Name" value="@p.Name" class="form-control form-control-sm" aria-label="Pipeline name" maxlength="100" required /><button type="submit" class="btn btn-sm btn-outline-secondary">Rename</button></form>
+                @if (!p.IsDefault && p.IsActive) { <form asp-action="SetDefault" asp-route-id="@p.Id" method="post"><button type="submit" class="btn btn-sm btn-outline-primary" data-confirm="Make @p.Name the default pipeline? New leads will start in it." data-confirm-label="Make default">Make default</button></form> }
+                @if (!p.IsDefault) { <form asp-action="SetActive" asp-route-id="@p.Id" method="post"><input type="hidden" name="active" value="@((!p.IsActive).ToString().ToLowerInvariant())" /><button type="submit" class="btn btn-sm btn-outline-warning">@(p.IsActive ? "Deactivate" : "Activate")</button></form> }
+            </div>
+        </div>
+        <div class="table-responsive"><table class="table align-middle mb-0">
+            <thead><tr><th style="width:3rem">#</th><th>Stage</th><th>Type</th><th>Leads</th><th></th></tr></thead>
+            <tbody>
+            @{ var i = 0; }
+            @foreach (var s in p.Stages)
+            {
+                i++;
+                <tr>
+                    <td>@i</td>
+                    <td colspan="2">
+                        <form asp-action="UpdateStage" asp-route-id="@p.Id" asp-route-stageId="@s.Id" method="post" class="row g-2">
+                            <div class="col-12 col-md-6"><input name="Name" value="@s.Name" class="form-control form-control-sm" aria-label="Stage name" maxlength="100" required /></div>
+                            <div class="col-8 col-md-4"><select name="Kind" class="form-select form-select-sm" aria-label="Stage type">@foreach (var k in Enum.GetValues<StageKind>()) { <option value="@k" selected="@(k == s.Kind)">@k</option> }</select></div>
+                            <div class="col-4 col-md-2"><button type="submit" class="btn btn-sm btn-outline-secondary">Save</button></div>
+                        </form>
+                    </td>
+                    <td>@s.LeadCount</td>
+                    <td class="text-end table-actions text-nowrap">
+                        <form asp-action="MoveStage" asp-route-id="@p.Id" asp-route-stageId="@s.Id" method="post"><input type="hidden" name="delta" value="-1" /><button type="submit" class="btn btn-sm btn-outline-secondary" aria-label="Move @s.Name up" disabled="@(i == 1)">↑</button></form>
+                        <form asp-action="MoveStage" asp-route-id="@p.Id" asp-route-stageId="@s.Id" method="post"><input type="hidden" name="delta" value="1" /><button type="submit" class="btn btn-sm btn-outline-secondary" aria-label="Move @s.Name down" disabled="@(i == p.Stages.Count)">↓</button></form>
+                        <form asp-action="DeleteStage" asp-route-id="@p.Id" asp-route-stageId="@s.Id" method="post"><button type="submit" class="btn btn-sm btn-outline-danger" data-confirm="Delete the stage @s.Name? Only possible while no lead or opportunity is in it." data-confirm-label="Delete">Delete</button></form>
+                    </td>
+                </tr>
+            }
+            </tbody></table></div>
+        <div class="card-body border-top">
+            <form asp-action="AddStage" asp-route-id="@p.Id" method="post" class="row g-2 align-items-end">
+                <div class="col-12 col-md-6 col-xl-4"><label class="form-label small" for="stage-name-@p.Id">New stage</label><input id="stage-name-@p.Id" name="Name" class="form-control form-control-sm" maxlength="100" required /></div>
+                <div class="col-8 col-md-4 col-xl-3"><label class="form-label small" for="stage-kind-@p.Id">Type</label><select id="stage-kind-@p.Id" name="Kind" class="form-select form-select-sm" asp-items="Html.GetEnumSelectList<StageKind>()"></select></div>
+                <div class="col-4 col-md-2"><button type="submit" class="btn btn-sm btn-primary">Add stage</button></div>
+            </form>
+            <div class="form-text">Types: <em>Open</em> = in progress, <em>Won</em>, <em>Lost</em>, and <em>Suppressed</em> = never contact (leads in such a stage are excluded from every audience).</div>
+        </div>
+    </div>
+}
+<form asp-action="Create" method="post" data-loading-form novalidate class="card card-body">
+    <h2 class="h6">New pipeline</h2>
+    <div class="row g-3 align-items-end">
+        <div class="col-12 col-md-6 col-xl-4"><label asp-for="NewPipeline.Name" class="form-label"></label><input asp-for="NewPipeline.Name" class="form-control" required /></div>
+        <div class="col-12 col-md-6 col-xl-3"><button type="submit" class="btn btn-primary"><span class="spinner-border spinner-border-sm d-none" aria-hidden="true"></span> Create with default stages</button></div>
+    </div>
+</form>

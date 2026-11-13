@@ -50,6 +50,7 @@ public sealed class TenantAdminService(
             db.Tenants.Add(tenant);
             var permissions = await RoleProvisioner.SyncPermissionsAsync(db, ct);
             await RoleProvisioner.SyncSystemRolesAsync(db, tenant, permissions, now, ct);
+            if (!tenant.IsPlatform) Services.Crm.CrmDefaults.AddAll(db, tenant.Id, now); // default pipeline, lead statuses, scoring rules
 
             (TenantInvitation, string)? invite = null;
             if (!string.IsNullOrWhiteSpace(request.AdminEmail))

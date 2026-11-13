@@ -61,3 +61,18 @@ A **platform tenant** (`Tenant.IsPlatform`, slug `platform`, never suspendable) 
 - Access JWTs are valid until expiry (15 min default) for signature purposes, but every request re-checks user status, membership and tenant status, so suspension/removal is immediate.
 - Refresh tokens are not purged yet (no job host before Phase 6).
 - Rate limiting for the API login is per IP only.
+
+## Phase 3 additions (CRM)
+| Item | Implementation | Verified by |
+|---|---|---|
+| 20 new tenant-owned tables | `ITenantOwned` → tenant FK, index and query filter generated automatically; architecture test requires every entity in `Domain.Crm` to be tenant-owned | architecture + `Every_crm_table_returns_nothing_without_a_tenant_and_only_own_rows_with_one` |
+| Cross-tenant FKs between CRM rows | Same guard as Phase 2 (all 19 relationships); principals tracked in the same unit of work are compared directly, others are looked up once per save and memoised | `Cross_tenant_foreign_keys_are_rejected_for_every_new_entity` (mutation-checked) |
+| Immutable history | `IAppendOnly` (AuditLog, ConsentRecord, LeadActivity, LeadScore, OpportunityActivity): any update/delete is rejected inside SaveChanges | `Consent_rows_cannot_be_changed_or_deleted_even_by_code`, architecture tests |
+| Service-level ownership | every service query repeats `TenantId == context tenant`; foreign ids → 404, foreign references inside a body → 400, bulk ids → "Lead not found" | `CrmTenantIsolationApiTests` (list, 404 on every read, 404 on every write with B verified untouched, references, spoofing), `CrmWebTests` (same through MVC) |
+| Spoofed tenant id | all request records inherit `TenantScopedRequest`; the Phase 2 filter rejects body/query/route/form/header values that name another tenant | `A_spoofed_tenant_id_is_rejected_everywhere_a_client_could_send_one` |
+| Per-tenant uniqueness | tags, categories, statuses, pipelines, suppression values, versions are unique **per tenant** (the same value may exist in two tenants) | `Unique_constraints_are_scoped_per_tenant` |
+| Eligible audience | computed per tenant in SQL; another tenant's contacts and suppressions are never joined | `Tenant_A_cannot_list_or_find_tenant_B_data` |
+| Files | `LocalTenantFileStore` resolves only keys inside `tenants/{activeTenantId}/…` and rejects anything else | code + isolation tests (imports of B are 404 for A) |
+| Provisioning | defaults are inserted in an explicit platform scope for the new/existing tenant; `PlatformSeeder` (already on the `IgnoreQueryFilters` allow-list) is the only new reader across tenants | `A_phase2_database_upgrades_and_existing_tenants_receive_crm_defaults_and_permissions` |
+
+The `IgnoreQueryFilters` allow-list did not grow in Phase 3.

@@ -44,6 +44,10 @@ public sealed class TestWorld
     public TestUser AUsersOnly { get; private set; } = default!;
     public TestUser BAdmin { get; private set; } = default!;
     public TestUser BReadOnly { get; private set; } = default!;
+    public TestUser ASalesManager { get; private set; } = default!;
+    public TestUser ASalesAgent { get; private set; } = default!;
+    public TestUser AMarketing { get; private set; } = default!;
+    public TestUser BSalesManager { get; private set; } = default!;
     public Guid RoleA { get; private set; }
     public Guid RoleB { get; private set; }
     public Guid TenantAdminRoleA { get; private set; }
@@ -64,6 +68,11 @@ public sealed class TestWorld
         w.AReadOnly = await w.AddUserAsync(w.A.Id, $"a-ro-{suffix}@a.test", SystemRoles.ReadOnly);
         w.BAdmin = await w.AddUserAsync(w.B.Id, $"b-admin-{suffix}@b.test", SystemRoles.TenantAdministrator);
         w.BReadOnly = await w.AddUserAsync(w.B.Id, $"b-ro-{suffix}@b.test", SystemRoles.ReadOnly);
+
+        w.ASalesManager = await w.AddUserAsync(w.A.Id, $"a-sm-{suffix}@a.test", SystemRoles.SalesManager);
+        w.ASalesAgent = await w.AddUserAsync(w.A.Id, $"a-agent-{suffix}@a.test", SystemRoles.SalesAgent);
+        w.AMarketing = await w.AddUserAsync(w.A.Id, $"a-mkt-{suffix}@a.test", SystemRoles.MarketingManager);
+        w.BSalesManager = await w.AddUserAsync(w.B.Id, $"b-sm-{suffix}@b.test", SystemRoles.SalesManager);
 
         w.RoleA = await w.AddRoleAsync(w.A.Id, "A Custom " + suffix, PermissionCodes.LeadsView);
         w.RoleB = await w.AddRoleAsync(w.B.Id, "B Custom " + suffix, PermissionCodes.LeadsView);
@@ -148,11 +157,13 @@ public sealed class ApiSession
     }
 
     public Task<HttpResponseMessage> Get(string url) => Http.GetAsync(url);
-    public Task<HttpResponseMessage> Post(string url, object? body = null) => Http.PostAsJsonAsync(url, body ?? new { });
-    public Task<HttpResponseMessage> Put(string url, object body) => Http.PutAsJsonAsync(url, body);
+    public Task<HttpResponseMessage> Post(string url, object? body = null) => Http.PostAsJsonAsync(url, body ?? new { }, JsonOptions);
+    public Task<HttpResponseMessage> Put(string url, object body) => Http.PutAsJsonAsync(url, body, JsonOptions);
     public Task<HttpResponseMessage> Delete(string url) => Http.DeleteAsync(url);
 
-    public static async Task<T> Json<T>(HttpResponseMessage r) => (await r.Content.ReadFromJsonAsync<T>(new JsonSerializerOptions(JsonSerializerDefaults.Web)))!;
+    public static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() } };
+
+    public static async Task<T> Json<T>(HttpResponseMessage r) => (await r.Content.ReadFromJsonAsync<T>(JsonOptions))!;
 
     public static string TenantClaim(string jwt)
     {

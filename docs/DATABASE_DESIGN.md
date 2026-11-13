@@ -27,23 +27,32 @@ Rules enforced in code on top of the schema: foreign keys between tenant-owned r
 
 Default system roles: *Platform Owner*, *SaaS Administrator* (platform tenant only) and *Tenant Administrator*, *Tenant Staff*, *Sales Manager*, *Sales Agent*, *Marketing Manager*, *Read-only* (every customer tenant). Mapping lives in `Application/Security/Permissions.cs` and is re-synchronised on every Web start.
 
-## 2. CRM (Phase 3)
-| Entity | Scope | Notes |
-|---|---|---|
-| Lead | T | Organization-level (school/company). Name, Category, Country/Province/City/District/Area, Address, Website, Status (pipeline enum), OwnerUserId, Score, Confidence, IsArchived. Dedup keys: normalized name+city, domain, phone → indexes `(TenantId, NormalizedKey)` |
-| Contact | T | LeadId FK, Name, Role, Phone (E.164), Email, PhoneVerifiedAt, DataOrigin (Public/Provided/Verified). Unique `(TenantId, LeadId, Phone)` |
-| LeadSource | T | Type, ExternalId, Url, RetrievedAtUtc, attribution; unique `(TenantId, Type, ExternalId)` |
-| LeadActivity | T | Type, Payload, ActorId |
-| LeadNote | T | Body, AuthorId |
-| LeadTag / LeadTagMap | T | (TenantId, Name) unique |
-| LeadScore (history) | T | Score, Breakdown(JSON), RuleVersion |
-| Pipeline / PipelineStage | T | Configurable per tenant; seeded with the 14 default stages |
-| Opportunity / OpportunityActivity | T | LeadId, StageId, Value decimal(18,2), ExpectedCloseDate, OwnerId |
-| ConsentRecord | T | ContactId, Channel, Purpose (Marketing/Service), Status (Granted/Revoked), Source, EvidenceRef, OccurredAtUtc. **Append-only** |
-| SuppressionEntry | T | Channel, Value (phone/email hash+raw), Reason (OptOut/Invalid/Blocked/TenantExcluded/Legal), CreatedAtUtc; unique `(TenantId, Channel, ValueNormalized)` |
-| ImportJob / ImportRowError | T | File ref, counts, per-row error report |
+## 2. CRM (Phase 3 — implemented, migration `Phase3Crm`)
+All tables are tenant-owned (**T**): mandatory FK `TenantId → Tenants` (RESTRICT), index on `TenantId`, global query filter. Enums are stored as strings. Foreign keys between CRM tables are single-column and are checked to stay inside one tenant by the SaveChanges guard. Rows marked *append-only* are rejected by the guard on update/delete.
 
-Relationships: Lead 1—* Contact; Lead 1—* Opportunity; Contact 1—* Conversation (Messaging); Contact 1—* ConsentRecord. Customers are a separate entity (Phase 10), linked to Lead for history.
+| Table (entity) | Columns / constraints / indexes |
+|---|---|
+| `LeadCategories` | Name(100), NormalizedName; **unique (TenantId, NormalizedName)**; IsActive |
+| `LeadStatuses` | Name(100), SortOrder, IsClosed, IsDefault, IsActive; **unique (TenantId, Name)** |
+| `Pipelines` | Name(100), IsDefault, IsActive; **unique (TenantId, Name)** |
+| `PipelineStages` | PipelineId FK, Name(100), Position, Kind(Open/Won/Lost/Suppressed); **unique (PipelineId, Name)**; index (TenantId, PipelineId, Position) |
+| `Leads` | Name(300), NormalizedName, **DedupKey(300)** = normalised name \| normalised city, CategoryId? FK, Country/Province/City/District/Area(100), Address(500), Website(500), **WebsiteDomain(255)**, PipelineId FK, PipelineStageId FK, StatusId FK, OwnerUserId? (no FK, validated), Score, ScoreRuleVersion?, ScoredAtUtc?, Confidence, PrimarySourceType, IsArchived, ArchivedAtUtc, LastActivityAtUtc, **Version (concurrency token)**, audit fields. Indexes: (TenantId, DedupKey), (TenantId, WebsiteDomain), (TenantId, IsArchived, CreatedAtUtc), (TenantId, PipelineStageId), (TenantId, StatusId), (TenantId, OwnerUserId), (TenantId, CategoryId), (TenantId, City), (TenantId, Score), (TenantId, NormalizedName) |
+| `LeadSources` | LeadId FK, Type, ExternalId(200)?, Name, Url, Attribution, RetrievedAtUtc; **unique (TenantId, Type, ExternalId)** (NULL external ids allowed repeatedly); index (TenantId, LeadId) |
+| `Contacts` | LeadId FK, Name(200), Role(100), PhoneRaw(40), **PhoneE164(20)**, Email(256, lower-case), DataOrigin, PhoneVerifiedAtUtc, IsPrimary, IsDeleted, DeletedAtUtc, **PhoneUniqueKey / EmailUniqueKey** (value while live, NULL when removed). **Unique (TenantId, LeadId, PhoneUniqueKey)** and **(TenantId, LeadId, EmailUniqueKey)**; indexes (TenantId, PhoneE164), (TenantId, Email) |
+| `ConsentRecords` | *append-only*. ContactId FK, Channel(WhatsApp/Sms/Email/Phone), Purpose(Marketing/Service), Status(Granted/Revoked), IsRevocation, Source(200, required), EvidenceRef(500), Note(1000), OccurredAtUtc, RecordedAtUtc, RecordedByUserId; index (TenantId, ContactId, Channel, Purpose, OccurredAtUtc) serves "latest decision" |
+| `SuppressionEntries` | Channel(Any/WhatsApp/Sms/Email/Phone), **ValueNormalized(320)** (E.164 or lower-case e-mail), ValueHash(64, SHA-256), Reason(OptOut/Invalid/Blocked/TenantExcluded/Legal), Note, CreatedByUserId; **unique (TenantId, Channel, ValueNormalized)**; indexes (TenantId, ValueNormalized), (TenantId, ValueHash) |
+| `LeadActivities` | *append-only*. LeadId FK, Type, Summary(500), Payload(JSON), ActorUserId, OccurredAtUtc; index (TenantId, LeadId, OccurredAtUtc) |
+| `LeadNotes` | LeadId FK, Body(4000), AuthorUserId, CreatedAtUtc, IsDeleted/DeletedAtUtc |
+| `LeadTags` / `LeadTagMaps` | Tag: Name(50), NormalizedName; **unique (TenantId, NormalizedName)**. Map: LeadId FK, TagId FK (cascade); **unique (LeadId, TagId)** |
+| `LeadScores` | *append-only history*. LeadId FK, Score, RuleVersion, Breakdown(JSON), CalculatedAtUtc |
+| `ScoringRuleSets` / `ScoringRules` | Set: Version, IsActive, Note; **unique (TenantId, Version)**. Rule: RuleSetId FK (cascade), Dimension, Target(200), Points(-100..100), Description, IsEnabled |
+| `Opportunities` / `OpportunityActivities` | Opportunity: LeadId FK, PipelineStageId FK, Name(200), Value decimal(18,2), Currency(3), ExpectedCloseDateUtc, OwnerUserId, Status. Activity is *append-only* |
+| `ImportJobs` | FileName, FileType, FileSizeBytes, StoredFileKey (tenant-relative), Status, DuplicatePolicy, TotalRows, Created/Merged/SkippedDuplicate/PendingDuplicate/Error counts, Mapping(JSON), FailureReason, Started/CompletedAtUtc |
+| `ImportRowErrors` | ImportJobId FK (cascade), RowNumber, Kind(Validation/Duplicate), Column, Message(500), RowData(JSON, 8000), DuplicateLeadId? FK, Resolution(Pending/Skipped/Merged); indexes (TenantId, ImportJobId, RowNumber), (TenantId, ImportJobId, Kind) |
+
+Relationships: Lead 1—* Contact; Lead 1—* Opportunity; Contact 1—* ConsentRecord; Contact 1—* Conversation (Messaging, Phase 5); Customers are a separate entity (Phase 10). Deviations from the Phase 0 sketch: `LeadStatus` is a configurable lookup distinct from the pipeline stage; a lead stores `PipelineId` + `PipelineStageId` instead of a status enum; `Contacts` uniqueness uses live-only keys so removed contacts release their numbers; Opportunity stage is a `PipelineStage` of the lead's pipeline; no `ImportRow` staging table (rows needing review are persisted as `ImportRowError.RowData`).
+
+Default data per tenant (code, applied at tenant creation and by the idempotent seeder): pipeline "Sales pipeline" with the 14 stages (New, Researched, Contact Eligible, Contacted, Responded, Interested, Qualified, Demo Scheduled, Demo Completed, Trial, Negotiation, Won, Lost, Suppressed), statuses Open/Working/Nurturing/Disqualified, scoring rule set v1 (9 rules).
 
 ## 3. Discovery (Phase 4)
 DiscoveryJob (T: Params JSON, Status, Progress, Attempts, RequestedBy, UsageCost) · DiscoveryResult (T: raw normalized payload, SourceId, Confidence, ReviewStatus Pending/Approved/Rejected, DuplicateOfLeadId?, RetrievedAtUtc, ExpiresAtUtc for provider caching limits) · DiscoveryConnectorConfig (T: provider, encrypted creds, quota) · UsageRecord shared with billing. Unique `(TenantId, ConnectorType, ExternalId)` makes retries idempotent.

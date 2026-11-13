@@ -1,0 +1,49 @@
+@model ImportMapViewModel
+@using LeadPilot.Domain.Crm
+@{
+    ViewData["Title"] = "Map columns";
+    var pv = Model.Preview;
+    var fields = Enum.GetValues<ImportField>();
+}
+<h1 class="h3 mb-1">Map columns</h1>
+<p class="text-muted">@pv.Job.FileName · @pv.Job.TotalRows data row(s) · limit @Model.MaxRows</p>
+<form asp-action="Run" asp-route-id="@pv.Job.Id" method="post" data-loading-form novalidate>
+    <div class="card mb-3"><div class="card-header">2. Match each column to a lead field</div>
+        <div class="table-responsive"><table class="table align-middle mb-0">
+            <thead><tr><th>Column in your file</th><th>Example values</th><th style="min-width:14rem">Lead field</th></tr></thead>
+            <tbody>
+            @foreach (var c in pv.Columns)
+            {
+                <tr>
+                    <td class="fw-semibold">@c.Header</td>
+                    <td class="small text-muted">@string.Join(" | ", pv.SampleRows.Select(r => r[c.Index]).Where(x => !string.IsNullOrWhiteSpace(x)).Take(3))</td>
+                    <td><select name="fields" class="form-select form-select-sm" aria-label="Field for @c.Header">
+                        <option value="">Do not import</option>
+                        @foreach (var f in fields) { <option value="@f" selected="@(c.SuggestedField == f)">@LeadPilot.Application.Crm.ImportRowMapper.Label(f)</option> }
+                    </select></td>
+                </tr>
+            }
+            </tbody></table></div></div>
+
+    <div class="card card-body mb-3">
+        <h2 class="h6">3. Options</h2>
+        <div class="row g-3">
+            <div class="col-12 col-md-6 col-xl-4"><label class="form-label" for="duplicatePolicy">When a row looks like an existing lead</label>
+                <select id="duplicatePolicy" name="duplicatePolicy" class="form-select">
+                    <option value="@DuplicatePolicy.Skip" selected="@(Model.DuplicatePolicy == DuplicatePolicy.Skip)">Skip it (recommended)</option>
+                    <option value="@DuplicatePolicy.Merge" selected="@(Model.DuplicatePolicy == DuplicatePolicy.Merge)">Merge: fill blanks, add new contacts and tags</option>
+                    <option value="@DuplicatePolicy.Review" selected="@(Model.DuplicatePolicy == DuplicatePolicy.Review)">Hold for my review (merge or skip one by one)</option>
+                </select></div>
+            <div class="col-12 col-md-6 col-xl-4"><label class="form-label" for="defaultCategoryId">Category for rows without one</label>
+                <select id="defaultCategoryId" name="defaultCategoryId" class="form-select"><option value="">None</option>@foreach (var c in Model.Lookups.Categories) { <option value="@c.Id">@c.Name</option> }</select>
+                <div class="form-check mt-1"><input class="form-check-input" type="checkbox" id="createMissingCategories" name="createMissingCategories" value="true" /><label class="form-check-label small" for="createMissingCategories">Create categories that do not exist yet</label></div></div>
+            @if (Model.CanAssign)
+            {
+                <div class="col-12 col-md-6 col-xl-4"><label class="form-label" for="defaultOwnerUserId">Owner for rows without one</label>
+                    <select id="defaultOwnerUserId" name="defaultOwnerUserId" class="form-select"><option value="">Unassigned</option>@foreach (var o in Model.Lookups.Owners) { <option value="@o.UserId">@o.DisplayName</option> }</select></div>
+            }
+            <div class="col-12 col-md-6 col-xl-4"><label class="form-label" for="sourceName">Source name</label><input id="sourceName" name="sourceName" class="form-control" maxlength="200" placeholder="@pv.Job.FileName" /></div>
+        </div>
+    </div>
+    <div class="d-flex gap-2"><button type="submit" class="btn btn-primary"><span class="spinner-border spinner-border-sm d-none" aria-hidden="true"></span> Import @pv.Job.TotalRows row(s)</button><a asp-action="Index" class="btn btn-outline-secondary">Cancel</a></div>
+</form>

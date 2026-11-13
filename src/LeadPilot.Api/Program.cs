@@ -28,13 +28,16 @@ builder.Services.AddTenancyServices(builder.Configuration, builder.Environment);
 builder.Services.Configure<TenantResolutionOptions>(o =>
     o.ExemptPathPrefixes = ["/api/v1/auth", "/api/v1/invitations/accept", "/health", "/swagger"]);
 
-builder.Services.AddControllers(o => o.Filters.AddService<RejectSpoofedTenantFilter>());
+builder.Services.AddControllers(o => o.Filters.AddService<RejectSpoofedTenantFilter>())
+    .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(o =>
 {
     o.SwaggerDoc("v1", new() { Title = "LeadPilot AI API", Version = "v1", Description = "Discover. Engage. Convert." });
+    var xml = Path.Combine(AppContext.BaseDirectory, "LeadPilot.Api.xml");
+    if (File.Exists(xml)) o.IncludeXmlComments(xml);
     o.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.OpenApiSecurityScheme { Type = Microsoft.OpenApi.SecuritySchemeType.Http, Scheme = "bearer", BearerFormat = "JWT", Description = "Obtain a token from POST /api/v1/auth/login." });
 });
 
@@ -65,7 +68,7 @@ builder.Services.AddRateLimiter(o =>
         _ => new FixedWindowRateLimiterOptions { PermitLimit = builder.Configuration.GetValue("RateLimiting:AuthPermitLimit", 20), Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
     o.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>
         RateLimitPartition.GetFixedWindowLimiter(ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            _ => new FixedWindowRateLimiterOptions { PermitLimit = 300, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = builder.Configuration.GetValue("RateLimiting:ApiPermitLimit", 300), Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 });
 builder.Services.Configure<ForwardedHeadersOptions>(o =>
 {

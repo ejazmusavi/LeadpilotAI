@@ -66,3 +66,28 @@ Swagger has an *Authorize* button for the bearer token. `X-Tenant-Id` may be sen
 - Never read a tenant id from a request. Use `ITenantContext`; jobs/consumers use `ITenantScopeRunner.RunAsync(tenantId, ...)`.
 - `IgnoreQueryFilters()` is only allowed in the allow-listed files in `tests/LeadPilot.ArchitectureTests/TenancyArchitectureTests.cs`.
 - Protect endpoints with `[Authorize(Policy = PermissionCodes.X)]`; add new permissions to `PermissionCatalog` (+ `SystemRoles` mapping). System roles are re-synchronised at every Web start.
+
+## Configuration added in Phase 3
+| Key | Where | Meaning |
+|---|---|---|
+| `Crm:StorageRoot` | Web, Api | Folder for uploaded import files (default `data/files` under the content root; compose mounts the shared `crm-files` volume at `/data/files`). Web and Api must share it. |
+| `Crm:MaxImportFileBytes` (5 MB) / `Crm:MaxImportRows` (5000) / `Crm:MaxExportRows` (10000) / `Crm:MaxBulkItems` (500) / `Crm:MaxXlsxUncompressedBytes` (50 MB) | Web, Api | Limits. |
+| `RateLimiting:ApiPermitLimit` | Api | Global per-IP requests per minute (default 300). |
+| Tenant setting `Crm.DefaultCountryCode` | per tenant (Settings page / API) | Calling code (e.g. `966`) used to turn local numbers such as `0501234567` into E.164. Without it, local numbers are rejected. |
+
+## CRM quick start
+```bash
+# sign in (token carries the tenant), then:
+curl -s localhost:5100/api/v1/leads -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' \
+  -d '{"name":"Al Noor School","city":"Riyadh","contacts":[{"name":"Sara","phone":"+966 50 123 4567"}]}'
+curl -s "localhost:5100/api/v1/leads?search=noor&sort=Score&descending=true" -H "authorization: Bearer $TOKEN"
+curl -s localhost:5100/api/v1/imports -H "authorization: Bearer $TOKEN" -F file=@leads.csv           # then POST /imports/{id}/run
+curl -s "localhost:5100/api/v1/audience/eligible-contacts?channel=WhatsApp&purpose=Marketing" -H "authorization: Bearer $TOKEN"
+```
+Import file: first row = headers (`Name`, `Category`, `Country`, `Province`, `City`, `District`, `Area`, `Address`, `Website`, `Tags`, `Stage`, `Owner`, `Contact`, `Role`, `Phone`, `E-mail` and common synonyms are recognised; any column can be mapped by hand in the wizard). UTF-8 CSV with `,` `;` or tab delimiters, or the first sheet of an `.xlsx`.
+
+Permissions: `Leads.View/Create/Update/Delete/Import/Export/Assign`, `Consent.Manage`, `Suppression.Manage`, `Pipelines.Manage` (pipelines, categories, statuses), `Scoring.Manage`. Default mappings live in `Application/Security/Permissions.cs`; existing tenants receive them when the Web host starts (idempotent seeder).
+
+Tests: integration tests that need real tenants use `TestWorld` (tenants A and B with administrators, sales manager/agent, marketing manager and read-only users) and `NewTenantAsync` for tests that change tenant-wide configuration (scoring rules, default pipeline). Phones and names come from `Crm.Phone()` / `Crm.Token()` so tests never collide in the shared database. Integration tests set `RateLimiting__ApiPermitLimit`, `Crm__StorageRoot` and `Crm__MaxExportRows=100` in `AppFixture`.
+
+Migrations: `Phase3Crm` is the only new migration. To check an upgrade by hand: run the Phase 2 build against an empty database (migrate + seed), then `dotnet ef database update` with the Phase 3 build and start the Web host (the integration test `A_phase2_database_upgrades_and_existing_tenants_receive_crm_defaults_and_permissions` automates exactly this).

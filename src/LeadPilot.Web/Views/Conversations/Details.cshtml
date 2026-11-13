@@ -1,0 +1,69 @@
+@model ThreadViewModel
+@using LeadPilot.Domain.Messaging
+@{
+    var c = Model.Conversation; var s = c.Summary; ViewData["Title"] = (s.ContactName ?? s.PeerName ?? s.PeerPhoneE164 ?? "Conversation") + " · Conversations";
+    string StatusBadge(MessageStatus st) => st switch { MessageStatus.Read => "text-bg-success", MessageStatus.Delivered => "text-bg-info", MessageStatus.Sent => "text-bg-secondary", MessageStatus.Failed => "text-bg-danger", MessageStatus.Unknown => "text-bg-warning", _ => "text-bg-light border" };
+    string StatusText(MessageStatus st) => st switch { MessageStatus.Read => "Read ✓✓", MessageStatus.Delivered => "Delivered ✓✓", MessageStatus.Sent => "Sent ✓", MessageStatus.Queued => "Queued", MessageStatus.Sending => "Sending…", MessageStatus.Unknown => "Not confirmed", MessageStatus.Failed => "Failed", _ => st.ToString() };
+}
+<div class="d-flex flex-wrap justify-content-between align-items-start mb-3 gap-2">
+    <div>
+        <h1 class="h3 mb-1">@(s.ContactName ?? s.PeerName ?? s.PeerPhoneE164 ?? "Unknown sender")</h1>
+        <div class="text-muted small">@s.PeerPhoneE164 · @s.AccountName · AI mode: @s.AiMode</div>
+        <div class="small">
+            @if (s.ContactId is not null && s.LeadId is { } lid) { <a asp-controller="Leads" asp-action="Details" asp-route-id="@lid">Open lead @s.LeadName</a> }
+            else { <span class="text-muted">Not linked to a contact. The sender's number does not match a contact in your CRM@(s.PeerPhoneE164 is null ? " (WhatsApp hid the number)" : "").</span> }
+        </div>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        @if (Model.CanReply && s.UnreadCount > 0) { <form asp-action="MarkRead" asp-route-id="@s.Id" method="post"><button type="submit" class="btn btn-outline-secondary btn-sm">Mark as read (@s.UnreadCount)</button></form> }
+        @if (Model.CanReply)
+        {
+            @if (s.Status == ConversationStatus.Open) { <form asp-action="SetStatus" asp-route-id="@s.Id" method="post"><input type="hidden" name="status" value="Closed" /><button type="submit" class="btn btn-outline-secondary btn-sm" data-confirm="Close this conversation? A new message from the customer reopens it." data-confirm-label="Close">Close conversation</button></form> }
+            else { <form asp-action="SetStatus" asp-route-id="@s.Id" method="post"><input type="hidden" name="status" value="Open" /><button type="submit" class="btn btn-outline-secondary btn-sm">Reopen</button></form> }
+        }
+    </div>
+</div>
+<div class="card mb-3"><div class="card-body" id="thread" aria-live="polite">
+    @if (Model.Messages.TotalPages > 1 && Model.Messages.Page < Model.Messages.TotalPages) { <div class="text-center mb-3"><a asp-action="Details" asp-route-id="@s.Id" asp-route-page="@(Model.Messages.Page + 1)" class="btn btn-sm btn-outline-secondary">Older messages</a></div> }
+    @if (Model.Messages.Items.Count == 0) { <partial name="_EmptyState" model='("No messages yet", "Messages in this conversation appear here.")' /> }
+    @foreach (var m in Model.Messages.Items)
+    {
+        var mine = m.Direction == MessageDirection.Outbound;
+        <div class="d-flex mb-3 @(mine ? "justify-content-end" : "justify-content-start")">
+            <div class="p-2 rounded @(mine ? "bg-primary-subtle" : "bg-body-secondary")" style="max-width:min(36rem,90%)">
+                <div style="white-space:pre-wrap;overflow-wrap:anywhere">@m.Body</div>
+                @foreach (var at in m.Attachments) { <div class="small mt-1"><span class="badge text-bg-light border">📎 @(at.FileName ?? at.MimeType)</span> <span class="text-muted">@(at.Status == AttachmentStatus.Rejected ? at.RejectionReason : "file not downloaded")</span></div> }
+                <div class="small text-muted mt-1 d-flex flex-wrap gap-2 align-items-center">
+                    <span>@m.OccurredAtUtc.ToString("yyyy-MM-dd HH:mm") UTC@(m.CreatedByName is null ? "" : " · " + m.CreatedByName)</span>
+                    @if (mine) { <span class="badge @StatusBadge(m.Status)" title="@(m.ReadAtUtc is { } r ? "Read " + r.ToString("HH:mm") : m.DeliveredAtUtc is { } d ? "Delivered " + d.ToString("HH:mm") : m.SentAtUtc is { } t ? "Sent " + t.ToString("HH:mm") : "")">@StatusText(m.Status)</span> }
+                    @if (mine && m.Purpose == MessagePurpose.Marketing) { <span class="badge text-bg-light border">marketing</span> }
+                </div>
+                @if (m.Status is MessageStatus.Failed or MessageStatus.Unknown) { <div class="small @(m.Status == MessageStatus.Failed ? "text-danger" : "text-warning-emphasis") mt-1">@m.FailureMessage</div> }
+            </div>
+        </div>
+    }
+    @if (Model.Messages.Page > 1) { <div class="text-center"><a asp-action="Details" asp-route-id="@s.Id" asp-route-page="@(Model.Messages.Page - 1)" class="btn btn-sm btn-outline-secondary">Newer messages</a></div> }
+</div></div>
+@if (Model.Suggestion is not null && (Model.Suggestion.Status == LeadPilot.Domain.Ai.DraftStatus.Pending || Model.Suggestion.Decision == LeadPilot.Domain.Ai.AiDecision.Escalate))
+{
+    <partial name="_AiSuggestion" model="(Model.Suggestion, s.Id, Model.CanReply)" />
+}
+@if (Model.CanReply)
+{
+    <div class="card"><div class="card-body">
+        @if (!c.CanReply) { <div class="alert alert-warning mb-0" role="alert"><strong>You cannot reply right now.</strong> @c.CannotReplyReason</div> }
+        else
+        {
+            <p class="small text-muted mb-2">@if (c.InsideServiceWindow) { <span>The customer wrote within the last @c.ServiceWindowHours hours, so this is a <strong>service reply</strong>.</span> } else { <span class="text-danger">The customer has not written in the last @c.ServiceWindowHours hours: this message counts as <strong>marketing</strong> and is only sent because the contact has recorded consent.</span> } Replies are sent in the background with a human-like pause, within the account's limits.</p>
+            <form asp-action="Reply" asp-route-id="@s.Id" method="post" data-loading-form novalidate>
+                <input type="hidden" name="IdempotencyKey" value="@Model.Reply.IdempotencyKey" />
+                <div class="mb-2"><label class="form-label" for="reply-text">Message</label><textarea id="reply-text" name="Text" class="form-control" rows="3" maxlength="@Message.MaxBodyLength">@Model.DraftText</textarea></div>
+                @if (Model.Templates.Count > 0 && s.ContactId is not null)
+                {
+                    <div class="mb-2"><label class="form-label" for="reply-template">…or use a template (replaces the text above)</label><select id="reply-template" name="TemplateId" class="form-select"><option value="">No template</option>@foreach (var t in Model.Templates) { <option value="@t.Id">@t.Name</option> }</select></div>
+                }
+                <button type="submit" class="btn btn-primary"><span class="spinner-border spinner-border-sm d-none" aria-hidden="true"></span> Send reply</button>
+            </form>
+        }
+    </div></div>
+}

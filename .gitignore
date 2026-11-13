@@ -1,0 +1,11 @@
+bin/
+obj/
+*.user
+.vs/
+.idea/
+*.log
+.env
+publish/
+TestResults/
+node_modules/
+src/*/data/

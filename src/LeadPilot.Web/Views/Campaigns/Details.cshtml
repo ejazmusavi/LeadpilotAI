@@ -1,0 +1,97 @@
+@model CampaignDetailsViewModel
+@using LeadPilot.Domain.Campaigns
+@{ var c = Model.Campaign; ViewData["Title"] = c.Name; var n = c.Counts; var done = n.Total - n.Pending - n.Queued; var pct = n.Total == 0 ? 0 : (int)Math.Round(done * 100.0 / n.Total); bool Can(string a) => c.Actions.Contains(a); }
+<div class="d-flex flex-wrap justify-content-between align-items-start mb-3 gap-2">
+    <div>
+        <h1 class="h3 mb-1">@c.Name <partial name="_CampaignStatus" model="c.Status" /></h1>
+        <p class="text-muted mb-0">@c.Type campaign · @(c.ChannelAccountName ?? "no account") · template: @(c.TemplateName ?? "none") · created by @c.CreatedByName</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a asp-action="Stats" asp-route-id="@c.Id" class="btn btn-outline-secondary">Statistics</a>
+        @if (Model.CanUpdate && Can("edit")) { <a asp-action="Edit" asp-route-id="@c.Id" class="btn btn-outline-primary">Edit</a> }
+        @if (Model.CanUpdate && Can("submit")) { <form asp-action="Submit" asp-route-id="@c.Id" method="post"><button class="btn btn-primary" type="submit" data-confirm="@(c.ApprovalRequired ? "Submit this campaign for approval?" : "Schedule this campaign? The content is frozen as shown.")" data-confirm-label="@(c.ApprovalRequired ? "Submit" : "Schedule")">@(c.ApprovalRequired ? "Submit for approval" : "Schedule")</button></form> }
+        @if (Model.CanApprove && Can("approve")) { <form asp-action="Approve" asp-route-id="@c.Id" method="post"><button class="btn btn-success" type="submit" data-confirm="Approve this campaign? It will be scheduled." data-confirm-label="Approve">Approve</button></form> }
+        @if (Model.CanExecute && Can("start")) { <form asp-action="Start" asp-route-id="@c.Id" method="post"><button class="btn btn-success" type="submit" data-confirm="Start now? The audience is selected and messages go out in paced batches." data-confirm-label="Start">Start now</button></form> }
+        @if (Model.CanExecute && Can("pause")) { <form asp-action="Pause" asp-route-id="@c.Id" method="post"><button class="btn btn-warning" type="submit" data-confirm="Pause? The running batch stops before the next recipient and queued messages are withdrawn." data-confirm-label="Pause">Pause</button></form> }
+        @if (Model.CanExecute && Can("resume")) { <form asp-action="Resume" asp-route-id="@c.Id" method="post"><button class="btn btn-success" type="submit">Resume</button></form> }
+        @if (Model.CanUpdate && Can("unschedule")) { <form asp-action="Unschedule" asp-route-id="@c.Id" method="post"><button class="btn btn-outline-secondary" type="submit" data-confirm="Unschedule and return to draft?" data-confirm-label="Unschedule">Unschedule</button></form> }
+        @if (Model.CanCancel && Can("cancel") && c.Status != CampaignStatus.Draft) { <form asp-action="Cancel" asp-route-id="@c.Id" method="post"><button class="btn btn-outline-danger" type="submit" data-confirm="Cancel this campaign? Waiting recipients are cancelled and queued messages withdrawn. This cannot be undone." data-confirm-label="Cancel campaign">Cancel</button></form> }
+        @if (Model.CanCreate) { <form asp-action="Clone" asp-route-id="@c.Id" method="post"><button class="btn btn-outline-secondary" type="submit">Clone</button></form> }
+        @if (Model.CanDelete && Can("delete")) { <form asp-action="Delete" asp-route-id="@c.Id" method="post"><button class="btn btn-outline-danger" type="submit" data-confirm="Delete this draft?" data-confirm-label="Delete">Delete</button></form> }
+    </div>
+</div>
+@if (Model.Settings.KillSwitch) { <div class="alert alert-danger">Workspace kill switch is ON: nothing is sent.</div> }
+@if (c.Status == CampaignStatus.Paused) { <div class="alert alert-warning"><strong>Paused@(c.PausedAutomatically ? " automatically" : "").</strong> @c.PauseReason</div> }
+@if (c.Status == CampaignStatus.Draft && c.RejectedReason is not null) { <div class="alert alert-warning"><strong>Returned by the approver:</strong> @c.RejectedReason</div> }
+@if (c.Status == CampaignStatus.PendingApproval) { <div class="alert alert-info">Waiting for approval. Submitted by @c.SubmittedByName on @c.SubmittedAtUtc?.ToString("yyyy-MM-dd HH:mm") UTC.</div> }
+<div class="card mb-3"><div class="card-body">
+    <div class="d-flex justify-content-between small text-muted mb-1"><span>Progress</span><span>@done of @n.Total handled (@pct%)</span></div>
+    <div class="progress mb-3" role="progressbar" aria-label="Campaign progress" aria-valuenow="@pct" aria-valuemin="0" aria-valuemax="100"><div class="progress-bar" style="width:@pct%"></div></div>
+    <div class="row text-center g-2">
+        @foreach (var (label, value) in new[] { ("Waiting", n.Pending), ("Queued", n.Queued), ("Sent", n.Sent), ("Delivered", n.Delivered), ("Read", n.Read), ("Replied", n.Replied), ("Skipped", n.Skipped), ("Failed", n.Failed), ("Cancelled", n.Cancelled), ("Conversions", n.Conversions) })
+        { <div class="col-4 col-md"><div class="fs-4 fw-semibold">@value</div><div class="small text-muted">@label</div></div> }
+    </div>
+</div></div>
+<div class="row g-3 mb-3">
+    <div class="col-12 col-lg-6"><div class="card h-100"><div class="card-header">Message</div><div class="card-body"><div style="white-space:pre-wrap" class="small">@(c.MessageBody ?? "No template chosen yet.")</div>@if (c.IncludeOptOutFooter && c.OptOutFooter is not null) { <div class="small text-muted mt-2" style="white-space:pre-wrap">+ opt-out text: @c.OptOutFooter</div> }</div></div></div>
+    <div class="col-12 col-lg-6"><div class="card h-100"><div class="card-header">Plan</div><div class="card-body small">
+        <dl class="row mb-0">
+            <dt class="col-5">Start</dt><dd class="col-7">@(c.ScheduledAtUtc is null ? (c.FollowUpDelayDays is { } d ? $"{d} day(s) after the parent completes" : "by hand") : Model.LocalSchedule.Replace('T', ' ') + " (" + Model.TimeZone + ")")</dd>
+            <dt class="col-5">Batches</dt><dd class="col-7">@c.BatchSize every @c.MinIntervalSeconds–@c.MaxIntervalSeconds s (random)</dd>
+            <dt class="col-5">Limits</dt><dd class="col-7">max @c.MaxRecipients recipients@(c.DailyLimit is { } dl ? $", {dl}/day" : "")</dd>
+            <dt class="col-5">Cool-down</dt><dd class="col-7">@(c.CooldownDays ?? Model.Settings.CooldownDays) day(s)</dd>
+            @if (c.ParentCampaignName is not null) { <dt class="col-5">Parent</dt><dd class="col-7"><a asp-action="Details" asp-route-id="@c.ParentCampaignId">@c.ParentCampaignName</a></dd> }
+            @if (c.ApprovedByName is not null) { <dt class="col-5">Approved</dt><dd class="col-7">@c.ApprovedByName · @c.ApprovedAtUtc?.ToString("yyyy-MM-dd HH:mm") UTC</dd> }
+            <dt class="col-5">Attribution</dt><dd class="col-7">replies and stage changes within @c.AttributionWindowDays day(s) of the message</dd>
+        </dl></div></div></div>
+</div>
+@if (c.Status == CampaignStatus.PendingApproval && Model.CanApprove)
+{
+    <form asp-action="RejectCampaign" asp-route-id="@c.Id" method="post" class="card card-body mb-3"><label class="form-label" for="reason">Return to the author (reason)</label><div class="input-group"><input id="reason" name="reason" class="form-control" required maxlength="500" /><button class="btn btn-outline-warning" type="submit">Return to draft</button></div></form>
+}
+@if (Model.CanExecute && Model.Settings.TestNumbers.Count > 0 && c.Actions.Contains("test"))
+{
+    <form asp-action="TestSend" asp-route-id="@c.Id" method="post" class="card card-body mb-3"><div class="row g-2 align-items-end">
+        <div class="col-12 col-md-6"><label class="form-label" for="phone">Test message to an internal number</label><select id="phone" name="phone" class="form-select">@foreach (var t in Model.Settings.TestNumbers) { <option value="@t">@t</option> }</select><div class="form-text">Only numbers from the campaign settings allow-list. The text is labelled as a test and uses the normal WhatsApp pipeline and limits.</div></div>
+        <div class="col-12 col-md-6"><button class="btn btn-outline-primary" type="submit">Send test</button> <button class="btn btn-outline-secondary" type="submit" asp-action="DryRun">Dry run (sends nothing)</button></div>
+    </div></form>
+}
+<ul class="nav nav-tabs mb-3">
+    @foreach (var (key, title) in new[] { ("recipients", "Recipients"), ("log", "Execution log"), ("conversions", "Conversions") })
+    { <li class="nav-item"><a class="nav-link @(Model.Tab == key ? "active" : "")" asp-action="Details" asp-route-id="@c.Id" asp-route-tab="@key">@title</a></li> }
+</ul>
+@if (Model.Tab == "log" && Model.Log is { } log)
+{
+    if (log.Items.Count == 0) { <div class="card"><partial name="_EmptyState" model='("No log entries", "The execution log fills when the campaign starts.")' /></div> }
+    else {
+    <div class="card"><div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th>When (UTC)</th><th>Level</th><th>Event</th><th>Details</th></tr></thead><tbody>
+    @foreach (var l in log.Items) { <tr><td class="text-nowrap small">@l.OccurredAtUtc.ToString("yyyy-MM-dd HH:mm:ss")</td><td><span class="badge @(l.Level == ExecutionLogLevel.Error ? "text-bg-danger" : l.Level == ExecutionLogLevel.Warning ? "text-bg-warning" : "text-bg-secondary")">@l.Level</span></td><td class="small">@l.Code</td><td class="small">@l.Message@(l.ActorName is null ? "" : " (" + l.ActorName + ")")</td></tr> }
+    </tbody></table></div></div>
+    <partial name="_Pager" model='new PagerModel(log.Page, log.TotalPages, log.TotalCount, "Details", Model.QueryValues)' /> }
+}
+else if (Model.Tab == "conversions" && Model.Conversions is { } cv)
+{
+    if (cv.Items.Count == 0) { <div class="card"><partial name="_EmptyState" model='("No conversions yet", "Replies and lead stage changes inside the attribution window appear here. Nothing is estimated: only real events are recorded.")' /></div> }
+    else {
+    <div class="card"><div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th>Lead</th><th>Kind</th><th>Detail</th><th>Message sent</th><th>Event</th></tr></thead><tbody>
+    @foreach (var x in cv.Items) { <tr><td><a asp-controller="Leads" asp-action="Details" asp-route-id="@x.LeadId">@x.LeadName</a></td><td>@x.Kind</td><td class="small">@x.Detail</td><td class="small text-nowrap">@x.SentAtUtc.ToString("yyyy-MM-dd HH:mm")</td><td class="small text-nowrap">@x.OccurredAtUtc.ToString("yyyy-MM-dd HH:mm")</td></tr> }
+    </tbody></table></div></div>
+    <partial name="_Pager" model='new PagerModel(cv.Page, cv.TotalPages, cv.TotalCount, "Details", Model.QueryValues)' /> }
+}
+else if (Model.Recipients is { } rec)
+{
+    <form method="get" asp-action="Details" asp-route-id="@c.Id" class="row g-2 mb-3"><input type="hidden" name="tab" value="recipients" />
+        <div class="col-6 col-md-3"><select name="status" class="form-select" aria-label="Status"><option value="">All statuses</option>@foreach (var s in Enum.GetValues<RecipientStatus>()) { <option value="@s" selected="@(Model.RecipientQuery.Status == s)">@s</option> }</select></div>
+        <div class="col-6 col-md-3"><button class="btn btn-outline-primary" type="submit">Filter</button></div></form>
+    if (rec.Items.Count == 0) { <div class="card"><partial name="_EmptyState" model='("No recipients", c.StartedAtUtc is null ? "The audience is selected when the campaign starts. Use Dry run to see who would be messaged." : "Nothing matches this filter.")' /></div> }
+    else {
+    <div class="card"><div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th>Lead / contact</th><th>Number</th><th>Status</th><th>Reason</th><th>Sent</th></tr></thead><tbody>
+    @foreach (var r in rec.Items)
+    {
+        <tr><td><a asp-controller="Leads" asp-action="Details" asp-route-id="@r.LeadId">@r.LeadName</a><div class="small text-muted">@r.ContactName</div></td><td class="small">@r.MaskedDestination</td>
+            <td><span class="badge @(r.Status == RecipientStatus.Failed ? "text-bg-danger" : r.Status == RecipientStatus.Skipped ? "text-bg-secondary" : r.Status == RecipientStatus.Replied ? "text-bg-success" : "text-bg-light border")">@r.Status</span></td>
+            <td class="small">@r.ReasonText <span class="text-muted">@r.StatusDetail</span></td><td class="small text-nowrap">@r.SentAtUtc?.ToString("yyyy-MM-dd HH:mm")</td></tr>
+    }
+    </tbody></table></div></div>
+    <partial name="_Pager" model='new PagerModel(rec.Page, rec.TotalPages, rec.TotalCount, "Details", Model.QueryValues)' /> }
+}

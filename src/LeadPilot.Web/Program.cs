@@ -5,7 +5,7 @@ using LeadPilot.Infrastructure.Identity;
 using LeadPilot.Infrastructure.Logging;
 using LeadPilot.Infrastructure.Persistence;
 using LeadPilot.Infrastructure.Web;
-using LeadPilot.Web.Services;
+using LeadPilot.Infrastructure.Seeding;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
@@ -20,24 +20,20 @@ builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration, builder.Environment);
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 
-builder.Services.AddIdentity<ApplicationUser, ApplicationRole>(o =>
-    {
-        o.Password.RequiredLength = 10;
-        o.Password.RequireDigit = true;
-        o.Password.RequireLowercase = true;
-        o.Password.RequireUppercase = true;
-        o.Password.RequireNonAlphanumeric = true;
-        o.User.RequireUniqueEmail = true;
-        o.Lockout.MaxFailedAccessAttempts = 5;
-        o.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
-        o.Lockout.AllowedForNewUsers = true;
-        o.Tokens.PasswordResetTokenProvider = TokenOptions.DefaultProvider;
-    })
+builder.Services.AddIdentity<ApplicationUser, ApplicationRole>(IdentitySetup.Configure)
     .AddEntityFrameworkStores<AppDbContext>()
+    .AddClaimsPrincipalFactory<TenantClaimsPrincipalFactory>()
     .AddDefaultTokenProviders();
+builder.Services.AddTenancyServices(builder.Configuration, builder.Environment);
+builder.Services.Configure<TenantResolutionOptions>(o =>
+{
+    o.NoTenantRedirectPath = "/Account/NoWorkspace";
+    o.SignOutOnAccessLoss = true;
+    o.ExemptPathPrefixes = ["/Account", "/Tenants/Switch", "/Invitations/Accept", "/Home/Error", "/Home/StatusPage", "/health", "/css", "/js", "/lib", "/favicon"];
+});
 
 builder.Services.Configure<DataProtectionTokenProviderOptions>(o => o.TokenLifespan = TimeSpan.FromHours(2));
-builder.Services.Configure<SecurityStampValidatorOptions>(o => o.ValidationInterval = TimeSpan.FromMinutes(5));
+builder.Services.Configure<SecurityStampValidatorOptions>(o => o.ValidationInterval = TimeSpan.FromMinutes(builder.Configuration.GetValue("Security:StampValidationMinutes", 5)));
 
 builder.Services.ConfigureApplicationCookie(o =>
 {
@@ -50,6 +46,18 @@ builder.Services.ConfigureApplicationCookie(o =>
     o.LoginPath = "/Account/Login";
     o.LogoutPath = "/Account/Logout";
     o.AccessDeniedPath = "/Account/AccessDenied";
+    // Real 403 (rendered by the status-code page) instead of a redirect: authorization failures are visible to clients and tests.
+    o.Events.OnRedirectToAccessDenied = ctx => { ctx.Response.StatusCode = StatusCodes.Status403Forbidden; return Task.CompletedTask; };
+    // The security-stamp validator rebuilds the principal periodically; keep the user's active-tenant choice across that refresh.
+    var inner = o.Events.OnValidatePrincipal;
+    o.Events.OnValidatePrincipal = async ctx =>
+    {
+        var before = ctx.Principal;
+        var tid = before?.FindFirst(TenantClaims.TenantId)?.Value;
+        await inner(ctx);
+        if (tid is not null && ctx.Principal is not null && !ReferenceEquals(ctx.Principal, before) && ctx.Principal.Identity is System.Security.Claims.ClaimsIdentity id && Guid.TryParse(tid, out var g))
+            id.ReplaceTenantClaim(g);
+    };
 });
 
 // Authentication policy: everything requires a signed-in user unless explicitly [AllowAnonymous].
@@ -71,7 +79,11 @@ builder.Services.Configure<ForwardedHeadersOptions>(o =>
     o.KnownProxies.Clear();
 });
 
-builder.Services.AddControllersWithViews(o => o.Filters.Add(new Microsoft.AspNetCore.Mvc.AutoValidateAntiforgeryTokenAttribute()));
+builder.Services.AddControllersWithViews(o =>
+{
+    o.Filters.Add(new Microsoft.AspNetCore.Mvc.AutoValidateAntiforgeryTokenAttribute());
+    o.Filters.AddService<RejectSpoofedTenantFilter>();
+});
 
 var app = builder.Build();
 
@@ -90,6 +102,7 @@ app.UseSerilogRequestLoggingSafe();
 app.UseRouting();
 app.UseRateLimiter();
 app.UseAuthentication();
+app.UseTenantResolution();
 app.UseAuthorization();
 
 app.MapStaticAssets();
@@ -98,7 +111,7 @@ app.MapHealthChecks("/health/ready", new() { Predicate = c => c.Tags.Contains("r
 app.MapControllerRoute("default", "{controller=Home}/{action=Index}/{id?}").WithStaticAssets();
 
 await DatabaseInitializer.MigrateIfConfiguredAsync(app.Services, app.Configuration);
-await IdentitySeeder.SeedInitialAdminAsync(app.Services, app.Configuration);
+await PlatformSeeder.SeedAsync(app.Services, app.Configuration);
 
 app.Run();
 

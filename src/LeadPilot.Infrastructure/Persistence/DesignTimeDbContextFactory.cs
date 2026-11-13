@@ -11,6 +11,6 @@ public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
         var cs = Environment.GetEnvironmentVariable("LEADPILOT_CONNECTION")
                  ?? "Server=localhost;Port=3306;Database=leadpilot_dev;User=leadpilot;Password=leadpilot_dev;";
         var options = new DbContextOptionsBuilder<AppDbContext>().UseMySQL(cs).Options;
-        return new AppDbContext(options);
+        return new AppDbContext(options, new TenantContext());
     }
 }

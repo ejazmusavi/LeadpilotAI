@@ -1,6 +1,7 @@
 using System.Text;
 using FluentValidation;
 using LeadPilot.Application.Abstractions;
+using LeadPilot.Application.Contracts;
 using LeadPilot.Infrastructure.Identity;
 using LeadPilot.Web.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -19,6 +20,8 @@ public class AccountController(
     IEmailSender email,
     IClock clock,
     IConfiguration config,
+    IAuditService audit,
+    IMembershipResolver membership,
     IValidator<RegisterViewModel> registerValidator,
     IValidator<ResetPasswordViewModel> resetValidator,
     ILogger<AccountController> logger) : Controller
@@ -48,11 +51,13 @@ public class AccountController(
                 user.LastLoginAtUtc = clock.UtcNow;
                 await users.UpdateAsync(user);
                 logger.LogInformation("User {UserId} signed in", user.Id);
+                await AuditAuth("Auth.SignedIn", user, $"{user.Email} signed in.");
                 return LocalRedirect(Url.IsLocalUrl(model.ReturnUrl) ? model.ReturnUrl! : "/");
             }
             if (result.IsLockedOut)
             {
                 logger.LogWarning("User {UserId} locked out", user.Id);
+                await AuditAuth("Auth.LockedOut", user, $"{user.Email} was locked out after repeated failed sign-ins.");
                 return View("Lockout");
             }
         }
@@ -64,6 +69,13 @@ public class AccountController(
 
         ModelState.AddModelError(string.Empty, "Invalid email or password.");
         return View(model);
+    }
+
+    private async Task AuditAuth(string action, ApplicationUser user, string summary)
+    {
+        // Auth events are recorded against the user's default workspace (no tenant is active yet at sign-in).
+        if (await membership.GetDefaultTenantIdAsync(user.Id) is { } tid)
+            await audit.RecordAndSaveAsync(new AuditEntry(action, "User", user.Id.ToString(), summary, tid, user.Id, user.Email));
     }
 
     [HttpPost]
@@ -174,5 +186,5 @@ public class AccountController(
     }
 
     [HttpGet] public IActionResult ResetPasswordConfirmation() => View();
-    [HttpGet] public IActionResult AccessDenied() => View();
+    [HttpGet] public IActionResult AccessDenied() { Response.StatusCode = StatusCodes.Status403Forbidden; return View(); }
 }

@@ -36,3 +36,28 @@ Tenant, Permission (catalog), platform Plans (Ph12), system-level templates. Eve
 - AI retrieval: queries from tenant A never return tenant B chunks, including with adversarial prompts and with identical document text in both tenants.
 - Cache and file store key isolation.
 - Cross-tenant FK insert attempts fail.
+
+## Phase 2 implementation status (what is actually built)
+| Design item | Implementation | Verified by |
+|---|---|---|
+| `ITenantContext` | `Application/Abstractions/Tenancy.cs`; scoped `TenantContext` (Infrastructure). Empty by default; `RequireTenantId()` throws `TenantContextMissingException`. | unit + integration |
+| MVC resolution | `tid` claim in the auth cookie, **re-validated against `UserTenant` on every request** by `TenantResolutionMiddleware` (after authentication, before authorization). Lost membership signs the cookie out; suspended tenant → 403; no workspace → `/Account/NoWorkspace`. The claim survives the periodic security-stamp refresh. | integration (stamp validated on every request in tests; mutation-checked) |
+| API resolution | JWT `tid` claim, same middleware, same validation on every request. Header `X-Tenant-Id` must equal it (else 400). | integration |
+| Spoofing | `RejectSpoofedTenantFilter` (global, MVC + API) rejects `tenantId` in route, query, form or bound body model unless it equals the authorized tenant. Tenant-scoped request records implement `ITenantScopedRequest`. | integration (header, query, route, body, form) |
+| Query filters | Generated for every `ITenantOwned` entity in `AppDbContext`; no tenant → no rows. | integration + architecture test |
+| SaveChanges guard | `TenantSaveChangesInterceptor`: stamps `TenantId`, rejects writes outside the active tenant, `TenantId` immutable, rejects FKs pointing at another tenant's rows (tracked or in DB), `AuditLog` append-only. Platform scope relaxes *which tenant*, never FK consistency. | integration |
+| Explicit ownership checks | Every service query repeats `TenantId == context tenant` on top of the filter; foreign ids (roles, users, invitations) are "not found" (404). | integration (MVC + API) |
+| Platform scope | `ITenantContextAccessor.BeginPlatformScope()`; used only for provisioning, seeding, invitation acceptance, audited cross-tenant audit writes. | code review + allow-list test |
+| `IgnoreQueryFilters` | Allow-list of 8 files, enforced by an architecture test (and a stale-entry check). | architecture |
+| Jobs / consumers | `ITenantScopeRunner.RunAsync(tenantId, ...)`: empty id, unknown or suspended tenant throw; `RunPlatformJobAsync` is the explicit unscoped path. (Hangfire/RabbitMQ wiring arrives with Phases 5-6 and must use it.) | integration + unit |
+| Cache / files | `TenantCacheKeys.For(...)` (`t:{tenantId}:{area}:{key}`) and `TenantPaths.For(...)` (`tenants/{tenantId}/...`, traversal rejected). Helpers only: no cache or file store exists yet. | unit |
+| Audit | `AuditLog` per tenant; platform actions record `ActorTenantId` + target `TenantId`. Tenant switch (cookie, JWT switch endpoint, and direct platform-access login) is always audited in the *target* tenant. | integration |
+| Secrets | Secret tenant settings: masked in every response, encrypted at rest (`enc:v1:` Data Protection), never in audit text. | integration |
+
+### Platform users and tenant switching
+A **platform tenant** (`Tenant.IsPlatform`, slug `platform`, never suspendable) holds operator staff (roles *Platform Owner*, *SaaS Administrator*). A user whose active platform role carries `Platform.SwitchTenant` may switch into any **active** tenant without being a member; inside it they carry the permissions of their platform roles (`PermissionEvaluator`). Ordinary users may only switch among their own memberships; anything else answers 404 (same as "does not exist"). Platform users cannot enter a suspended tenant, but can still manage it from the tenant list.
+
+### Known limits (documented, not hidden)
+- Access JWTs are valid until expiry (15 min default) for signature purposes, but every request re-checks user status, membership and tenant status, so suspension/removal is immediate.
+- Refresh tokens are not purged yet (no job host before Phase 6).
+- Rate limiting for the API login is per IP only.

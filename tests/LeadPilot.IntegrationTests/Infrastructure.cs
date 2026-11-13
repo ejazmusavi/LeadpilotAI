@@ -2,6 +2,10 @@ extern alias ApiApp;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using LeadPilot.Application.Abstractions;
 using MySqlConnector;
 
 namespace LeadPilot.IntegrationTests;
@@ -25,13 +29,15 @@ public sealed class AppFixture : IAsyncLifetime
 
     private readonly string _dbName = "leadpilot_test_" + Guid.NewGuid().ToString("N")[..12];
     private string? _adminConn;
+    public EmailOutbox Outbox { get; } = new();
+    public TestWorld World { get; private set; } = default!;
     public WebApplicationFactory<Program>? Web { get; private set; }
     public WebApplicationFactory<ApiApp::Program>? Api { get; private set; }
 
-    public Task InitializeAsync()
+    public async Task InitializeAsync()
     {
         _adminConn = Environment.GetEnvironmentVariable(RequiresMySqlFactAttribute.EnvVar);
-        if (string.IsNullOrEmpty(_adminConn)) return Task.CompletedTask;
+        if (string.IsNullOrEmpty(_adminConn)) return;
 
         using (var c = new MySqlConnection(_adminConn))
         {
@@ -50,10 +56,20 @@ public sealed class AppFixture : IAsyncLifetime
         Environment.SetEnvironmentVariable("Registration__AllowSelfRegistration", "true");
         Environment.SetEnvironmentVariable("RateLimiting__AuthPermitLimit", "1000"); // the shared test client IP would otherwise trip the 20/min limit
 
-        Web = new WebApplicationFactory<Program>().WithWebHostBuilder(b => b.UseEnvironment("Development"));
-        Web.CreateClient().Dispose(); // boots the app: migrates + seeds
-        Api = new WebApplicationFactory<ApiApp::Program>().WithWebHostBuilder(b => b.UseEnvironment("Development"));
-        return Task.CompletedTask;
+        Environment.SetEnvironmentVariable("App__PublicWebUrl", "http://localhost");
+        // Re-validate the security stamp (and rebuild the principal) on EVERY request, so tests prove the active-tenant claim survives that refresh.
+        Environment.SetEnvironmentVariable("Security__StampValidationMinutes", "0");
+
+        // Test double: capture outgoing e-mail so invitation links can be followed. Tests only.
+        void UseOutbox(IWebHostBuilder b) => b.UseEnvironment("Development").ConfigureTestServices(s =>
+        {
+            s.RemoveAll<IEmailSender>();
+            s.AddSingleton<IEmailSender>(Outbox);
+        });
+        Web = new WebApplicationFactory<Program>().WithWebHostBuilder(UseOutbox);
+        Web.CreateClient().Dispose(); // boots the app: migrates + seeds the catalog, platform tenant and platform owner
+        Api = new WebApplicationFactory<ApiApp::Program>().WithWebHostBuilder(UseOutbox);
+        World = await TestWorld.BuildAsync(Web.Services);
     }
 
     public async Task DisposeAsync()

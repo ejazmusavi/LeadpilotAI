@@ -122,3 +122,12 @@ Without a Google key you can still search public websites you provide (connector
 Permissions: `Discovery.View/Run/Review/Manage`, `Integrations.Manage` (defaults: Sales Manager View/Run/Review/Manage; Marketing Manager View/Run; Sales Agent and Staff View; Tenant Administrator all; Read-only none). Existing tenants receive them when Web starts (idempotent role sync).
 
 Tests: `DiscoveryKit` (integration) holds the TEST-ONLY fake connector (`test-fake`, `test-fake-keyed`), a recording scheduler and a no-network website enricher; they are registered by the test hosts only. `DiscoveryHangfireTests` build the real Worker composition (`AddWorkerServices`, Development ⇒ `ValidateOnBuild`) with a real Hangfire server on the test database. Migration: `Phase4Discovery` is the only new migration; `DiscoveryMigrationTests` upgrades a Phase 3 database that holds data.
+
+
+## Live check of the Google Places connector (runbook)
+Cost: **one** Text Search request (pageSize 5, Enterprise SKU because the field mask includes website and phone), roughly 0.03–0.04 USD at list price: check Google's current price list. It prints counts and field presence only; do not paste or commit Google responses (caching terms: see INTEGRATIONS.md).
+1. In the Google Cloud project: enable **Places API (New)**, enable billing, create an API key (restrict it to that API).
+2. Give the check the key in ONE of two ways: set the environment variable `GOOGLE_PLACES_API_KEY` in the shell (never in a file or in git), **or** (cloud sandbox) save it as a network secret for host `places.googleapis.com`, header `X-Goog-Api-Key`, bare value, and leave the variable unset: the tool then sends a dummy key and the proxy substitutes the real one. Environment variables and secrets only reach a NEW session or after a restart.
+3. Run: `SSL_CERT_FILE=/root/.ccr/ca-bundle.crt dotnet run --project tools/LiveGoogleCheck` (drop `SSL_CERT_FILE` outside the sandbox).
+4. Expected: `OK http=200 calls=1 candidates=<1..5>`, a line of field counts (name/address/website/phone/city/province/country/sourceUrl), types such as `school`, place ids starting with `ChIJ`, attribution `Place data from Google Maps`, retention 30 days.
+5. Errors the adapter reports: 400 `API key not valid` = the key (or the proxy substitution) is wrong; 403 = API not enabled/billing off/key restricted; 429 = quota. In the app itself: Connectors & usage → paste the key → Discovery → New search (Pakistan / Lahore / Private schools, max results 5) and watch the usage page.

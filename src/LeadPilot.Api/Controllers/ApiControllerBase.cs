@@ -15,7 +15,8 @@ public abstract class ApiControllerBase : ControllerBase
         {
             "not_found" => StatusCodes.Status404NotFound,
             "forbidden" or "tenant_suspended" => StatusCodes.Status403Forbidden,
-            "conflict" or "duplicate" => StatusCodes.Status409Conflict,
+            "conflict" or "duplicate" or "connector_not_configured" => StatusCodes.Status409Conflict,
+            "usage_limit_reached" => StatusCodes.Status429TooManyRequests,
             "too_large" => StatusCodes.Status413PayloadTooLarge,
             "invalid_credentials" or "invalid_refresh_token" or "sign_in_required" => StatusCodes.Status401Unauthorized,
             "locked_out" => StatusCodes.Status423Locked,

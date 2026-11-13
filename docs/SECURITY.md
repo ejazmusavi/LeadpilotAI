@@ -54,3 +54,23 @@ Cross-tenant data leakage (IDOR, filter bypass, cache/vector leakage) · credent
 - **Export**: permission-gated (`Leads.Export`), audited, capped at 10 000 rows (refuses instead of truncating), CSV `'`-prefix / XLSX quote-prefix neutralisation of `= + - @ TAB CR LF`, never includes another tenant's rows.
 - **Web**: every state-changing MVC action is POST + antiforgery, destructive ones behind a confirm dialog; output HTML-encoded (tested with a hostile lead name and note); `returnQuery` redirects are restricted to same-site query strings.
 - **Static assets** are served anonymously on purpose (the login page needs them); every application page still requires authentication.
+
+
+## Phase 4 — discovery security
+**SSRF-safe website fetching** (`UrlGuard`, `SafeWebFetcher`, `SafeHttpClientFactory`; unit-tested incl. real sockets):
+- URL checks before every request and on **every redirect hop**: scheme http/https only; no credentials in the URL; ports 80/443 only; host names such as `localhost`, `*.local`, `*.internal`, `metadata.google.internal`, single-label names rejected; IP literals (including decimal/hex/octal forms, which `Uri` normalises) checked; the name is resolved and **every** answer must be public.
+- Address policy (`IpAddressClassifier`): rejects 0/8, 10/8, 100.64/10 (CGNAT), 127/8, 169.254/16 (cloud metadata 169.254.169.254), 172.16/12, 192.0.0/24, 192.0.2/24, 192.88.99/24, 192.168/16, 198.18/15, 198.51.100/24, 203.0.113/24, ≥224/4; IPv6 `::`, `::1`, fc00::/7 (incl. fd00:ec2::254), fe80::/10, fec0::/10, ff00::/8, 2001:db8::/32, Teredo, 100::/64; IPv4-mapped, NAT64 and 6to4 addresses are classified by the IPv4 they embed; only 2000::/3 global unicast passes.
+- **DNS rebinding:** the HTTP handler resolves the name itself inside `SocketsHttpHandler.ConnectCallback`, filters with the same policy and connects the socket to the validated address; there is no second lookup between check and connect (tested with a resolver that answers public first, loopback afterwards).
+- Redirects are never followed by the handler (3 hops max, each re-validated); no proxy, no cookies, no `Authorization`; total timeout 10 s; body ≤ 1 MB read incrementally; only `text/html`, `application/xhtml+xml`, `text/plain`; 401/403/407 are "protected content" and never retried; a page with a password field or `noindex` is not read.
+- Only `ISafeHttpClientFactory` may produce a client for arbitrary hosts (architecture test: no other type in that namespace references `HttpClient`/`IHttpClientFactory`; a source scan rejects `new HttpClient`/handlers). The Google adapter uses its own named client to a fixed, configured base URL (not user input).
+- Logging: only the host and failure reason; never the path/query, never the API key.
+
+**Credentials:** connector keys are encrypted with ASP.NET Data Protection (`ISecretProtector`, `enc:v1:` prefix, shared key ring `DataProtection:KeysPath` — **the Worker must mount the same key ring as Web**, as compose does), shown only as a 4-character hint, excluded from DTOs (architecture test), audit text and logs; provider error messages are scrubbed of the key. Keys can be removed; saving needs `Integrations.Manage`.
+
+**Data-source rules enforced in code:** discovery never writes consent (contacts approved from discovery are `DataOrigin.Public` with no `ConsentRecord`; `IContactEligibilityService` blocks them on every channel/purpose until consent exists — integration-tested, and the same test shows consent opens the gate); no scraping of protected platforms (no such connector exists; the stubs return nothing); every unverified value is labelled; nothing is invented (the extractor has no field for student strength, software, decision makers).
+
+**Abuse and cost controls:** per-tenant monthly call limit (default 1000) and optional budget, enforced when creating/retrying a search and again before every provider call; page delay (`Discovery:PageDelayMs`); `Discovery.Run` is a separate permission; the result of a limit hit is `429 usage_limit_reached` / a failed, resumable job.
+
+**Hangfire dashboard:** `/hangfire`, authenticated users only, further restricted to `Tenants.Manage` or `Platform.SwitchTenant`; it can enqueue/delete jobs, so it stays platform-only. Hangfire job arguments contain ids only.
+
+**Known residual risks:** the Google caching question (INTEGRATIONS.md); `Hangfire.MySqlStorage` is unmaintained; website enrichment depends on the host's DNS answering truthfully for the *validation* only (the connect itself is pinned); a very large site could still return 1 MB per request (bounded by `MaxWebsitesPerJob`).

@@ -42,6 +42,17 @@
             <a class="nav-link @(Nav("/Tags") ? "active" : "")" asp-controller="Tags" asp-action="Index">Tags</a>
         </nav>
     }
+    @if (perms.Has(PermissionCodes.DiscoveryView))
+    {
+        <div class="nav-section">Discovery</div>
+        <nav class="nav flex-column px-2">
+            <a class="nav-link @(Nav("/Discovery/History") ? "active" : Nav("/Discovery") && !Nav("/DiscoveryResults") && !Nav("/DiscoverySetup") ? "active" : "")" asp-controller="Discovery" asp-action="Index">Searches</a>
+            <a class="nav-link @(Nav("/DiscoveryResults") ? "active" : "")" asp-controller="DiscoveryResults" asp-action="Index">Review results</a>
+            <a class="nav-link @(Nav("/Discovery/History") ? "active" : "")" asp-controller="Discovery" asp-action="History">Search history</a>
+            <a class="nav-link @(Nav("/DiscoverySetup") ? "active" : "")" asp-controller="DiscoverySetup" asp-action="Index">Categories &amp; locations</a>
+            @if (perms.Has(PermissionCodes.IntegrationsManage)) { <a class="nav-link @(Nav("/Connectors") ? "active" : "")" asp-controller="Connectors" asp-action="Index">Connectors &amp; usage</a> }
+        </nav>
+    }
     @if (perms.Has(PermissionCodes.SuppressionManage))
     {
         <div class="nav-section">Compliance</div>
@@ -80,6 +91,7 @@
         <div class="nav-section">Platform</div>
         <nav class="nav flex-column px-2">
             <a class="nav-link @(Nav("/Tenants") && !Nav("/Tenants/Switch") ? "active" : "")" asp-controller="Tenants" asp-action="Index">Tenants</a>
+            <a class="nav-link" href="/hangfire" target="_blank" rel="noopener">Background jobs</a>
         </nav>
     }
     <div class="sidebar-footer small">Discover. Engage. Convert.</div>

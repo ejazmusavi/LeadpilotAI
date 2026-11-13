@@ -30,6 +30,8 @@ public sealed class AppFixture : IAsyncLifetime
     private readonly string _dbName = "leadpilot_test_" + Guid.NewGuid().ToString("N")[..12];
     private string? _adminConn;
     public EmailOutbox Outbox { get; } = new();
+    public FakeScript Script { get; } = new();
+    public RecordingScheduler Scheduler { get; } = new();
     public TestWorld World { get; private set; } = default!;
     public WebApplicationFactory<Program>? Web { get; private set; }
     public WebApplicationFactory<ApiApp::Program>? Api { get; private set; }
@@ -68,6 +70,7 @@ public sealed class AppFixture : IAsyncLifetime
         {
             s.RemoveAll<IEmailSender>();
             s.AddSingleton<IEmailSender>(Outbox);
+            DiscoveryKit.RegisterTestServices(s, Script, Scheduler);   // TEST-ONLY fake connector, recording scheduler, no-network website enricher
         });
         Web = new WebApplicationFactory<Program>().WithWebHostBuilder(UseOutbox);
         Web.CreateClient().Dispose(); // boots the app: migrates + seeds the catalog, platform tenant and platform owner

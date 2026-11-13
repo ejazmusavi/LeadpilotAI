@@ -91,3 +91,34 @@ Permissions: `Leads.View/Create/Update/Delete/Import/Export/Assign`, `Consent.Ma
 Tests: integration tests that need real tenants use `TestWorld` (tenants A and B with administrators, sales manager/agent, marketing manager and read-only users) and `NewTenantAsync` for tests that change tenant-wide configuration (scoring rules, default pipeline). Phones and names come from `Crm.Phone()` / `Crm.Token()` so tests never collide in the shared database. Integration tests set `RateLimiting__ApiPermitLimit`, `Crm__StorageRoot` and `Crm__MaxExportRows=100` in `AppFixture`.
 
 Migrations: `Phase3Crm` is the only new migration. To check an upgrade by hand: run the Phase 2 build against an empty database (migrate + seed), then `dotnet ef database update` with the Phase 3 build and start the Web host (the integration test `A_phase2_database_upgrades_and_existing_tenants_receive_crm_defaults_and_permissions` automates exactly this).
+
+
+## Configuration added in Phase 4
+| Key | Where | Meaning |
+|---|---|---|
+| `Discovery:PageSize` (20) / `MaxPagesPerQuery` (5) / `MaxResultsPerJob` (200) / `MaxBulkItems` (100) | all | Search limits. |
+| `Discovery:DefaultMonthlyCallLimit` (1000) | all | Used when a tenant sets no limit for a connector (tenants override under *Connectors & usage*). |
+| `Discovery:DefaultCostPerCallUsd` (0.035) | all | **Estimate** shown on the usage page; set it from Google's current price list. |
+| `Discovery:PageDelayMs` (500) | Worker | Minimum delay between provider calls of one job (rate limit). Tests set 0. |
+| `Discovery:GoogleContentRetentionDays` (30) | Worker | How long provider content of a result is kept (see INTEGRATIONS.md). |
+| `Discovery:StaleRunningMinutes` (30) | Worker | A Running job older than this may be taken over after a worker crash. |
+| `Discovery:GooglePlaces:BaseUrl` / `TimeoutSeconds` | all | Google endpoint (tests point it at a local fake). |
+| `Discovery:Website:UserAgent` / `RobotsToken` / `MaxBytes` (1 MB) / `TimeoutSeconds` (10) / `MaxRedirects` (3) / `MaxPagesPerSite` (2) / `MaxWebsitesPerJob` (100) | Worker | Website fetching limits. Put a real contact URL in the User-Agent before production. |
+| `Discovery:Hangfire:PollSeconds` (5) / `Workers` (2) | Worker | Hangfire queue polling and worker threads. |
+| `ConnectionStrings:Default` | Web, Api, Worker | Hangfire reuses it (adds `Allow User Variables=true`); its tables use the prefix `Hangfire` in the same database. |
+| `DataProtection:KeysPath` | Web, Api, **Worker** | Must be the SAME key ring everywhere, otherwise the Worker cannot decrypt connector keys saved in Web. |
+
+## Running discovery locally
+```bash
+dotnet run --project src/LeadPilot.Web      # migrates (EF) first; creates the Hangfire tables on first use
+dotnet run --project src/LeadPilot.Worker   # Hangfire server: processes discovery searches, runs the daily retention job
+# 1. sign in as an administrator -> Discovery -> Connectors & usage: paste your own Google Places API key (stored encrypted)
+# 2. Discovery -> New search: pick a saved location + category (education workspaces get the school starter pack automatically)
+# 3. watch it on the search page, then Review results: approve/reject/bulk. Approved results become leads (source = Discovery, public contacts, no consent)
+# Hangfire dashboard (platform operators only): http://localhost:5002/hangfire
+```
+Without a Google key you can still search public websites you provide (connector *Public websites*). Nothing in the app returns sample data.
+
+Permissions: `Discovery.View/Run/Review/Manage`, `Integrations.Manage` (defaults: Sales Manager View/Run/Review/Manage; Marketing Manager View/Run; Sales Agent and Staff View; Tenant Administrator all; Read-only none). Existing tenants receive them when Web starts (idempotent role sync).
+
+Tests: `DiscoveryKit` (integration) holds the TEST-ONLY fake connector (`test-fake`, `test-fake-keyed`), a recording scheduler and a no-network website enricher; they are registered by the test hosts only. `DiscoveryHangfireTests` build the real Worker composition (`AddWorkerServices`, Development ⇒ `ValidateOnBuild`) with a real Hangfire server on the test database. Migration: `Phase4Discovery` is the only new migration; `DiscoveryMigrationTests` upgrades a Phase 3 database that holds data.

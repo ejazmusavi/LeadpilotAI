@@ -197,3 +197,14 @@ public sealed record OpportunityDto(Guid Id, Guid LeadId, string Name, decimal V
     Guid StageId, string StageName, OpportunityStatus Status, DateTime CreatedAtUtc);
 public sealed record SaveOpportunityRequest(string Name, decimal Value, string Currency = "USD", DateTime? ExpectedCloseDateUtc = null, Guid? OwnerUserId = null) : TenantScopedRequest;
 public sealed record OpportunityStageRequest(Guid StageId) : TenantScopedRequest;
+
+// ---- lead intake (discovery approval; the only non-client path that may write LeadSourceType.Discovery) ----
+public sealed record IntakeContact(string? Phone, string? Email, string? Name = null);
+
+public sealed record LeadIntakeRequest(
+    string Name, Guid? CategoryId, string? Country, string? Province, string? City, string? District, string? Area, string? Address, string? Website, int Confidence,
+    LeadSourceType SourceType, string? ExternalId, string? SourceName, string? SourceUrl, string? Attribution, IReadOnlyList<IntakeContact> Contacts, Guid? OwnerUserId,
+    bool MergeIfDuplicate, DateTime RetrievedAtUtc);
+
+public enum IntakeAction { Created = 1, Merged = 2 }
+public sealed record LeadIntakeResult(Guid LeadId, IntakeAction Action, IReadOnlyList<string> MergedFields);

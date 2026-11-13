@@ -80,14 +80,23 @@ public sealed class LeadService(CrmContext crm, DuplicateDetector duplicates, IL
     }
 
     // ---------- create / update ----------
-    public Task<Result<LeadDto>> CreateAsync(CreateLeadRequest r, CancellationToken ct = default) =>
+    public Task<Result<LeadDto>> CreateAsync(CreateLeadRequest r, CancellationToken ct = default)
+    {
+        if (r.SourceType is { } st && !ClientSourceTypes.Contains(st)) return Task.FromResult(Result.Failure<LeadDto>(Error.Validation($"Source type '{st}' is reserved for imports and discovery.")));
+        return CreateCore(r, r.SourceType ?? LeadSourceType.Manual, null, null, null, ct);
+    }
+
+    /// <summary>Server-side only (discovery approval): creates a lead whose source is a system source type with its external id, attribution and retrieval time.</summary>
+    public Task<Result<LeadDto>> CreateFromSourceAsync(CreateLeadRequest r, LeadSourceType source, string? externalId, string? attribution, DateTime? retrievedAtUtc, CancellationToken ct = default) =>
+        CreateCore(r, source, externalId, attribution, retrievedAtUtc, ct);
+
+    private Task<Result<LeadDto>> CreateCore(CreateLeadRequest r, LeadSourceType source, string? externalId, string? attribution, DateTime? retrievedAtUtc, CancellationToken ct) =>
         CrmFlow.GuardAsync(async () =>
         {
             await crm.EnsureDefaultsAsync(ct);
             var db = crm.Db; var tenantId = crm.TenantId; var now = crm.Now;
             if (string.IsNullOrWhiteSpace(r.Name)) return Result.Failure<LeadDto>(Error.Validation("Lead name is required."));
 
-            if (r.SourceType is { } st && !ClientSourceTypes.Contains(st)) return Result.Failure<LeadDto>(Error.Validation($"Source type '{st}' is reserved for imports and discovery."));
             if (await CheckCategory(r.CategoryId, null, ct) is { } catErr) return Result.Failure<LeadDto>(catErr);
 
             // pipeline, stage, status
@@ -123,7 +132,7 @@ public sealed class LeadService(CrmContext crm, DuplicateDetector duplicates, IL
             var inputs = r.Contacts ?? [];
             if (inputs.Count > 20) return Result.Failure<LeadDto>(Error.Validation("At most 20 contacts can be created with a lead."));
             var lead = Lead.Create(tenantId, new LeadProfile(r.Name, r.CategoryId, r.Country, r.Province, r.City, r.District, r.Area, r.Address, r.Website, r.Confidence),
-                stage.PipelineId, stage.Id, status.Id, r.OwnerUserId, r.SourceType ?? LeadSourceType.Manual, now, crm.Actor);
+                stage.PipelineId, stage.Id, status.Id, r.OwnerUserId, source, now, crm.Actor);
             for (var i = 0; i < inputs.Count; i++)
             {
                 var c = inputs[i];
@@ -153,7 +162,7 @@ public sealed class LeadService(CrmContext crm, DuplicateDetector duplicates, IL
             }
 
             db.Leads.Add(lead);
-            db.LeadSources.Add(LeadSource.Create(tenantId, lead.Id, lead.PrimarySourceType, null, r.SourceName, r.SourceUrl, null, now));
+            db.LeadSources.Add(LeadSource.Create(tenantId, lead.Id, lead.PrimarySourceType, externalId, r.SourceName, r.SourceUrl, attribution, retrievedAtUtc ?? now));
             foreach (var c in contacts) db.Contacts.Add(c);
             foreach (var t in tagIds) db.LeadTagMaps.Add(LeadTagMap.Create(tenantId, lead.Id, t, now));
             crm.Activity(lead.Id, LeadActivityType.Created, $"Lead created ({lead.PrimarySourceType}).");

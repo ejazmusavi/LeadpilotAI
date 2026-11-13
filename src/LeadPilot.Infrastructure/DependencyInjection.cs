@@ -1,6 +1,8 @@
 using LeadPilot.Application.Abstractions;
 using LeadPilot.Application.Contracts;
 using LeadPilot.Infrastructure.Persistence;
+using LeadPilot.Infrastructure.Discovery;
+using LeadPilot.Infrastructure.Discovery.Jobs;
 using LeadPilot.Infrastructure.Services;
 using LeadPilot.Infrastructure.Services.Tenancy;
 using LeadPilot.Infrastructure.Services.Crm;
@@ -80,6 +82,8 @@ public static class DependencyInjection
         services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
         services.AddScoped<RejectSpoofedTenantFilter>();
         services.AddCrmServices(config);
+        services.AddDiscovery(config);
+        services.AddDiscoveryHangfire(config, server: false);   // Web/Api only enqueue; the Worker processes
         return services;
     }
 
@@ -94,6 +98,7 @@ public static class DependencyInjection
         services.AddScoped<IScoringService>(sp => sp.GetRequiredService<ScoringService>());
         services.AddScoped<ILeadScorer>(sp => sp.GetRequiredService<ScoringService>());
         services.AddScoped<ILeadService, LeadService>();
+        services.AddScoped<ILeadIntakeService, LeadIntakeService>();
         services.AddScoped<IContactService, ContactService>();
         services.AddScoped<IConsentService, ConsentService>();
         services.AddScoped<ISuppressionService, SuppressionService>();

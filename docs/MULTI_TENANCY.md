@@ -76,3 +76,12 @@ A **platform tenant** (`Tenant.IsPlatform`, slug `platform`, never suspendable) 
 | Provisioning | defaults are inserted in an explicit platform scope for the new/existing tenant; `PlatformSeeder` (already on the `IgnoreQueryFilters` allow-list) is the only new reader across tenants | `A_phase2_database_upgrades_and_existing_tenants_receive_crm_defaults_and_permissions` |
 
 The `IgnoreQueryFilters` allow-list did not grow in Phase 3.
+
+
+## Phase 4 — discovery under the tenancy rules
+- Entities `DiscoveryJob`, `DiscoveryResult`, `DiscoveryConnectorConfig`, `DiscoveryUsageEntry`, `DiscoveryCategoryMapping`, `DiscoveryLocationPreset` are `ITenantOwned`: global query filter, TenantId stamped/immutable by the SaveChanges guard, cross-tenant FK rejection (a result pointing at another tenant's job, a job using another tenant's category, a mapping for another tenant's category all throw `CrossTenantViolationException`), usage ledger append-only.
+- Services use the Phase 3 `CrmContext` (explicit `TenantId ==` predicate on every query + 404 for foreign ids). No file under `Infrastructure/Discovery` may use `IgnoreQueryFilters` (architecture test); the retention job iterates tenants and runs each inside `ITenantScopeRunner`.
+- **Credentials:** the connector config row is read with the active tenant's predicate and decrypted just before the call; the key is passed to the connector in the request object. There is no ambient or shared key: tenant B without a key gets "not configured", never tenant A's key (integration-tested with a keyed test connector recording which key it received).
+- **Background jobs:** the Hangfire payload is `(tenantId, jobId)`; `ITenantScopeRunner` fails closed on an empty/unknown/suspended tenant; a payload pairing tenant A with tenant B's job id finds nothing in A's scope and does nothing (tested with a real Hangfire server).
+- Monthly limits and usage are per tenant and per connector; the dashboard `/hangfire` is platform-only.
+- Test coverage: `DiscoverySecurityTests` (every endpoint 401/403, A↔B 404 for read/approve/reject/cancel/retry/rerun/delete, bulk, lists, spoofed `TenantId` in body/query/header, credentials, runner, DB guard on each entity).

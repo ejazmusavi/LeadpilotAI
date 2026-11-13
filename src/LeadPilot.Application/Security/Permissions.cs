@@ -23,6 +23,11 @@ public static class PermissionCodes
     public const string UsersManage = "Users.Manage";
     public const string SettingsManage = "Settings.Manage";
     public const string AuditView = "Audit.View";
+    public const string DiscoveryView = "Discovery.View";
+    public const string DiscoveryRun = "Discovery.Run";
+    public const string DiscoveryReview = "Discovery.Review";
+    public const string DiscoveryManage = "Discovery.Manage";
+    public const string IntegrationsManage = "Integrations.Manage";
     // Platform (operator) permissions: grantable only by roles of the platform tenant.
     public const string TenantsManage = "Tenants.Manage";
     public const string PlatformSwitchTenant = "Platform.SwitchTenant";
@@ -56,6 +61,11 @@ public static class PermissionCatalog
         new(PermissionCodes.UsersManage, "Manage users and roles", "Administration", "Invite users, assign roles and edit custom roles."),
         new(PermissionCodes.SettingsManage, "Manage settings", "Administration", "Edit workspace profile and settings."),
         new(PermissionCodes.AuditView, "View audit log", "Administration", "Read the workspace audit trail."),
+        new(PermissionCodes.DiscoveryView, "View discovery", "Discovery", "See discovery searches, their progress and their results."),
+        new(PermissionCodes.DiscoveryRun, "Run discovery searches", "Discovery", "Start, cancel and retry discovery searches (counts against the connector's monthly limit)."),
+        new(PermissionCodes.DiscoveryReview, "Review discovery results", "Discovery", "Approve results into the CRM or reject them."),
+        new(PermissionCodes.DiscoveryManage, "Manage discovery setup", "Discovery", "Edit category search phrases, saved locations and starter packs."),
+        new(PermissionCodes.IntegrationsManage, "Manage integrations", "Administration", "Store connector API keys and set monthly usage limits."),
         new(PermissionCodes.TenantsManage, "Manage tenants", "Platform", "Create, edit, suspend and activate tenants.", IsPlatform: true),
         new(PermissionCodes.PlatformSwitchTenant, "Switch into tenants", "Platform", "Operate inside any active tenant (audited).", IsPlatform: true),
     ];
@@ -94,24 +104,26 @@ public static class SystemRoles
         new(TenantStaff, "Day-to-day work with leads and conversations.", false,
         [
             PermissionCodes.LeadsView, PermissionCodes.LeadsCreate, PermissionCodes.LeadsUpdate, PermissionCodes.CampaignsView,
-            PermissionCodes.ConversationsView, PermissionCodes.ConversationsReply, PermissionCodes.ReportsView
+            PermissionCodes.ConversationsView, PermissionCodes.ConversationsReply, PermissionCodes.ReportsView, PermissionCodes.DiscoveryView
         ]),
         new(SalesManager, "Manages the sales team, leads and conversations.", false,
         [
             PermissionCodes.LeadsView, PermissionCodes.LeadsCreate, PermissionCodes.LeadsUpdate, PermissionCodes.LeadsDelete, PermissionCodes.CampaignsView,
             PermissionCodes.ConversationsView, PermissionCodes.ConversationsReply, PermissionCodes.ReportsView,
             PermissionCodes.LeadsImport, PermissionCodes.LeadsExport, PermissionCodes.LeadsAssign, PermissionCodes.ConsentManage,
-            PermissionCodes.SuppressionManage, PermissionCodes.PipelinesManage, PermissionCodes.ScoringManage
+            PermissionCodes.SuppressionManage, PermissionCodes.PipelinesManage, PermissionCodes.ScoringManage,
+            PermissionCodes.DiscoveryView, PermissionCodes.DiscoveryRun, PermissionCodes.DiscoveryReview, PermissionCodes.DiscoveryManage
         ]),
         new(SalesAgent, "Works leads and conversations.", false,
         [
-            PermissionCodes.LeadsView, PermissionCodes.LeadsCreate, PermissionCodes.LeadsUpdate, PermissionCodes.ConversationsView, PermissionCodes.ConversationsReply
+            PermissionCodes.LeadsView, PermissionCodes.LeadsCreate, PermissionCodes.LeadsUpdate, PermissionCodes.ConversationsView, PermissionCodes.ConversationsReply,
+            PermissionCodes.DiscoveryView
         ]),
         new(MarketingManager, "Plans and runs campaigns.", false,
         [
             PermissionCodes.LeadsView, PermissionCodes.CampaignsView, PermissionCodes.CampaignsCreate, PermissionCodes.CampaignsExecute,
             PermissionCodes.ConversationsView, PermissionCodes.ReportsView,
-            PermissionCodes.LeadsExport, PermissionCodes.ConsentManage, PermissionCodes.SuppressionManage
+            PermissionCodes.LeadsExport, PermissionCodes.ConsentManage, PermissionCodes.SuppressionManage, PermissionCodes.DiscoveryView, PermissionCodes.DiscoveryRun
         ]),
         new(ReadOnly, "Can view everything operational but change nothing.", false,
         [

@@ -161,6 +161,12 @@ public class Conversation : AuditableEntity, ITenantOwned
     public int UnreadCount { get; private set; }
     /// <summary>Set when the peer sent an opt-out message. Blocks every outbound message to this chat (needed for hidden @lid senders whose number cannot be suppressed).</summary>
     public DateTime? OptedOutAtUtc { get; private set; }
+    /// <summary>Why the conversation was handed to a person (set by an escalation or a takeover, cleared when the AI is resumed).</summary>
+    public string? EscalationReason { get; private set; }
+    public DateTime? EscalatedAtUtc { get; private set; }
+    public DateTime? AiModeChangedAtUtc { get; private set; }
+    /// <summary>Incremented on EVERY change of <see cref="AiMode"/>. An AI generation remembers the value it started with; if it changed, a person or a rule intervened and the AI must not send.</summary>
+    public int AiEpoch { get; private set; }
 
     public static Conversation Create(Guid tenantId, Guid accountId, string externalChatId, string? peerPhoneE164, string? peerName, DateTime nowUtc) =>
         new() { TenantId = tenantId, ChannelAccountId = accountId, ExternalChatId = Guard.Required(externalChatId, 100, "Chat id"), PeerPhoneE164 = peerPhoneE164, PeerName = Trim(peerName, 200), CreatedAtUtc = nowUtc };
@@ -188,7 +194,19 @@ public class Conversation : AuditableEntity, ITenantOwned
 
     public void MarkRead(DateTime nowUtc) { UnreadCount = 0; UpdatedAtUtc = nowUtc; }
     public void SetStatus(ConversationStatus status, DateTime nowUtc) { Status = status; UpdatedAtUtc = nowUtc; }
-    public void SetAiMode(AiMode mode, DateTime nowUtc) { AiMode = mode; UpdatedAtUtc = nowUtc; }
+    public void SetAiMode(AiMode mode, DateTime nowUtc)
+    {
+        if (mode != AiMode) { AiEpoch++; AiModeChangedAtUtc = nowUtc; }
+        AiMode = mode; UpdatedAtUtc = nowUtc;
+        if (mode == AiMode.Active) { EscalationReason = null; EscalatedAtUtc = null; }
+    }
+
+    /// <summary>Hands the conversation to a person: the AI stops answering until it is resumed.</summary>
+    public void Escalate(string reason, DateTime nowUtc)
+    {
+        SetAiMode(AiMode.HumanControl, nowUtc);
+        EscalationReason = string.IsNullOrWhiteSpace(reason) ? "escalated" : Trim(reason, 200); EscalatedAtUtc = nowUtc;
+    }
     public void Assign(Guid? userId, DateTime nowUtc) { AssignedUserId = userId; UpdatedAtUtc = nowUtc; }
 
     /// <summary>True when the customer wrote within the last <paramref name="window"/>: replies are then service messages.</summary>
@@ -247,6 +265,10 @@ public class Message : Entity, ITenantOwned
     /// <summary>Set when the message belongs to a campaign. <see cref="CampaignRecipientId"/> is null for a test send (which is never part of a campaign's audience or statistics).</summary>
     public Guid? CampaignId { get; private set; }
     public Guid? CampaignRecipientId { get; private set; }
+    /// <summary>Written by the AI agent (never by a person or a campaign). The send runner re-checks that the AI may still speak in the conversation (<see cref="AiEpoch"/>) immediately before sending.</summary>
+    public bool IsAiGenerated { get; private set; }
+    public Guid? AiInteractionId { get; private set; }
+    public int? AiEpoch { get; private set; }
 
     public static Message Inbound(Guid tenantId, Guid conversationId, Guid accountId, string externalId, string body, DateTime occurredAtUtc, string correlationId, DateTime nowUtc) =>
         new()
@@ -272,6 +294,7 @@ public class Message : Entity, ITenantOwned
     private static string Truncate(string? body) => (body ?? string.Empty).Length > MaxBodyLength ? body![..MaxBodyLength] : body ?? string.Empty;
 
     public void SetContact(Guid contactId) => ContactId = contactId;
+    public void MarkAiGenerated(Guid interactionId, int epoch) { IsAiGenerated = true; AiInteractionId = interactionId; AiEpoch = epoch; }
     public void SetCampaign(Guid campaignId, Guid? recipientId) { CampaignId = campaignId; CampaignRecipientId = recipientId; }
 
     // ---- outbound lifecycle (the send runner performs the atomic Queued → Sending claim in SQL; these mirror it for tracked entities) ----

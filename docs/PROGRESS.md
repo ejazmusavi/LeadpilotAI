@@ -397,3 +397,50 @@ Knowledge base (empty and with documents), add (text/upload/website), document, 
 4. PDFs that are scans need OCR (refused with a clear message). Website sources read ≤ 10 pages of one host.
 5. Per-agent model choice, automatic sending, demo scheduling and trial creation are Phase 8.
 6. Owner decisions taken by default: docs/OWNER_DECISIONS.md.
+
+
+---
+# Phase 8 — AI sales agent and controlled tool calling
+
+**Status: Completed against test doubles; live Claude is NOT verified; demo, trial and payment services do not exist yet (Phase 10), so those tools honestly answer "not available".** No real message was sent and no money spent.
+
+### Implemented
+- **Configurable agent framework** (tenant data): `SalesAgent` (instructions, enabled tools, model/confidence overrides, opt-in), qualification questions, product/pricing catalog (`Confirmed` flag; the AI only sees confirmed, active entries). **School ERP is a SAMPLE** created by a button: `[PLACEHOLDER]` text only, nothing confirmed, so the agent says it does not know.
+- **Controlled tools** (`AgentToolRunner`): GetProductInformation, GetPricingPlans, GetLeadProfile, UpdateLeadStatus, QualifyLead (the spec's QualifySchool, product-agnostic), CheckDemoAvailability, BookDemo, ScheduleFollowUp, CreateTrialAccount, CreatePaymentRequest, TransferToHuman, StopMarketingMessages (+ AddLeadNote from Phase 7). Allow-list, schema validation, tenant/lead/conversation from server context only (forbidden arguments refused), no SQL/query tool, one append-only execution row (inputs, outputs, outcome, approval link), replay on redelivery.
+- **Approvals:** payment requests always; discounts above the plan limit, custom terms, trials over the limit. Atomic decision, expiry, honest execution state ("not carried out: service not connected"). No tool activates a subscription or confirms a payment.
+- **Handoff:** takeover, AI pause/resume, assignment, internal notes, status, escalation reason, handoff history; a staff reply takes control; AI epoch makes takeover/pause during an in-flight generation cancel the reply; queued AI replies are withdrawn; the send runner re-checks before the atomic claim.
+- **AI reply sending:** OFF by default (workspace switch + agent switch), only via `IAiReplySender` into the Phase 5 pipeline, only as an answer inside the service window, per-conversation daily cap; AI cannot start a conversation or send marketing. Opt-out by meaning runs StopMarketingMessages (classifier ≥ 0.8).
+- **UI + API:** Sales agent, Product catalog, Approvals, Tool log, Follow-ups, inbox controls; `/api/v1/agents|catalog|approvals|tool-executions|follow-ups` and conversation takeover/pause/resume/notes/history. Multilingual (Urdu, Roman Urdu) sensitivity rules added.
+
+### Tests (MySQL 8.0.46 + RabbitMQ 3.12.1, `dotnet test LeadPilotAI.sln`, build 0 warnings 0 errors)
+| Suite | Result |
+|---|---|
+| Unit | **985 passed** (was 930): tool arguments/catalog, agent-output parsing, validator with tool results and verified completions, multilingual sensitivity, injection signals, domain rules |
+| Architecture | **84 passed** (was 70): 13-tool catalog (no activate/query/delete/tenant parameters), single AI sender, no fake Phase 10 ports, permission + verb on every action, tenant-owned entities |
+| Integration | **421 passed, 1 skipped, 0 failed** (was 368/1): tools one by one, approvals (concurrent approve, reject, expiry), conversation flows (opt-in, takeover races, withdraw, window, cap, opt-out, injection), **196 scenarios** (en 92 / ur 43 / ru 61), security (401 matrix, 6-role permission matrix, API/MVC/consumer/DB-guard isolation), migration on a clean DB and on a Phase 7 DB with data |
+| Skipped (not passed) | `LIVE_the_skeleton_suite_against_the_real_claude_and_voyage_services` |
+| Not executed | live Claude/Voyage/Qdrant, live WAHA, Docker, load tests |
+
+Phase 7 tests changed on purpose: tool names are canonical in the log, the unknown-tool reason is `not_a_permitted_tool`, and the history test resumes the AI after staff replies.
+
+### Playwright render check (Chromium, scratch DB)
+Sales agent (empty and with the sample), agent edit, tool log, approvals, catalog, product, follow-ups at 1366 px and 390 px: all 200, no horizontal overflow, breadcrumbs present. The inbox controls are covered by integration tests (HTML asserted), not screenshotted (needs a WhatsApp account).
+
+### Acceptance criteria
+| Criterion | Result |
+|---|---|
+| AI can qualify a school using verified information | **Passed** (scripted model): answers validated against the tenant's questions; catalog facts only when confirmed |
+| AI can retrieve actual pricing | **Passed** (scripted model): price only from the confirmed catalog via the tool; an invented or unconfirmed price is refused |
+| AI can book a demo only through an authorized tool | **Passed** with a test double for the scheduler: only available slots, claims only after success; **real scheduling: Phase 10** |
+| Human staff can take over | **Passed** (UI, API) |
+| No further automatic replies while human control is active | **Passed**, incl. takeover/pause during a generation and queued replies |
+
+### Outstanding / known limits
+1. Live Claude never run (runbook in DEVELOPMENT.md): the JSON tool protocol is unverified against the real model.
+2. Demo/trial/payment: ports only; honest "not available".
+3. The validator proves numbers/offers/actions are backed by tool results or knowledge, not that every sentence is true.
+4. No automatic acknowledgement on escalation (owner decision 14). A message already `Sending` when a person takes over still finishes.
+5. Decisions taken by default: docs/OWNER_DECISIONS.md items 11–20.
+
+### Next
+Phase 9 (automation workflow engine). Not started.

@@ -67,6 +67,9 @@ public class ThreadViewModel
     public ReplyFormModel Reply { get; set; } = new();
     public AiSuggestionDto? Suggestion { get; set; }
     public string? DraftText { get; set; }
+    public IReadOnlyList<LeadPilot.Application.Agents.ConversationNoteDto> Notes { get; set; } = [];
+    public IReadOnlyList<LeadPilot.Application.Agents.HandoffEventDto> History { get; set; } = [];
+    public Guid? CurrentUserId { get; set; }
 }
 
 public class ReplyFormModel

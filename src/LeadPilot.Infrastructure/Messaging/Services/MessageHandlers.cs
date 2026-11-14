@@ -37,7 +37,7 @@ internal static class ConsumerIdempotency
 /// <c>messaging.auto_create_leads</c> is on), updates the conversation, detects opt-outs (suppression + consent revocation through the Phase 3 services, audited) and publishes the AI extension event.
 /// </summary>
 public sealed class InboundMessageHandler(
-    CrmContext crm, ISuppressionService suppression, IConsentService consent, ITenantSettingsService settings, ILeadService leads, ICampaignEvents campaigns, ILogger<InboundMessageHandler> logger) : IMessagingEventHandler
+    CrmContext crm, OptOutProcessor optOut, ITenantSettingsService settings, ILeadService leads, ICampaignEvents campaigns, ILogger<InboundMessageHandler> logger) : IMessagingEventHandler
 {
     public const string Name = "messaging.inbound";
     public string ConsumerName => Name;
@@ -96,20 +96,33 @@ public sealed class InboundMessageHandler(
         return await FindContactAsync(phone, ct);
     }
 
-    /// <summary>Opt-out → suppression entry for the number (all contacts and unknown numbers alike) + a consent revocation per matching contact. Idempotent: safe to run again after a crash.</summary>
+    /// <summary>Opt-out → suppression + consent revocation, shared with the AI's StopMarketingMessages tool (see <see cref="OptOutProcessor"/>).</summary>
     private async Task<bool> ProcessOptOutAsync(Conversation conv, Message message, CancellationToken ct)
     {
         var keywords = OptOutDetector.ParseList(await settings.GetValueAsync(OptOutDetector.SettingKey, ct));
         if (!OptOutDetector.IsOptOut(message.Body, keywords)) return false;
+        await optOut.ApplyAsync(conv, "WhatsApp opt-out message", message.ExternalMessageId, "Detected by the opt-out keyword rule", ct);
+        return true;
+    }
+}
+
+/// <summary>
+/// The one implementation of "this customer asked us to stop": the chat is blocked, the number is suppressed on WhatsApp and marketing consent is revoked for every matching contact. Idempotent (safe after a crash).
+/// Used by the inbound keyword rule and by the AI tool StopMarketingMessages.
+/// </summary>
+public sealed class OptOutProcessor(CrmContext crm, ISuppressionService suppression, IConsentService consent, ILogger<OptOutProcessor> logger)
+{
+    public async Task ApplyAsync(Conversation conv, string suppressionNote, string? sourceRef, string consentNote, CancellationToken ct)
+    {
         var tenantId = crm.TenantId;
         conv.RegisterOptOut(crm.Now);
         if (conv.PeerPhoneE164 is not { } phone)
         {
-            crm.Record("Messaging.OptOut", "Conversation", conv.Id, "An opt-out message arrived from a hidden WhatsApp id with no known phone number: the conversation is blocked from further messages, but no number could be suppressed.");
-            return true;
+            crm.Record("Messaging.OptOut", "Conversation", conv.Id, "An opt-out arrived from a hidden WhatsApp id with no known phone number: the conversation is blocked from further messages, but no number could be suppressed.");
+            return;
         }
 
-        var added = await suppression.AddAsync(new AddSuppressionRequest(SuppressionChannel.WhatsApp, phone, SuppressionReason.OptOut, "Opt-out message received on WhatsApp"), ct);
+        var added = await suppression.AddAsync(new AddSuppressionRequest(SuppressionChannel.WhatsApp, phone, SuppressionReason.OptOut, suppressionNote), ct);
         if (added.IsFailure && added.Error.Code != "conflict") logger.LogWarning("Suppression for an opt-out failed: {Error}", added.Error.Code);
 
         var contactIds = await crm.Db.Contacts.AsNoTracking().Where(c => c.TenantId == tenantId && !c.IsDeleted && c.PhoneE164 == phone).Select(c => c.Id).ToListAsync(ct);
@@ -118,10 +131,9 @@ public sealed class InboundMessageHandler(
             var latest = await crm.Db.ConsentRecords.AsNoTracking().Where(r => r.TenantId == tenantId && r.ContactId == contactId && r.Channel == ConsentChannel.WhatsApp && r.Purpose == ConsentPurpose.Marketing)
                 .OrderByDescending(r => r.OccurredAtUtc).ThenByDescending(r => r.IsRevocation).Select(r => (ConsentStatus?)r.Status).FirstOrDefaultAsync(ct);
             if (latest == ConsentStatus.Revoked) continue;
-            await consent.RecordAsync(contactId, new RecordConsentRequest(ConsentChannel.WhatsApp, ConsentPurpose.Marketing, ConsentStatus.Revoked, "WhatsApp opt-out message", message.ExternalMessageId, "Detected by the opt-out keyword rule"), ct);
+            await consent.RecordAsync(contactId, new RecordConsentRequest(ConsentChannel.WhatsApp, ConsentPurpose.Marketing, ConsentStatus.Revoked, suppressionNote, sourceRef, consentNote), ct);
         }
         crm.Record("Messaging.OptOut", "Conversation", conv.Id, $"Opt-out from {CrmContext.Mask(phone)}: number suppressed on WhatsApp, marketing consent revoked for {contactIds.Count} contact(s).");
-        return true;
     }
 }
 

@@ -1,0 +1,25 @@
+@model ToolLogViewModel
+@using LeadPilot.Domain.Ai
+@{ ViewData["Title"] = "Tool log"; var q = Model.Query; }
+<h1 class="h3 mb-1">Tool log</h1>
+<p class="text-muted">Every tool the AI asked for: what it sent, what came back and whether it ran, was refused, waited for approval or was not available. This log cannot be edited.</p>
+<form method="get" asp-action="Executions" class="card card-body mb-3"><div class="row g-3 align-items-end">
+    <div class="col-6 col-md-3"><label class="form-label" for="tool">Tool</label><select id="tool" name="tool" class="form-select"><option value="">All</option>@foreach (var t in Model.Tools) { <option value="@t.Name" selected="@(q.Tool == t.Name)">@t.Name</option> }</select></div>
+    <div class="col-6 col-md-3"><label class="form-label" for="outcome">Outcome</label><select id="outcome" name="outcome" class="form-select"><option value="">All</option>@foreach (var d in Enum.GetValues<ToolOutcome>()) { <option value="@d" selected="@(q.Outcome == d)">@d</option> }</select></div>
+    <div class="col-12 col-md-3"><button type="submit" class="btn btn-outline-primary">Filter</button> <a asp-action="Executions" class="btn btn-link">Clear</a></div>
+</div></form>
+@if (Model.Result.Items.Count == 0) { <div class="card"><partial name="_EmptyState" model='("No tool calls yet", "When the sales agent uses a tool, the call appears here.")' /></div> }
+else
+{
+    <div class="card"><div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>When (UTC)</th><th>Tool</th><th>Outcome</th><th>Inputs</th><th>Result</th></tr></thead><tbody>
+    @foreach (var e in Model.Result.Items)
+    {
+        <tr><td class="small text-nowrap">@e.OccurredAtUtc.ToString("yyyy-MM-dd HH:mm:ss")</td>
+            <td>@e.Tool@if (e.ConversationId is { } cid) { <div class="small"><a asp-controller="Conversations" asp-action="Details" asp-route-id="@cid">conversation</a></div> }</td>
+            <td><span class="badge @(e.Outcome == ToolOutcome.Executed ? "text-bg-success" : e.Outcome is ToolOutcome.ApprovalRequired or ToolOutcome.NotAvailable ? "text-bg-warning" : "text-bg-danger")">@e.Outcome</span>@if (e.Reason is not null) { <div class="small text-muted">@e.Reason</div> }@if (e.ExecutedByName is not null) { <div class="small text-muted">approved by @e.ExecutedByName</div> }</td>
+            <td class="small" style="max-width:20rem;overflow-wrap:anywhere">@e.ArgumentsSummary</td>
+            <td class="small"><details><summary>Show</summary><pre class="mb-0 small" style="white-space:pre-wrap;overflow-wrap:anywhere">@e.OutputJson</pre></details></td></tr>
+    }
+    </tbody></table></div></div>
+    <partial name="_Pager" model='new PagerModel(Model.Result.Page, Model.Result.TotalPages, Model.Result.TotalCount, "Executions", Model.QueryValues)' />
+}

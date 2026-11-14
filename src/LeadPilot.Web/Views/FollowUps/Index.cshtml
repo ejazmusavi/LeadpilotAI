@@ -1,0 +1,25 @@
+@model FollowUpsViewModel
+@using LeadPilot.Domain.Agents
+@{ ViewData["Title"] = "Follow-ups"; var q = Model.Query; }
+<h1 class="h3 mb-1">Follow-ups</h1>
+<p class="text-muted">Internal tasks: someone should contact these leads again. The sales agent creates them with ScheduleFollowUp; people can close them. Nothing is sent to the customer automatically.</p>
+<form method="get" asp-action="Index" class="card card-body mb-3"><div class="row g-3 align-items-end">
+    <div class="col-6 col-md-3"><label class="form-label" for="status">Status</label><select id="status" name="status" class="form-select"><option value="">All</option>@foreach (var d in Enum.GetValues<FollowUpStatus>()) { <option value="@d" selected="@(q.Status == d)">@d</option> }</select></div>
+    <div class="col-12 col-md-3"><button type="submit" class="btn btn-outline-primary">Filter</button> <a asp-action="Index" class="btn btn-link">Clear</a></div>
+</div></form>
+@if (Model.Result.Items.Count == 0) { <div class="card"><partial name="_EmptyState" model='("No follow-ups", "When the sales agent or a colleague schedules a follow-up, it appears here.")' /></div> }
+else
+{
+    <div class="card"><div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Due (UTC)</th><th>Lead</th><th>Note</th><th>Owner</th><th>Status</th><th></th></tr></thead><tbody>
+    @foreach (var f in Model.Result.Items)
+    {
+        <tr><td class="small text-nowrap">@f.DueAtUtc.ToString("yyyy-MM-dd HH:mm")@if (f.Overdue) { <span class="badge text-bg-danger ms-1">overdue</span> }</td>
+            <td><a asp-controller="Leads" asp-action="Details" asp-route-id="@f.LeadId" class="text-decoration-none">@f.LeadName</a>@if (f.ConversationId is { } c) { <div class="small"><a asp-controller="Conversations" asp-action="Details" asp-route-id="@c">conversation</a></div> }</td>
+            <td style="max-width:24rem;overflow-wrap:anywhere">@f.Note <span class="badge text-bg-light border">@(f.CreatedBy == ActorKind.Ai ? "by AI" : "by a person")</span></td><td>@(f.AssignedToName ?? "—")</td><td>@f.Status</td>
+            <td class="text-end">@if (Model.CanUpdate && f.Status == FollowUpStatus.Open) {
+                <form asp-action="Close" asp-route-id="@f.Id" method="post" class="d-inline"><input type="hidden" name="done" value="true" /><button class="btn btn-outline-success btn-sm" type="submit">Done</button></form>
+                <form asp-action="Close" asp-route-id="@f.Id" method="post" class="d-inline"><input type="hidden" name="done" value="false" /><button class="btn btn-outline-secondary btn-sm" type="submit" data-confirm="Cancel this follow-up?" data-confirm-label="Cancel follow-up">Cancel</button></form> }</td></tr>
+    }
+    </tbody></table></div></div>
+    <partial name="_Pager" model='new PagerModel(Model.Result.Page, Model.Result.TotalPages, Model.Result.TotalCount, "Index", Model.QueryValues)' />
+}

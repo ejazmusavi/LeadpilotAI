@@ -1,3 +1,4 @@
+using LeadPilot.Application.Agents;
 using LeadPilot.Application.Messaging;
 using LeadPilot.Infrastructure.Discovery.Website;
 using LeadPilot.Infrastructure.Messaging.Broker;
@@ -54,6 +55,8 @@ public static class MessagingServiceCollection
         services.AddScoped<IWebhookIngestionService, WebhookIngestionService>();
         services.AddScoped<IOutboundSendRunner, OutboundSendRunner>();
         services.AddScoped<IOutboxDispatcher, OutboxDispatcher>();
+        services.AddScoped<OptOutProcessor>();
+        services.AddScoped<IAiReplySender, AiReplySender>();
         services.AddScoped<IMessagingEventHandler, InboundMessageHandler>();
         services.AddScoped<IMessagingEventHandler, StatusEventHandler>();
 

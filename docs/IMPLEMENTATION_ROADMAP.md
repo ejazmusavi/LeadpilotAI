@@ -13,7 +13,7 @@ Rule: implement one phase at a time; no phase starts until the previous meets it
 | 5 | WhatsApp gateway adapter, conversations, webhooks, outbox/RabbitMQ | 3 | WAHA docs + deployment details |
 | 6 | Campaigns, eligibility at send time, Hangfire scheduling (Hangfire itself arrived in Phase 4) | 3, 5 | — |
 | 7 | AI engine, knowledge base, RAG | 2, 5 | Claude API key, embedding provider, product info (any product) |
-| 8 | AI sales agent, controlled tools, human handoff | 7, 3, 5 | Product pricing/features, demo process |
+| 8 | AI sales agent, controlled tools, human handoff | 7, 3, 5 | Product pricing/features, demo process — **built with scripted models and a sample (placeholder) catalog; live Claude not verified; demo/trial/payment tools report "not available" until Phase 10; see PROGRESS.md** |
 | 9 | Workflow engine, follow-ups | 6, 8 | — |
 | 10 | Demo, trial, conversion, payment verification | 8, 9 | Payment method info |
 | 11 | Analytics & reports | 3–10 (grows incrementally) | — |
@@ -51,3 +51,7 @@ Phase 5 (WhatsApp gateway via WAHA) is **built and tested against a fake WAHA an
 
 ## Status after Phase 7
 Phase 7 (AI engine and knowledge base) is **built and tested with scripted/fake providers, real MySQL, real RabbitMQ and a real Hangfire server; the live Claude and Voyage services and a real Qdrant were never exercised** (runbook: DEVELOPMENT.md). AI replies are suggestions for staff; automatic sending is not available until Phase 8. Next: Phase 8 (AI sales agent and controlled tool calling) — not started.
+
+
+## Status after Phase 8
+Phase 8 (AI sales agent, controlled tools, human handoff) is **built and tested with a scripted model, real MySQL and RabbitMQ; the live Claude service was never exercised**. Demo, trial and payment tools are wired to ports whose default implementation answers "not connected" (Phase 10 registers the real ones). Automatic AI replies exist but are OFF by default (two switches). Next: Phase 9 (automation workflow engine) — not started.

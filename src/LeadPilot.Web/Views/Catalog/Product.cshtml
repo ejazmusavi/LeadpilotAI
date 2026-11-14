@@ -1,0 +1,61 @@
+@model ProductEditViewModel
+@{ var p = Model.Product; var f = Model.Form; ViewData["Title"] = (p?.Name ?? "New product") + " · Catalog"; var dis = Model.CanManage ? "" : "disabled"; }
+<h1 class="h3 mb-1">@(p?.Name ?? "New product")</h1>
+@if (p?.IsSample == true) { <div class="alert alert-warning" role="alert"><strong>SAMPLE placeholders.</strong> Nothing here is a real fact. Replace each placeholder with your real product information, then tick "Confirmed". Until then the AI says it does not know.</div> }
+<div asp-validation-summary="All" class="text-danger"></div>
+<form asp-action="SaveProduct" method="post" data-loading-form novalidate class="card card-body mb-3"><fieldset @dis>
+    <input type="hidden" asp-for="Form.Id" /><input type="hidden" asp-for="Form.Version" />
+    <div class="row g-3">
+        <div class="col-12"><label asp-for="Form.Name" class="form-label">Name</label><input asp-for="Form.Name" class="form-control" /></div>
+        <div class="col-12"><label asp-for="Form.Summary" class="form-label">Summary</label><textarea asp-for="Form.Summary" class="form-control" rows="2"></textarea></div>
+        <div class="col-12"><label asp-for="Form.Features" class="form-label">Features (one per line)</label><textarea asp-for="Form.Features" class="form-control" rows="6"></textarea></div>
+        <div class="col-12 col-md-6"><label asp-for="Form.DemoProcess" class="form-label">Demo process</label><textarea asp-for="Form.DemoProcess" class="form-control" rows="3"></textarea></div>
+        <div class="col-12 col-md-6"><label asp-for="Form.TrialProcess" class="form-label">Trial process</label><textarea asp-for="Form.TrialProcess" class="form-control" rows="3"></textarea></div>
+        <div class="col-12"><div class="form-check"><input type="checkbox" class="form-check-input" id="conf" name="Form.IsConfirmed" value="true" @(f.IsConfirmed ? "checked" : "") /><input type="hidden" name="Form.IsConfirmed" value="false" /><label class="form-check-label" for="conf"><strong>Confirmed</strong>: I know this is true. The AI may state it as fact.</label></div>
+            <div class="form-check"><input type="checkbox" class="form-check-input" id="act" name="Form.IsActive" value="true" @(f.IsActive ? "checked" : "") /><input type="hidden" name="Form.IsActive" value="false" /><label class="form-check-label" for="act">Active</label></div></div>
+    </div>
+    @if (Model.CanManage) { <button type="submit" class="btn btn-primary mt-3">Save product</button> }
+</fieldset></form>
+@if (p is not null)
+{
+    <div class="card mb-3"><div class="card-header">Pricing plans</div>
+    @if (p.Plans.Count == 0) { <div class="card-body text-muted">No plans yet. Without a confirmed plan the AI says it does not know the price.</div> }
+    else
+    {
+        <div class="list-group list-group-flush">
+        @foreach (var pl in p.Plans)
+        {
+            <div class="list-group-item"><form asp-action="SavePlan" asp-route-productId="@p.Id" method="post"><fieldset @dis><input type="hidden" name="Id" value="@pl.Id" />
+                <div class="row g-2 align-items-end">
+                    <div class="col-12 col-md-3"><label class="form-label small" for="pn-@pl.Id">Plan</label><input id="pn-@pl.Id" name="Name" class="form-control form-control-sm" value="@pl.Name" /></div>
+                    <div class="col-4 col-md-2"><label class="form-label small" for="pp-@pl.Id">Price</label><input id="pp-@pl.Id" name="Price" type="number" step="0.01" min="0" class="form-control form-control-sm" value="@pl.Price" /></div>
+                    <div class="col-4 col-md-1"><label class="form-label small" for="pc-@pl.Id">Currency</label><input id="pc-@pl.Id" name="Currency" class="form-control form-control-sm" value="@pl.Currency" maxlength="3" /></div>
+                    <div class="col-4 col-md-2"><label class="form-label small" for="pb-@pl.Id">Billing period</label><input id="pb-@pl.Id" name="BillingPeriod" class="form-control form-control-sm" value="@pl.BillingPeriod" /></div>
+                    <div class="col-6 col-md-2"><label class="form-label small" for="pd-@pl.Id">Max discount %</label><input id="pd-@pl.Id" name="MaxDiscountPercent" type="number" step="0.01" min="0" max="100" class="form-control form-control-sm" value="@pl.MaxDiscountPercent" /></div>
+                    <div class="col-12"><label class="form-label small" for="pt-@pl.Id">Details</label><textarea id="pt-@pl.Id" name="Details" class="form-control form-control-sm" rows="2">@pl.Details</textarea></div>
+                    <div class="col-12 d-flex flex-wrap gap-3 align-items-center">
+                        <div class="form-check"><input class="form-check-input" type="checkbox" id="pcf-@pl.Id" name="IsConfirmed" value="true" @(pl.IsConfirmed ? "checked" : "") /><input type="hidden" name="IsConfirmed" value="false" /><label class="form-check-label small" for="pcf-@pl.Id">Confirmed (needs a price)</label></div>
+                        <div class="form-check"><input class="form-check-input" type="checkbox" id="pa-@pl.Id" name="IsActive" value="true" @(pl.IsActive ? "checked" : "") /><input type="hidden" name="IsActive" value="false" /><label class="form-check-label small" for="pa-@pl.Id">Active</label></div>
+                        @if (pl.IsSample) { <span class="badge text-bg-warning">SAMPLE</span> }
+                        @if (Model.CanManage) { <button class="btn btn-primary btn-sm" type="submit">Save plan</button> }
+                    </div></div></fieldset></form>
+                @if (Model.CanManage) { <form asp-action="DeletePlan" asp-route-productId="@p.Id" asp-route-id="@pl.Id" method="post" class="mt-1"><button class="btn btn-link btn-sm text-danger p-0" type="submit" data-confirm="Delete the plan '@pl.Name'?" data-confirm-label="Delete plan">Delete plan</button></form> }
+            </div>
+        }
+        </div>
+    }
+    @if (Model.CanManage)
+    {
+        <div class="card-body border-top"><h2 class="h6">Add a plan</h2>
+        <form asp-action="SavePlan" asp-route-productId="@p.Id" method="post" class="row g-2" novalidate>
+            <div class="col-12 col-md-3"><label class="form-label small" for="np-name">Plan</label><input id="np-name" name="Name" class="form-control form-control-sm" required /></div>
+            <div class="col-4 col-md-2"><label class="form-label small" for="np-price">Price</label><input id="np-price" name="Price" type="number" step="0.01" min="0" class="form-control form-control-sm" /></div>
+            <div class="col-4 col-md-1"><label class="form-label small" for="np-cur">Currency</label><input id="np-cur" name="Currency" class="form-control form-control-sm" value="USD" maxlength="3" /></div>
+            <div class="col-4 col-md-2"><label class="form-label small" for="np-per">Billing period</label><input id="np-per" name="BillingPeriod" class="form-control form-control-sm" placeholder="e.g. per month" /></div>
+            <div class="col-6 col-md-2"><label class="form-label small" for="np-disc">Max discount %</label><input id="np-disc" name="MaxDiscountPercent" type="number" step="0.01" min="0" max="100" class="form-control form-control-sm" /></div>
+            <div class="col-12"><label class="form-label small" for="np-det">Details</label><textarea id="np-det" name="Details" class="form-control form-control-sm" rows="2"></textarea></div>
+            <div class="col-12"><div class="form-check d-inline-block me-3"><input class="form-check-input" type="checkbox" id="np-conf" name="IsConfirmed" value="true" /><input type="hidden" name="IsConfirmed" value="false" /><label class="form-check-label small" for="np-conf">Confirmed (needs a price)</label></div><input type="hidden" name="IsActive" value="true" /><button class="btn btn-outline-primary btn-sm" type="submit">Add plan</button></div>
+        </form></div>
+    }
+    </div>
+}

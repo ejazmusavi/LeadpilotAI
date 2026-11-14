@@ -25,6 +25,11 @@ public static class PermissionCodes
     public const string ConversationsView = "Conversations.View";
     public const string ConversationsReply = "Conversations.Reply";
     public const string AgentsManage = "Agents.Manage";
+    public const string AgentsView = "Agents.View";
+    public const string CatalogView = "Catalog.View";
+    public const string CatalogManage = "Catalog.Manage";
+    public const string ApprovalsView = "Approvals.View";
+    public const string ApprovalsDecide = "Approvals.Decide";
     public const string KnowledgeView = "Knowledge.View";
     public const string KnowledgeManage = "Knowledge.Manage";
     public const string AiView = "Ai.View";
@@ -77,7 +82,12 @@ public static class PermissionCatalog
         new(PermissionCodes.AudiencesPreview, "Preview audiences", "Campaigns", "See how many contacts an audience contains and why others are excluded."),
         new(PermissionCodes.ConversationsView, "View conversations", "Conversations", "Read conversations."),
         new(PermissionCodes.ConversationsReply, "Reply to conversations", "Conversations", "Send replies and take over from the AI agent."),
-        new(PermissionCodes.AgentsManage, "Manage AI agents", "AI", "Configure AI agents and knowledge."),
+        new(PermissionCodes.AgentsManage, "Manage AI agents", "AI", "Configure the sales agents: instructions, enabled tools, qualification questions, models, thresholds and the opt-in for automatic AI replies."),
+        new(PermissionCodes.AgentsView, "View AI agents and tool log", "AI", "See agent configuration, the tool execution log and follow-ups created by the agent."),
+        new(PermissionCodes.CatalogView, "View product catalog", "AI", "See the products and pricing plans the sales agent may quote."),
+        new(PermissionCodes.CatalogManage, "Manage product catalog", "AI", "Edit products and prices. The AI quotes confirmed entries only."),
+        new(PermissionCodes.ApprovalsView, "View approvals", "AI", "See sensitive AI actions waiting for a person (payment requests, discounts, trials over the limit)."),
+        new(PermissionCodes.ApprovalsDecide, "Decide approvals", "AI", "Approve or reject sensitive AI actions."),
         new(PermissionCodes.KnowledgeView, "View knowledge base", "AI", "See knowledge sources, documents, versions and their index status."),
         new(PermissionCodes.KnowledgeManage, "Manage knowledge base", "AI", "Add, edit, re-index, disable and delete knowledge documents and sources (the AI answers from them)."),
         new(PermissionCodes.AiView, "View AI activity and usage", "AI", "See AI suggestions, escalations, tool logs and token usage."),
@@ -135,7 +145,7 @@ public static class SystemRoles
         [
             PermissionCodes.LeadsView, PermissionCodes.LeadsCreate, PermissionCodes.LeadsUpdate, PermissionCodes.CampaignsView,
             PermissionCodes.ConversationsView, PermissionCodes.ConversationsReply, PermissionCodes.ReportsView, PermissionCodes.DiscoveryView, PermissionCodes.ChannelsView,
-            PermissionCodes.KnowledgeView
+            PermissionCodes.KnowledgeView, PermissionCodes.CatalogView
         ]),
         new(SalesManager, "Manages the sales team, leads and conversations.", false,
         [
@@ -145,12 +155,13 @@ public static class SystemRoles
             PermissionCodes.SuppressionManage, PermissionCodes.PipelinesManage, PermissionCodes.ScoringManage,
             PermissionCodes.DiscoveryView, PermissionCodes.DiscoveryRun, PermissionCodes.DiscoveryReview, PermissionCodes.DiscoveryManage,
             PermissionCodes.ChannelsView, PermissionCodes.MessagesSend, PermissionCodes.CampaignsApprove, PermissionCodes.AudiencesPreview,
-            PermissionCodes.KnowledgeView, PermissionCodes.KnowledgeManage, PermissionCodes.AiView, PermissionCodes.AiTest
+            PermissionCodes.KnowledgeView, PermissionCodes.KnowledgeManage, PermissionCodes.AiView, PermissionCodes.AiTest,
+            PermissionCodes.AgentsView, PermissionCodes.CatalogView, PermissionCodes.CatalogManage, PermissionCodes.ApprovalsView, PermissionCodes.ApprovalsDecide
         ]),
         new(SalesAgent, "Works leads and conversations.", false,
         [
             PermissionCodes.LeadsView, PermissionCodes.LeadsCreate, PermissionCodes.LeadsUpdate, PermissionCodes.ConversationsView, PermissionCodes.ConversationsReply,
-            PermissionCodes.DiscoveryView, PermissionCodes.ChannelsView, PermissionCodes.KnowledgeView
+            PermissionCodes.DiscoveryView, PermissionCodes.ChannelsView, PermissionCodes.KnowledgeView, PermissionCodes.CatalogView, PermissionCodes.ApprovalsView
         ]),
         new(MarketingManager, "Plans and runs campaigns.", false,
         [
@@ -158,11 +169,11 @@ public static class SystemRoles
             PermissionCodes.CampaignsCancel, PermissionCodes.CampaignsDelete, PermissionCodes.AudiencesPreview,
             PermissionCodes.ConversationsView, PermissionCodes.ReportsView,
             PermissionCodes.LeadsExport, PermissionCodes.ConsentManage, PermissionCodes.SuppressionManage, PermissionCodes.DiscoveryView, PermissionCodes.DiscoveryRun,
-            PermissionCodes.ChannelsView, PermissionCodes.MessagesSend, PermissionCodes.KnowledgeView, PermissionCodes.AiTest
+            PermissionCodes.ChannelsView, PermissionCodes.MessagesSend, PermissionCodes.KnowledgeView, PermissionCodes.AiTest, PermissionCodes.CatalogView
         ]),
         new(ReadOnly, "Can view everything operational but change nothing.", false,
         [
-            PermissionCodes.LeadsView, PermissionCodes.CampaignsView, PermissionCodes.ConversationsView, PermissionCodes.ReportsView, PermissionCodes.KnowledgeView
+            PermissionCodes.LeadsView, PermissionCodes.CampaignsView, PermissionCodes.ConversationsView, PermissionCodes.ReportsView, PermissionCodes.KnowledgeView, PermissionCodes.CatalogView
         ]),
     ];
 

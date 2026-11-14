@@ -1,0 +1,35 @@
+@model ApprovalsViewModel
+@using LeadPilot.Domain.Agents
+@{ ViewData["Title"] = "Approvals"; var q = Model.Query; }
+<h1 class="h3 mb-1">Approvals</h1>
+<p class="text-muted">Sensitive things the AI asked for (payment requests, discounts, unusual terms, trials beyond the limit) wait here. Nothing happens until a person approves; a subscription is never activated because someone — or the AI — claims a payment was made.</p>
+<form method="get" asp-action="Index" class="card card-body mb-3"><div class="row g-3 align-items-end">
+    <div class="col-6 col-md-3"><label class="form-label" for="status">Status</label><select id="status" name="status" class="form-select"><option value="">All</option>@foreach (var d in Enum.GetValues<ApprovalStatus>()) { <option value="@d" selected="@(q.Status == d)">@d</option> }</select></div>
+    <div class="col-12 col-md-3"><button type="submit" class="btn btn-outline-primary">Filter</button> <a asp-action="Index" class="btn btn-link">Clear</a></div>
+</div></form>
+@if (Model.Result.Items.Count == 0) { <div class="card"><partial name="_EmptyState" model='("Nothing waiting", "When the sales agent asks for something that needs a person, it appears here.")' /></div> }
+else
+{
+    @foreach (var a in Model.Result.Items)
+    {
+        <div class="card mb-3 @(a.Status == ApprovalStatus.Pending ? "border-warning" : "")"><div class="card-body">
+            <div class="d-flex flex-wrap gap-2 align-items-center mb-1"><strong>@a.ToolName</strong><span class="badge @(a.Status == ApprovalStatus.Pending ? "text-bg-warning" : a.Status == ApprovalStatus.Approved ? "text-bg-success" : "text-bg-secondary")">@a.Status</span><span class="badge text-bg-light border">@a.Reason.Replace('_', ' ')</span>
+                <span class="small text-muted ms-auto">asked @a.RequestedAtUtc.ToString("yyyy-MM-dd HH:mm") UTC · @(a.Status == ApprovalStatus.Pending ? "expires " + a.ExpiresAtUtc.ToString("yyyy-MM-dd HH:mm") : "")</span></div>
+            <p class="mb-1">@a.Summary</p>
+            <p class="small mb-2">Conversation: <a asp-controller="Conversations" asp-action="Details" asp-route-id="@a.ConversationId">@(a.PeerName ?? "open")</a>@if (a.LeadName is not null) { <span> · lead @a.LeadName</span> }</p>
+            @if (a.Status != ApprovalStatus.Pending)
+            {
+                <p class="small mb-0">@(a.DecidedByName is null ? "" : "Decided by " + a.DecidedByName + " on " + a.DecidedAtUtc?.ToString("yyyy-MM-dd HH:mm") + " UTC. ")@(a.DecisionNote)
+                @if (a.Status == ApprovalStatus.Approved) { <span class="badge @(a.Execution == ExecutionState.Executed ? "text-bg-success" : "text-bg-warning")">@(a.Execution == ExecutionState.NotAvailable ? "not carried out: service not connected" : a.Execution.ToString())</span> @a.ExecutionNote }</p>
+            }
+            else if (Model.CanDecide)
+            {
+                <div class="d-flex flex-wrap gap-2">
+                    <form asp-action="Approve" asp-route-id="@a.Id" method="post" class="d-flex gap-2"><label class="visually-hidden" for="n-@a.Id">Note</label><input id="n-@a.Id" name="note" class="form-control form-control-sm" placeholder="Note (optional)" maxlength="300" /><button class="btn btn-success btn-sm" type="submit" data-confirm="Approve and carry out: @a.Summary" data-confirm-label="Approve">Approve</button></form>
+                    <form asp-action="RejectRequest" asp-route-id="@a.Id" method="post"><button class="btn btn-outline-danger btn-sm" type="submit" data-confirm="Reject this request? Nothing will be done." data-confirm-label="Reject">Reject</button></form>
+                </div>
+            }
+        </div></div>
+    }
+    <partial name="_Pager" model='new PagerModel(Model.Result.Page, Model.Result.TotalPages, Model.Result.TotalCount, "Index", Model.QueryValues)' />
+}

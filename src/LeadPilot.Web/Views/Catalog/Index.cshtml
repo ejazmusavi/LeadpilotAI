@@ -1,0 +1,17 @@
+@model CatalogIndexViewModel
+@{ ViewData["Title"] = "Product catalog"; }
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+    <div><h1 class="h3 mb-1">Product catalog</h1><p class="text-muted mb-0">What the sales agent may say about your products and prices. Only <strong>confirmed</strong> entries are given to the AI as facts; everything else it answers with "I do not have that information".</p></div>
+    @if (Model.CanManage) { <a asp-action="Product" class="btn btn-primary">Add product</a> }
+</div>
+@if (Model.Products.Count == 0) { <div class="card"><partial name="_EmptyState" model='("No products yet", "Add your products and pricing plans. Until something is confirmed the AI will not state any product fact or price.")' /></div> }
+else
+{
+    <div class="card"><div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Product</th><th>Status</th><th>Plans</th></tr></thead><tbody>
+    @foreach (var p in Model.Products)
+    {
+        <tr><td><a asp-action="Product" asp-route-id="@p.Id" class="fw-semibold text-decoration-none">@p.Name</a>@if (p.IsSample) { <span class="badge text-bg-warning ms-1">SAMPLE</span> }<div class="small text-muted">@p.Summary</div></td>
+            <td><span class="badge @(p.IsConfirmed ? "text-bg-success" : "text-bg-warning")">@(p.IsConfirmed ? "Confirmed" : "Not confirmed")</span> <span class="badge @(p.IsActive ? "text-bg-light border" : "text-bg-secondary")">@(p.IsActive ? "Active" : "Inactive")</span></td><td>@p.PlanCount</td></tr>
+    }
+    </tbody></table></div></div>
+}

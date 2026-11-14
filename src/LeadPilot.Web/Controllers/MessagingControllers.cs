@@ -1,3 +1,4 @@
+using LeadPilot.Application.Abstractions;
 using LeadPilot.Application.Ai;
 using LeadPilot.Application.Common;
 using LeadPilot.Application.Contracts;
@@ -152,7 +153,7 @@ public class ChannelsController(IChannelAccountService accounts, IWebhookEventSe
 
 /// <summary>A working minimal inbox: list with filters, thread with delivery status, reply. The full hand-off experience is Phase 8.</summary>
 [Authorize(Policy = PermissionCodes.ConversationsView)]
-public class ConversationsController(IConversationService conversations, IChannelAccountService accounts, IMessageTemplateService templates, IPermissionEvaluator permissions, IAiSuggestionService suggestions) : AppController
+public class ConversationsController(IConversationService conversations, IChannelAccountService accounts, IMessageTemplateService templates, IPermissionEvaluator permissions, IAiSuggestionService suggestions, ICurrentUser currentUser) : AppController
 {
     [HttpGet]
     public async Task<IActionResult> Index([FromQuery] ConversationQuery query, CancellationToken ct)
@@ -180,7 +181,9 @@ public class ConversationsController(IConversationService conversations, IChanne
         Crumbs(("Conversations", Url.Action(nameof(Index))), (conv.Value.Summary.PeerName ?? conv.Value.Summary.PeerPhoneE164 ?? "Conversation", null));
         var canReply = await permissions.HasAsync(PermissionCodes.ConversationsReply, ct);
         var latest = await suggestions.LatestAsync(id, ct);
-        return View(new ThreadViewModel { Conversation = conv.Value, Messages = msgs.Value, CanReply = canReply, Templates = canReply ? await templates.ListAsync(activeOnly: true, ct) : [], Suggestion = latest.IsSuccess ? latest.Value : null, DraftText = TempData["AiDraft"] as string });
+        var notes = await conversations.NotesAsync(id, ct); var history = await conversations.HistoryAsync(id, ct);
+        return View(new ThreadViewModel { Conversation = conv.Value, Messages = msgs.Value, CanReply = canReply, Templates = canReply ? await templates.ListAsync(activeOnly: true, ct) : [], Suggestion = latest.IsSuccess ? latest.Value : null, DraftText = TempData["AiDraft"] as string,
+            Notes = notes.IsSuccess ? notes.Value : [], History = history.IsSuccess ? history.Value : [], CurrentUserId = currentUser.UserId });
     }
 
     /// <summary>Takes the AI's suggestion as the starting point of a reply: it is marked as used and put into the reply box for the person to review, edit and send (the send itself is the normal, consent-checked reply).</summary>
@@ -222,6 +225,52 @@ public class ConversationsController(IConversationService conversations, IChanne
     {
         var r = await conversations.MarkReadAsync(id, ct);
         if (Reject(r) is { } rej) return rej;
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    /// <summary>Human takeover: the AI stops answering at once. The reason is kept in the handoff history.</summary>
+    [HttpPost, Authorize(Policy = PermissionCodes.ConversationsReply)]
+    public async Task<IActionResult> TakeOver(Guid id, string? reason, CancellationToken ct)
+    {
+        var r = await conversations.TakeOverAsync(id, reason, ct);
+        if (Reject(r) is { } rej) return rej;
+        if (r.IsSuccess) Success("You are in control. The AI will not answer this conversation until you give it back."); else Failure(r.Error.Message);
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    [HttpPost, Authorize(Policy = PermissionCodes.ConversationsReply)]
+    public async Task<IActionResult> PauseAi(Guid id, string? reason, CancellationToken ct)
+    {
+        var r = await conversations.PauseAiAsync(id, reason, ct);
+        if (Reject(r) is { } rej) return rej;
+        if (r.IsSuccess) Success("The AI is paused for this conversation."); else Failure(r.Error.Message);
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    [HttpPost, Authorize(Policy = PermissionCodes.ConversationsReply)]
+    public async Task<IActionResult> ResumeAi(Guid id, CancellationToken ct)
+    {
+        var r = await conversations.ResumeAiAsync(id, ct);
+        if (Reject(r) is { } rej) return rej;
+        if (r.IsSuccess) Success("The AI answers this conversation again."); else Failure(r.Error.Message);
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    [HttpPost, Authorize(Policy = PermissionCodes.ConversationsReply)]
+    public async Task<IActionResult> AddNote(Guid id, string? body, CancellationToken ct)
+    {
+        var r = await conversations.AddNoteAsync(id, body ?? string.Empty, ct);
+        if (Reject(r) is { } rej) return rej;
+        if (r.IsSuccess) Success("Internal note added. It is never sent to the customer."); else Failure(r.Error.Message);
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    [HttpPost, Authorize(Policy = PermissionCodes.ConversationsReply)]
+    public async Task<IActionResult> Assign(Guid id, Guid? userId, CancellationToken ct)
+    {
+        var r = await conversations.AssignAsync(id, userId, ct);
+        if (Reject(r) is { } rej) return rej;
+        if (r.IsSuccess) Success(userId is null ? "Conversation unassigned." : "Conversation assigned."); else Failure(r.Error.Message);
         return RedirectToAction(nameof(Details), new { id });
     }
 

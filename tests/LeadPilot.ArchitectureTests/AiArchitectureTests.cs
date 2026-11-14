@@ -1,5 +1,6 @@
 using System.Reflection;
 using Hangfire;
+using LeadPilot.Application.Agents;
 using LeadPilot.Application.Ai;
 using LeadPilot.Application.Security;
 using LeadPilot.Domain.Ai;
@@ -29,7 +30,7 @@ public class AiArchitectureTests
         Directory.EnumerateFiles(Path.Combine(RepoRoot(), "src", project), "*.cs", SearchOption.AllDirectories)
             .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}") && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}") && !f.Contains("Migrations"));
 
-    private static IEnumerable<string> AiFiles(string project) => Sources(project).Where(f => f.Replace('\\', '/').Contains("/Ai/"));
+    private static IEnumerable<string> AiFiles(string project) => Sources(project).Where(f => f.Replace('\\', '/').Contains("/Ai/") || f.Replace('\\', '/').Contains("/Agents/"));
 
     [Fact]
     public void Every_ai_entity_is_tenant_owned_and_ledgers_and_logs_are_append_only()
@@ -102,7 +103,7 @@ public class AiArchitectureTests
     [Fact]
     public void The_ai_module_cannot_send_messages_it_never_touches_the_send_pipeline_or_the_gateway()
     {
-        string[] forbidden = ["IWhatsAppGateway", "IOutboundMessageService", "OutboundQueueService", "IOutboundSendRunner", ".SendToContactAsync(", ".SendTextAsync(", ".SendTemplateAsync(", "ReplyAsync(", "WahaGateway", "ICampaignService"];
+        string[] forbidden = ["IWhatsAppGateway", "IOutboundMessageService", "OutboundQueueService", "IOutboundSendRunner", ".SendToContactAsync(", ".SendTextAsync(", ".SendTemplateAsync(", "ReplyAsync(", "WahaGateway", "ICampaignService", "IConversationService"];
         var offenders = new List<string>();
         foreach (var project in new[] { "LeadPilot.Application", "LeadPilot.Infrastructure" })
             foreach (var file in AiFiles(project))
@@ -114,13 +115,47 @@ public class AiArchitectureTests
     }
 
     [Fact]
-    public void The_ai_may_only_request_actions_from_the_small_permitted_catalog()
+    public void The_ai_may_only_use_the_controlled_tools_and_none_of_them_can_activate_pay_delete_or_query()
     {
-        string[] dangerous = ["send", "message", "discount", "refund", "trial", "delete", "price", "payment", "stage", "demo", "campaign", "export", "suppress", "consent"];
-        Assert.All(AiActionCatalog.Permitted, a => Assert.DoesNotContain(dangerous, d => a.Name.Contains(d, StringComparison.OrdinalIgnoreCase) || a.Capability.Contains(d, StringComparison.OrdinalIgnoreCase)));
-        Assert.Equal(2, AiActionCatalog.Permitted.Count);
-        Assert.All(AiActionCatalog.Capabilities, c => Assert.Contains(AiActionCatalog.Permitted, a => a.Capability == c));
-        Assert.Null(AiActionCatalog.Find("send_message")); Assert.Null(AiActionCatalog.Find("apply_discount"));
+        string[] spec = ["GetProductInformation", "GetPricingPlans", "GetLeadProfile", "UpdateLeadStatus", "QualifyLead", "CheckDemoAvailability", "BookDemo", "ScheduleFollowUp", "CreateTrialAccount", "CreatePaymentRequest", "TransferToHuman", "StopMarketingMessages"];
+        Assert.All(spec, n => Assert.NotNull(AgentToolCatalog.Find(n)));
+        Assert.Equal(spec.Length + 1, AgentToolCatalog.All.Count);   // + AddLeadNote carried over from Phase 7
+        string[] dangerous = ["activate", "subscription", "confirmpayment", "markpaid", "sql", "query", "execute", "delete", "refund", "export", "consent", "suppress", "sendmessage", "campaign", "tenant", "user", "role", "permission"];
+        Assert.All(AgentToolCatalog.All, t => Assert.DoesNotContain(dangerous, d => t.Name.Contains(d, StringComparison.OrdinalIgnoreCase) || t.Capability.Contains(d, StringComparison.OrdinalIgnoreCase)));
+        // the model can never choose the tenant, a user, a lead or a conversation
+        Assert.All(AgentToolCatalog.All.SelectMany(t => t.Params), p => Assert.DoesNotContain(new[] { "tenant", "user", "lead", "conversation", "contact", "agent" }, d => p.Name.Contains(d, StringComparison.OrdinalIgnoreCase)));
+        Assert.Equal(ApprovalPolicy.Always, AgentToolCatalog.Find("CreatePaymentRequest")!.Approval);
+        Assert.Equal(ApprovalPolicy.Conditional, AgentToolCatalog.Find("CreateTrialAccount")!.Approval);
+        Assert.All(AgentToolCatalog.All.Where(t => t.ReadOnly), t => Assert.Equal(ApprovalPolicy.Never, t.Approval));
+        // the only tools that are always available only REDUCE what the AI does
+        Assert.Equal(["StopMarketingMessages", "TransferToHuman"], AgentToolCatalog.All.Where(t => t.Safety).Select(t => t.Name).Order().ToArray());
+        Assert.Null(AgentToolCatalog.Find("send_message")); Assert.Null(AgentToolCatalog.Find("apply_discount")); Assert.Null(AgentToolCatalog.Find("run_sql"));
+    }
+
+    [Fact]
+    public void Only_the_tool_gateway_changes_things_for_the_ai_and_nothing_else_in_the_ai_module_touches_the_crm_write_services()
+    {
+        // the AI orchestration and the loop reach tools only through AgentToolRunner; handlers are reached only by the runner
+        string[] writers = ["ILeadService", "INoteService", "ISuppressionService", "IConsentService", "AgentToolHandlers", "OptOutProcessor"];
+        var offenders = new List<string>();
+        foreach (var file in AiFiles("LeadPilot.Infrastructure").Where(f => { var r = f.Replace('\\', '/'); return r.Contains("/Ai/Services/") || r.EndsWith("AgentLoop.cs"); }))
+        { var text = File.ReadAllText(file); offenders.AddRange(writers.Where(text.Contains).Select(w => $"{Path.GetFileName(file)}: {w}")); }
+        Assert.Empty(offenders);
+        Assert.Single(Infrastructure.GetTypes(), t => typeof(IAiReplySender).IsAssignableFrom(t) && !t.IsInterface);
+    }
+
+    [Fact]
+    public void Ai_messages_leave_only_through_the_single_reply_sender_which_has_no_way_to_start_a_conversation()
+    {
+        var m = typeof(IAiReplySender).GetMethods().Single();
+        Assert.DoesNotContain(m.GetParameters().SelectMany(p => p.ParameterType == typeof(AiSendRequest) ? typeof(AiSendRequest).GetProperties().Select(x => x.Name) : [p.Name!]), n => n.Contains("Contact", StringComparison.OrdinalIgnoreCase) || n.Contains("Phone", StringComparison.OrdinalIgnoreCase) || n.Contains("Template", StringComparison.OrdinalIgnoreCase));
+        // outside messaging, only the sender may mark a message as AI-written
+        var offenders = Sources("LeadPilot.Infrastructure").Where(f => !f.Replace('\\', '/').Contains("/Messaging/")).Where(f => File.ReadAllText(f).Contains("MarkAiGenerated") || File.ReadAllText(f).Contains("AiInteractionId =")).ToList();
+        Assert.Empty(offenders);
+        var senderSource = File.ReadAllText(Sources("LeadPilot.Infrastructure").Single(f => f.EndsWith("AiReplySender.cs")));
+        Assert.Contains("ForcedPurpose = MessagePurpose.Service", senderSource);
+        Assert.DoesNotContain("MessagePurpose.Marketing", senderSource);
+        Assert.DoesNotContain("ContactId", senderSource.Replace("m.ContactId", ""));
     }
 
     [Fact]
@@ -166,6 +201,67 @@ public class AiArchitectureTests
                 Assert.Equal(["POST"], verbs);
             if (controller.Namespace.Contains("Web") && a.Name is "Index" or "Add" or "Document" or "Usage" or "Activity") Assert.Equal(["GET"], verbs);
         }
+    }
+
+    public static IEnumerable<object[]> AgentControllers() =>
+        Web.GetTypes().Where(t => typeof(Controller).IsAssignableFrom(t) && t.Name is "AgentsController" or "ApprovalsController" or "CatalogController" or "FollowUpsController").Select(t => new object[] { t })
+            .Concat(Api.GetTypes().Where(t => t.Name is "AgentsController" or "ProductCatalogController" or "ApprovalsController" or "ToolExecutionsController" or "FollowUpsController").Select(t => new object[] { t }));
+
+    [Theory, MemberData(nameof(AgentControllers))]
+    public void Every_sales_agent_action_has_a_catalog_permission_an_explicit_verb_and_web_mutations_are_post(Type controller)
+    {
+        var actions = controller.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly).Where(m => !m.IsSpecialName && m.GetCustomAttribute<NonActionAttribute>() is null && m.DeclaringType == controller).ToList();
+        Assert.NotEmpty(actions);
+        var classPolicy = controller.GetCustomAttributes<AuthorizeAttribute>().Select(a => a.Policy).FirstOrDefault(p => p is not null);
+        string[] webReads = ["Index", "Edit", "Executions", "Product"];
+        foreach (var a in actions)
+        {
+            var policy = a.GetCustomAttributes<AuthorizeAttribute>().Select(x => x.Policy).FirstOrDefault(p => p is not null) ?? classPolicy;
+            Assert.True(policy is not null && PermissionCatalog.Exists(policy), $"{controller.Name}.{a.Name} needs a catalog permission");
+            var verbs = a.GetCustomAttributes().OfType<HttpMethodAttribute>().SelectMany(v => v.HttpMethods).ToList();
+            Assert.True(verbs.Count > 0, $"{controller.Name}.{a.Name} needs an explicit HTTP verb");
+            if (controller.Namespace!.Contains("Web")) Assert.Equal(webReads.Contains(a.Name) ? ["GET"] : ["POST"], verbs);
+        }
+    }
+
+    [Fact]
+    public void The_conversation_handoff_actions_are_post_only_and_need_reply_permission()
+    {
+        var web = Web.GetTypes().Single(t => t.Name == "ConversationsController");
+        foreach (var name in new[] { "TakeOver", "PauseAi", "ResumeAi", "AddNote", "Assign" })
+        {
+            var m = web.GetMethod(name)!;
+            Assert.Equal(["POST"], m.GetCustomAttributes().OfType<HttpMethodAttribute>().SelectMany(v => v.HttpMethods).ToList());
+            Assert.Equal(PermissionCodes.ConversationsReply, m.GetCustomAttributes<AuthorizeAttribute>().Single().Policy);
+        }
+        var api = Api.GetTypes().Single(t => t.Name == "ConversationsController");
+        foreach (var name in new[] { "TakeOver", "PauseAi", "ResumeAi", "AddNote" })
+            Assert.Equal(PermissionCodes.ConversationsReply, api.GetMethod(name)!.GetCustomAttributes<AuthorizeAttribute>().Single().Policy);
+    }
+
+    [Fact]
+    public void Every_phase_8_entity_is_tenant_owned_ledgers_are_append_only_and_hangfire_is_still_the_only_scheduler()
+    {
+        var ns = typeof(LeadPilot.Domain.Agents.SalesAgent).Namespace;
+        var entities = typeof(LeadPilot.Domain.Agents.SalesAgent).Assembly.GetTypes().Where(t => t.Namespace == ns && typeof(Entity).IsAssignableFrom(t) && !t.IsAbstract).ToList();
+        Assert.True(entities.Count >= 10);
+        Assert.All(entities, t => Assert.True(typeof(ITenantOwned).IsAssignableFrom(t), $"{t.Name} must be tenant owned"));
+        foreach (var t in new[] { typeof(LeadPilot.Domain.Agents.ConversationNote), typeof(LeadPilot.Domain.Agents.HandoffEvent), typeof(AiToolExecution) }) Assert.True(typeof(IAppendOnly).IsAssignableFrom(t), t.Name);
+        string[] forbidden = ["System.Threading.Timer", "new Timer(", "PeriodicTimer", "Quartz", "BackgroundService", "IHostedService", "Thread.Sleep", "new Thread(", "Task.Run("];
+        var offenders = AiFiles("LeadPilot.Infrastructure").Where(f => f.Replace('\\', '/').Contains("/Agents/")).SelectMany(f => forbidden.Where(File.ReadAllText(f).Contains).Select(x => $"{Path.GetFileName(f)}: {x}")).ToList();
+        Assert.Empty(offenders);
+    }
+
+    [Fact]
+    public void The_phase_10_ports_have_no_fake_implementation_in_the_product_and_report_not_connected()
+    {
+        foreach (var port in new[] { typeof(IDemoScheduler), typeof(ITrialProvisioner), typeof(IPaymentRequestGateway) })
+        {
+            var impl = Infrastructure.GetTypes().Single(t => port.IsAssignableFrom(t) && !t.IsInterface);
+            Assert.StartsWith("Unavailable", impl.Name);
+        }
+        var source = File.ReadAllText(Sources("LeadPilot.Infrastructure").Single(f => f.EndsWith("UnavailablePorts.cs")));
+        Assert.DoesNotContain("PortResult<TrialInfo>.Ok", source); Assert.DoesNotContain(".Ok(", source.Replace("NotConnected", ""));
     }
 
     [Fact]

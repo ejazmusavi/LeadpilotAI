@@ -111,3 +111,9 @@ All eight new tables are `ITenantOwned` (architecture test); services use the te
 - The vector store takes the tenant from `ITenantContext` itself: no method has a tenant parameter, so callers can neither omit nor change it. The retriever re-checks every hit against the database. A test replaces the store with one that returns foreign, disabled and outdated chunks: none is returned.
 - Jobs (`KnowledgeJob`) and the AI consumer run inside `ITenantScopeRunner` / the verified `TenantId` header; ids of another tenant are no-ops or dead-letters. The only cross-tenant query is `KnowledgeDirectory` (ids only, allow-listed).
 - Per-tenant circuit breakers: one workspace's bad key or exhausted quota never opens the breaker of another.
+
+## Phase 8 additions
+- The 10 new entities are `ITenantOwned` (filter + save guard); cross-tenant references (a question for B's agent, a plan for B's product, an approval/note/handoff for B's conversation, a qualification/follow-up for B's lead) and spoofed tenant ids are refused; notes, handoff events and the tool log are append-only (`AgentSecurityTests`).
+- **Tools never take a tenant from the model:** the tenant comes from `ITenantContext` inside `CrmContext`; the conversation, lead and agent are resolved server-side; arguments named like a tenant/user/lead/conversation are refused and logged. A tool aimed at another tenant's conversation finds nothing.
+- API, MVC, the AI consumer (forged tenant header / foreign ids → dead letter) and the worker scope are covered: every new endpoint answers 404 for another workspace's ids, every page 404s, the permission matrix is tested for the six default roles and for anonymous callers.
+- Existing tenants receive the new permissions through the role sync at start-up (verified on a Phase 7 database).

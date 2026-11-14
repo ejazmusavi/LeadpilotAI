@@ -134,3 +134,20 @@ Guid storage format; Pomelo provider version for .NET 10; Hangfire MySQL storage
 | `AiInteractions` | the suggestion/escalation of one AI run; **unique (TenantId, TriggerMessageId)** = one run per inbound message, FK to Conversation and Message |
 | `AiToolExecutions` | append-only tool log (allowed/denied/failed + redacted arguments) |
 Deleting a document removes versions, passages, embedding rows and vectors (vectors first; if the store is down nothing is deleted and the user is told). Delete behaviours are Restrict; the application deletes in dependency order inside a transaction. Applied and checked on an empty MySQL 8 database and on a database at the Phase 6 schema holding a tenant, roles, a lead and a contact (`AiMigrationTests`).
+
+## Phase 8: sales agent, catalog, approvals, handoff (migration `Phase8SalesAgent`, additive)
+New tenant-owned tables (all indexed `(TenantId, …)`, tenant FK, global query filter, save guard):
+| Table | Notes |
+|---|---|
+| `SalesAgents` | name, instructions (text), `EnabledToolsJson`, optional model/min-confidence override, `IsDefault`, `IsSample`, `AutoReplyEnabled` (default false), off-topic reply, concurrency token |
+| `AgentQualificationQuestions` | key/question/type (Text, Number, Choice + choices)/required/order; **unique (TenantId, AgentId, Key)** |
+| `CatalogProducts` | name, summary, features (one per line), demo/trial process, `IsConfirmed`, `IsSample`, concurrency token |
+| `PricingPlans` | `Price decimal(18,2)` **nullable** (no price set), currency, period, details, `MaxDiscountPercent`, `IsConfirmed` (needs a price), FK to product |
+| `ApprovalRequests` | tool, reason, summary, the exact validated `InputJson`, status (Pending/Approved/Rejected/Expired), execution state (None/Executed/NotAvailable/Failed), expiry, decider; **unique (TenantId, DedupeKey)** |
+| `ConversationNotes` | append-only internal notes (user or AI) |
+| `HandoffEvents` | append-only: takeover, pause/resume, escalation (reason), auto-takeover, assignment, status, opt-out; actor kind, from/to state |
+| `AgentTenantSettings` | **unique TenantId**; `AiRepliesAllowed` (false), automatic replies per conversation per day, trials per lead, approval lifetime, open follow-ups per lead |
+| `LeadQualifications` | answers JSON + fit per lead; **unique (TenantId, LeadId)** |
+| `FollowUps` | internal task (lead, due, note, status, created by user/AI); index `(TenantId, Status, DueAtUtc)` |
+Changed tables: `Conversations` + `EscalationReason`, `EscalatedAtUtc`, `AiModeChangedAtUtc`, **`AiEpoch`** (incremented on every change of AI mode: the AI remembers the value it started with, so a takeover/pause — even pause+resume — during a generation cancels the reply); `Messages` + `IsAiGenerated`, `AiInteractionId`, `AiEpoch`; `AiInteractions` + `AgentId`, `AutoSend` (NotAttempted/Sent/Blocked), `AutoSendNote`, `SentMessageId`; **`AiToolExecutions` is the ToolExecution record**: `InteractionId` became nullable (Phase 7 rows keep it) and it gained `TriggerMessageId`, `ConversationId`, `LeadId`, `AgentId`, `InputJson`, `OutputJson`, `ApprovalRequestId`, `ExecutedByUserId`, `DedupeKey` (**unique (TenantId, DedupeKey)**: a redelivered event replays the stored result), `DurationMs`; the outcome set grew (ApprovalRequired, NotAvailable, Invalid). Still append-only: an approved action is a new row pointing at the same approval.
+Applied and checked on an empty MySQL 8 database and on a database at the Phase 7 schema holding a tenant, roles, a lead, a contact and an old tool-log row (`AgentMigrationTests`).

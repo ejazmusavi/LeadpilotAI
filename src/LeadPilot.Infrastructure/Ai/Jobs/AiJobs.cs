@@ -1,3 +1,4 @@
+using LeadPilot.Infrastructure.Agents;
 using Hangfire;
 using LeadPilot.Application.Abstractions;
 using LeadPilot.Application.Ai;
@@ -161,7 +162,7 @@ public static class AiServiceCollection
         services.AddScoped<IKnowledgeService, KnowledgeService>();
         services.AddScoped<IKnowledgeRetriever, KnowledgeRetriever>();
         services.AddScoped<IConversationMemory, ConversationMemory>();
-        services.AddScoped<AiActionExecutor>();
+        services.AddAgents();
         services.AddScoped<AiOrchestrator>();
         services.AddScoped<IAIOrchestrator>(sp => sp.GetRequiredService<AiOrchestrator>());
         services.AddScoped<IAiSettingsService, AiSettingsService>();

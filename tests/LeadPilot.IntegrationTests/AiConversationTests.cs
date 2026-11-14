@@ -87,7 +87,7 @@ public class AiConversationTests(AppFixture app)
         Assert.Equal(AiDecision.Escalate, s.Decision); Assert.Equal("no_knowledge", s.EscalationReason); Assert.Equal(settings.UnsupportedReply, s.DraftText); Assert.Empty(s.Citations);
         Assert.Empty(app.Ai.Llm.Of("generate"));                                                      // nothing to ground an answer on: the model is not asked to invent one
         Assert.Equal(AiMode.HumanControl, await chat.ModeAsync());
-        var tools = Assert.Single(s.Tools); Assert.Equal(("escalate_to_human", ToolOutcome.Executed), (tools.Tool, tools.Outcome));
+        var tools = Assert.Single(s.Tools); Assert.Equal(("TransferToHuman", ToolOutcome.Executed), (tools.Tool, tools.Outcome));
         // the AI stays quiet afterwards
         var before = (await chat.InteractionsAsync()).Count;
         await chat.SendAsync("Hello? Anyone there?");
@@ -232,7 +232,7 @@ public class AiConversationTests(AppFixture app)
         await chat.SendAsync("How much does the Standard plan cost?");
         var s = (await chat.LatestAsync())!;
         Assert.Equal(5, s.Tools.Count(t => t.Outcome == ToolOutcome.Denied)); Assert.All(s.Tools, t => Assert.Equal(ToolOutcome.Denied, t.Outcome));
-        Assert.Equal("not_a_permitted_action", s.Tools.First().Reason);
+        Assert.Equal("not_a_permitted_tool", s.Tools.First().Reason);
         Assert.Equal(sent, app.Waha.SentMessages.Count);
         Assert.Equal(AiMode.Active, await chat.ModeAsync());                                      // "ESCALATE_TO_HUMAN" is not an exact catalog name: denied, not interpreted
         var current = await Crm.Ok<LeadPilot.Application.Crm.LeadDto>(await w.Admin.Get($"/api/v1/leads/{lead.Id}"));
@@ -240,7 +240,7 @@ public class AiConversationTests(AppFixture app)
         Assert.Empty(await app.Db(db => db.LeadNotes.IgnoreQueryFilters().Where(n => n.LeadId == lead.Id).ToListAsync()));
         // the tool log is append-only and keeps the redacted arguments
         var logged = await app.Db(db => db.AiToolExecutions.IgnoreQueryFilters().Where(t => t.TenantId == w.TenantId).ToListAsync());
-        Assert.Equal(5, logged.Count); Assert.Contains(logged, t => t.ToolName == "apply_discount" && t.ArgumentsSummary.Contains("percent=50"));
+        Assert.Equal(5, logged.Count); Assert.Contains(logged, t => t.ToolName == "apply_discount" && t.ArgumentsSummary.Contains("percent") && t.ArgumentsSummary.Contains("50"));
     }
 
     [RequiresMySqlFact]
@@ -252,7 +252,7 @@ public class AiConversationTests(AppFixture app)
         var phone = (await Crm.Ok<List<LeadPilot.Application.Crm.ContactDto>>(await w.Admin.Get($"/api/v1/leads/{lead.Id}/contacts"))).Single().Phone!;
         var linked = await w.ChatAsync(phone); await linked.SendAsync("How much is the Standard plan for 600 students?");
         var s = (await linked.LatestAsync())!;
-        Assert.Equal(("add_lead_note", ToolOutcome.Executed), (s.Tools.Single().Tool, s.Tools.Single().Outcome));
+        Assert.Equal(("AddLeadNote", ToolOutcome.Executed), (s.Tools.Single().Tool, s.Tools.Single().Outcome));
         var note = Assert.Single(await app.Db(db => db.LeadNotes.IgnoreQueryFilters().Where(n => n.LeadId == lead.Id).ToListAsync()));
         Assert.StartsWith("[AI assistant] ", note.Body); Assert.Null(note.AuthorUserId);
         Assert.Contains(await app.Db(db => db.LeadActivities.IgnoreQueryFilters().Where(a => a.LeadId == lead.Id).Select(a => a.Type).ToListAsync()), t => t == LeadActivityType.NoteAdded);
@@ -280,6 +280,9 @@ public class AiConversationTests(AppFixture app)
             var ids = await db.Messages.IgnoreQueryFilters().Where(m => m.ConversationId == chat.ConversationId).OrderBy(m => m.CreatedAtUtc).Select(m => m.Id).ToListAsync(); var t0 = DateTime.UtcNow.AddHours(-1);
             for (var i = 0; i < ids.Count; i++) { var at = t0.AddMinutes(i); var id = ids[i]; await db.Messages.IgnoreQueryFilters().Where(m => m.Id == id).ExecuteUpdateAsync(s => s.SetProperty(m => m.OccurredAtUtc, at)); }
         });
+        // a person replying took control (Phase 8): hand the conversation back to the AI to test the history it reads
+        Assert.Equal(AiMode.HumanControl, await chat.ModeAsync());
+        Assert.Equal(HttpStatusCode.OK, (await w.Admin.Put($"/api/v1/conversations/{chat.ConversationId}/ai-mode", new { mode = "Active" })).StatusCode);
         await chat.SendAsync("What does the Standard plan cost?");     // pumps everything
 
         var req = app.Ai.Llm.Of("generate").Last(); var conversation = Regex.Match(req.Messages[0].Content, "<conversation>\n(.*?)</conversation>", RegexOptions.Singleline).Groups[1].Value.Trim().Split('\n');

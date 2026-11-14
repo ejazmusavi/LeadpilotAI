@@ -1,3 +1,4 @@
+using LeadPilot.Application.Agents;
 using LeadPilot.Application.Common;
 using LeadPilot.Application.Messaging;
 using LeadPilot.Application.Security;
@@ -140,12 +141,34 @@ public class ConversationsController(IConversationService conversations) : ApiCo
     [HttpPut("{id:guid}/status"), Authorize(Policy = PermissionCodes.ConversationsReply)]
     public async Task<IActionResult> SetStatus(Guid id, [FromQuery] ConversationStatus status, CancellationToken ct) => Respond(await conversations.SetStatusAsync(id, status, ct));
 
-    /// <summary>Stores who answers (AI replies and hand-off arrive in later phases).</summary>
+    /// <summary>Sets who answers: Active (the AI), Paused (nobody automatic) or HumanControl (a person). The AI never replies unless the mode is Active, even to a message it is still working on.</summary>
     [HttpPut("{id:guid}/ai-mode"), Authorize(Policy = PermissionCodes.ConversationsReply)]
     public async Task<IActionResult> SetAiMode(Guid id, SetAiModeRequest request, CancellationToken ct) => Respond(await conversations.SetAiModeAsync(id, request.Mode, ct));
 
     [HttpPut("{id:guid}/assignee"), Authorize(Policy = PermissionCodes.ConversationsReply)]
     public async Task<IActionResult> Assign(Guid id, AssignConversationRequest request, CancellationToken ct) => Respond(await conversations.AssignAsync(id, request.UserId, ct));
+
+    /// <summary>Human takeover: the AI stops answering immediately; an AI reply still waiting to be sent is withdrawn. The reason is recorded in the handoff history.</summary>
+    [HttpPost("{id:guid}/takeover"), Authorize(Policy = PermissionCodes.ConversationsReply)]
+    public async Task<IActionResult> TakeOver(Guid id, HandoffReasonRequest request, CancellationToken ct) => Respond(await conversations.TakeOverAsync(id, request.Reason, ct));
+
+    [HttpPost("{id:guid}/ai/pause"), Authorize(Policy = PermissionCodes.ConversationsReply)]
+    public async Task<IActionResult> PauseAi(Guid id, HandoffReasonRequest request, CancellationToken ct) => Respond(await conversations.PauseAiAsync(id, request.Reason, ct));
+
+    /// <summary>Gives the conversation back to the AI. 409 when the customer opted out.</summary>
+    [HttpPost("{id:guid}/ai/resume"), Authorize(Policy = PermissionCodes.ConversationsReply)]
+    public async Task<IActionResult> ResumeAi(Guid id, CancellationToken ct) => Respond(await conversations.ResumeAiAsync(id, ct));
+
+    [HttpGet("{id:guid}/notes"), Authorize(Policy = PermissionCodes.ConversationsView)]
+    public async Task<IActionResult> Notes(Guid id, CancellationToken ct) => Respond(await conversations.NotesAsync(id, ct));
+
+    /// <summary>Internal note (never sent to the customer).</summary>
+    [HttpPost("{id:guid}/notes"), Authorize(Policy = PermissionCodes.ConversationsReply)]
+    public async Task<IActionResult> AddNote(Guid id, ConversationNoteRequest request, CancellationToken ct) { var r = await conversations.AddNoteAsync(id, request.Body, ct); return r.IsSuccess ? Created($"api/v1/conversations/{id}/notes", r.Value) : Fail(r); }
+
+    /// <summary>Takeovers, pauses, escalations (with reasons), assignments and status changes, newest first.</summary>
+    [HttpGet("{id:guid}/handoff-history"), Authorize(Policy = PermissionCodes.ConversationsView)]
+    public async Task<IActionResult> History(Guid id, CancellationToken ct) => Respond(await conversations.HistoryAsync(id, ct));
 }
 
 /// <summary>Messages to contacts. Consent, suppression and the sending limits always apply.</summary>

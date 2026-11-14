@@ -1,3 +1,4 @@
+using LeadPilot.Domain.Agents;
 using LeadPilot.Domain.Common;
 using LeadPilot.Domain.Crm;
 
@@ -19,9 +20,10 @@ public enum RetrievalOutcome { Found = 1, NoMatch = 2, NotConfigured = 3, Error 
 
 public enum AiDecision { Draft = 1, Escalate = 2, NoReply = 3 }
 
-public enum DraftStatus { Pending = 1, Used = 2, Dismissed = 3, Superseded = 4 }
+public enum DraftStatus { Pending = 1, Used = 2, Dismissed = 3, Superseded = 4, AutoSent = 5 }
 
-public enum ToolOutcome { Executed = 1, Denied = 2, Failed = 3 }
+/// <summary>Executed = done. Denied = not allowed. Failed = error. ApprovalRequired = waiting for a person. NotAvailable = the service behind the tool is not connected (nothing happened). Invalid = the arguments were rejected.</summary>
+public enum ToolOutcome { Executed = 1, Denied = 2, Failed = 3, ApprovalRequired = 4, NotAvailable = 5, Invalid = 6 }
 
 /// <summary>A place knowledge comes from: an uploaded file, pasted text or a website. Tenant-owned.</summary>
 public class KnowledgeSource : AuditableEntity, ITenantOwned
@@ -331,6 +333,14 @@ public class AiInteraction : Entity, ITenantOwned
     public Guid? HandledByUserId { get; private set; }
     public DateTime? HandledAtUtc { get; private set; }
     public DateTime CreatedAtUtc { get; private set; }
+    public Guid? AgentId { get; private set; }
+    public AutoSendState AutoSend { get; private set; }
+    public string? AutoSendNote { get; private set; }
+    public Guid? SentMessageId { get; private set; }
+
+    public void SetAgent(Guid? agentId) => AgentId = agentId;
+    public void RecordAutoSendBlocked(string note) { AutoSend = AutoSendState.Blocked; AutoSendNote = note.Length > 200 ? note[..200] : note; }
+    public void RecordAutoSent(Guid messageId, DateTime nowUtc) { AutoSend = AutoSendState.Sent; SentMessageId = messageId; Status = DraftStatus.AutoSent; HandledAtUtc = nowUtc; AutoSendNote = null; }
 
     public static AiInteraction Create(Guid tenantId, Guid conversationId, Guid triggerMessageId, string intent, AiDecision decision, decimal confidence, string? draft, string citationsJson,
         string validationJson, string? escalationReason, string? nextAction, string extractedJson, bool injectionSuspected, string model, int latencyMs, Guid? retrievalLogId, DateTime nowUtc) =>
@@ -347,16 +357,30 @@ public class AiInteraction : Entity, ITenantOwned
     public void Supersede(DateTime nowUtc) { if (Status == DraftStatus.Pending) { Status = DraftStatus.Superseded; HandledAtUtc = nowUtc; } }
 }
 
-/// <summary>Every action the AI asked for, allowed or not. Append-only audit of tool execution.</summary>
+/// <summary>
+/// The ToolExecution record: every tool the AI asked for, executed or not, with sanitised inputs and outputs, outcome and approval link. Append-only: an approved action is a NEW row that points at the same approval.
+/// </summary>
 public class AiToolExecution : Entity, ITenantOwned, IAppendOnly
 {
     private AiToolExecution() { }
     public Guid TenantId { get; private set; }
-    public Guid InteractionId { get; private set; }
+    /// <summary>Phase 7 rows only. Newer rows are linked through <see cref="TriggerMessageId"/>.</summary>
+    public Guid? InteractionId { get; private set; }
+    public Guid? TriggerMessageId { get; private set; }
+    public Guid? ConversationId { get; private set; }
+    public Guid? LeadId { get; private set; }
+    public Guid? AgentId { get; private set; }
     public string ToolName { get; private set; } = string.Empty;
     public string ArgumentsSummary { get; private set; } = string.Empty;
+    public string? InputJson { get; private set; }
+    public string? OutputJson { get; private set; }
     public ToolOutcome Outcome { get; private set; }
     public string? Reason { get; private set; }
+    public Guid? ApprovalRequestId { get; private set; }
+    public Guid? ExecutedByUserId { get; private set; }
+    /// <summary>Same key = same logical call (trigger message + tool + arguments): a redelivered event replays the stored result instead of acting twice.</summary>
+    public string? DedupeKey { get; private set; }
+    public int DurationMs { get; private set; }
     public DateTime OccurredAtUtc { get; private set; }
 
     public static AiToolExecution Create(Guid tenantId, Guid interactionId, string tool, string args, ToolOutcome outcome, string? reason, DateTime nowUtc) =>
@@ -365,4 +389,15 @@ public class AiToolExecution : Entity, ITenantOwned, IAppendOnly
             TenantId = tenantId, InteractionId = interactionId, ToolName = tool.Length > 60 ? tool[..60] : tool, ArgumentsSummary = args.Length > 500 ? args[..500] : args, Outcome = outcome,
             Reason = reason is { Length: > 200 } ? reason[..200] : reason, OccurredAtUtc = nowUtc
         };
+
+    public static AiToolExecution Record(Guid tenantId, Guid? triggerMessageId, Guid? conversationId, Guid? leadId, Guid? agentId, string tool, string argsSummary, string? inputJson, string? outputJson, ToolOutcome outcome,
+        string? reason, Guid? approvalId, Guid? userId, string? dedupeKey, int durationMs, DateTime nowUtc) =>
+        new()
+        {
+            TenantId = tenantId, TriggerMessageId = triggerMessageId, ConversationId = conversationId, LeadId = leadId, AgentId = agentId, ToolName = tool.Length > 60 ? tool[..60] : tool,
+            ArgumentsSummary = argsSummary.Length > 500 ? argsSummary[..500] : argsSummary, InputJson = Clip(inputJson, 8000), OutputJson = Clip(outputJson, 16000), Outcome = outcome,
+            Reason = reason is { Length: > 200 } ? reason[..200] : reason, ApprovalRequestId = approvalId, ExecutedByUserId = userId, DedupeKey = dedupeKey is { Length: > 100 } ? dedupeKey[..100] : dedupeKey, DurationMs = durationMs, OccurredAtUtc = nowUtc
+        };
+
+    private static string? Clip(string? s, int n) => s is null ? null : s.Length > n ? s[..n] : s;
 }

@@ -47,7 +47,8 @@ public sealed record ConversationListItemDto(
     ConversationStatus Status, AiMode AiMode, Guid? AssignedUserId, string? AssignedUserName, DateTime? LastMessageAtUtc, string? LastMessagePreview, int UnreadCount);
 
 public sealed record ConversationDto(
-    ConversationListItemDto Summary, DateTime? LastInboundAtUtc, DateTime? LastOutboundAtUtc, bool CanReply, string? CannotReplyReason, MessagePurpose ReplyPurpose, int ServiceWindowHours, bool InsideServiceWindow);
+    ConversationListItemDto Summary, DateTime? LastInboundAtUtc, DateTime? LastOutboundAtUtc, bool CanReply, string? CannotReplyReason, MessagePurpose ReplyPurpose, int ServiceWindowHours, bool InsideServiceWindow,
+    string? EscalationReason = null, DateTime? EscalatedAtUtc = null, bool OptedOut = false);
 
 public sealed record AttachmentDto(Guid Id, string? FileName, string MimeType, long? SizeBytes, AttachmentStatus Status, string? RejectionReason);
 
@@ -118,6 +119,15 @@ public interface IConversationService
     Task<Result<ConversationDto>> SetStatusAsync(Guid id, ConversationStatus status, CancellationToken ct = default);
     Task<Result<ConversationDto>> SetAiModeAsync(Guid id, AiMode mode, CancellationToken ct = default);
     Task<Result<ConversationDto>> AssignAsync(Guid id, Guid? userId, CancellationToken ct = default);
+    /// <summary>Human takeover: the AI stops answering at once (an AI reply still waiting to be sent is withdrawn), the conversation is assigned to the caller if it has no owner, and the reason is recorded.</summary>
+    Task<Result<ConversationDto>> TakeOverAsync(Guid id, string? reason, CancellationToken ct = default);
+    /// <summary>Pauses the AI for this conversation without a person taking over.</summary>
+    Task<Result<ConversationDto>> PauseAiAsync(Guid id, string? reason, CancellationToken ct = default);
+    /// <summary>Gives the conversation back to the AI. Refused when the customer opted out.</summary>
+    Task<Result<ConversationDto>> ResumeAiAsync(Guid id, CancellationToken ct = default);
+    Task<Result<LeadPilot.Application.Agents.ConversationNoteDto>> AddNoteAsync(Guid id, string body, CancellationToken ct = default);
+    Task<Result<IReadOnlyList<LeadPilot.Application.Agents.ConversationNoteDto>>> NotesAsync(Guid id, CancellationToken ct = default);
+    Task<Result<IReadOnlyList<LeadPilot.Application.Agents.HandoffEventDto>>> HistoryAsync(Guid id, CancellationToken ct = default);
 }
 
 public interface IOutboundMessageService

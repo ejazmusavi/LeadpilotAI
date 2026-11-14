@@ -154,23 +154,3 @@ public interface IAiSuggestionService
     Task<Result<AiSuggestionDto>> MarkUsedAsync(Guid id, CancellationToken ct = default);
     Task<Result<AiSuggestionDto>> DismissAsync(Guid id, CancellationToken ct = default);
 }
-
-/// <summary>The only actions the AI may ask for. Anything else is denied and logged (see <c>AiActionCatalog</c>).</summary>
-public static class AiActionCatalog
-{
-    public const string EscalateToHuman = "escalate_to_human";
-    public const string AddLeadNote = "add_lead_note";
-
-    public sealed record Definition(string Name, string Description, string Capability);
-
-    public static readonly IReadOnlyList<Definition> Permitted =
-    [
-        new(EscalateToHuman, "Hand the conversation to a member of staff (pauses the AI for this conversation).", "conversation.escalate"),
-        new(AddLeadNote, "Add a short internal note to the linked lead (arguments: note).", "lead.note"),
-    ];
-
-    /// <summary>What the AI "principal" may do in this phase. Nothing that contacts a customer, changes money, a plan, a stage or deletes data is in this set.</summary>
-    public static readonly IReadOnlySet<string> Capabilities = new HashSet<string> { "conversation.escalate", "lead.note" };
-
-    public static Definition? Find(string name) => Permitted.FirstOrDefault(d => string.Equals(d.Name, name, StringComparison.Ordinal));
-}

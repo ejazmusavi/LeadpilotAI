@@ -1,0 +1,14 @@
+@model PlatformPlansViewModel
+@using LeadPilot.Web.Models
+@using LeadPilot.Domain.Billing
+@{ ViewData["Title"] = "Plans"; }
+<div class="d-flex justify-content-between align-items-center mb-3"><h1 class="h3 mb-0">Subscription plans</h1><a class="btn btn-primary" asp-action="Create">New plan</a></div>
+<p class="text-muted">Prices, cycles, limits and features are data you set here: the product contains no price and no plan name. Plans marked SAMPLE were created at install time with zero prices; edit or archive them. Editing a plan changes the entitlements of every tenant on it immediately.</p>
+<div class="card"><div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Plan</th><th>Price</th><th>Cycle</th><th>Visibility</th><th>Tenants</th><th>Status</th><th></th></tr></thead><tbody>
+@foreach (var p in Model.Plans)
+{
+    <tr><td>@p.Name@if (p.IsSample) { <span class="badge bg-warning text-dark ms-1">SAMPLE</span> }@if (p.IsTrial) { <span class="badge bg-info text-dark ms-1">trial @p.TrialDays d</span> }<div class="small text-muted">@p.Code</div></td><td>@(p.Price == 0 ? "0.00 " + p.Currency + " (free)" : BillingFormat.Money(p.Price, p.Currency))</td><td>@p.Cycle@(p.CustomPeriodDays is { } cd ? $" ({cd} d)" : "")</td><td>@p.Visibility</td><td>@p.TenantCount</td><td>@p.Status</td>
+    <td class="text-end text-nowrap"><a class="btn btn-outline-primary btn-sm" asp-action="Edit" asp-route-id="@p.Id">Edit</a>
+    @if (p.Status == PlanStatus.Active) { <form asp-action="Archive" asp-route-id="@p.Id" method="post" class="d-inline"><button class="btn btn-outline-secondary btn-sm">Archive</button></form> } else { <form asp-action="Restore" asp-route-id="@p.Id" method="post" class="d-inline"><button class="btn btn-outline-secondary btn-sm">Restore</button></form> }</td></tr>
+}
+</tbody></table></div></div>

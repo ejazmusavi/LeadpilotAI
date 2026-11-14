@@ -1,0 +1,8 @@
+@model ResendViewModel
+@{ Layout = "_AuthLayout"; ViewData["Title"] = "Resend verification"; }
+<form asp-action="Resend" method="post" novalidate>
+    <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+    <div class="mb-3"><label asp-for="Email" class="form-label"></label><input asp-for="Email" class="form-control" autofocus /><span asp-validation-for="Email" class="text-danger small"></span></div>
+    <button class="btn btn-primary w-100">Send a new link</button>
+    <p class="small text-muted mt-3">You get the same answer whether or not the address is registered.</p>
+</form>

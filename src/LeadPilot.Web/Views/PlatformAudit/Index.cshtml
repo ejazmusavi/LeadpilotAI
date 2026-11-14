@@ -1,0 +1,9 @@
+@model PlatformAuditViewModel
+@using LeadPilot.Web.Models
+@{ ViewData["Title"] = "Platform audit"; }
+<h1 class="h3 mb-3">Platform audit</h1>
+<form method="get" class="mb-3 d-flex gap-2"><input name="action" value="@Model.Action" class="form-control w-auto" placeholder="Action contains…" aria-label="Action" /><button class="btn btn-outline-primary">Filter</button></form>
+<div class="card"><div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th>When (UTC)</th><th>Action</th><th>Tenant</th><th>By</th><th>Summary</th></tr></thead><tbody>
+@foreach (var a in Model.Result.Items) { <tr><td class="text-nowrap small">@a.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm:ss")</td><td>@a.Action</td><td>@a.TenantName</td><td class="small">@a.ActorEmail</td><td class="small">@a.Summary</td></tr> }
+</tbody></table></div></div>
+<partial name="_Pager" model='new PagerModel(Model.Result.Page, Model.Result.TotalPages, Model.Result.TotalCount, "Index", new Dictionary<string, string?> { ["action"] = Model.Action })' />

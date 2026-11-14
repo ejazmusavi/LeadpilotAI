@@ -1,0 +1,3 @@
+@{ Layout = "_AuthLayout"; ViewData["Title"] = "E-mail verification"; var ok = (bool)(ViewData["Ok"] ?? false); }
+@if (ok) { <div class="alert alert-success" role="alert">Your e-mail address is verified. Messaging, AI, discovery, campaigns and workflows are unlocked.</div><a asp-controller="Account" asp-action="Login" class="btn btn-primary">Sign in</a> }
+else { <div class="alert alert-danger" role="alert">@(ViewData["Message"] ?? "This link is invalid or has expired.")</div><a asp-action="Resend" class="btn btn-primary">Request a new link</a> }

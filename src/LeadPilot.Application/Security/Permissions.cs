@@ -67,7 +67,14 @@ public static class PermissionCodes
     public const string PaymentsRequest = "Payments.Request";
     public const string PaymentsVerify = "Payments.Verify";
     // Platform (operator) permissions: grantable only by roles of the platform tenant.
+    public const string BillingView = "Billing.View";
+    public const string BillingManage = "Billing.Manage";
     public const string TenantsManage = "Tenants.Manage";
+    public const string PlatformPlansManage = "Platform.Plans.Manage";
+    public const string PlatformTenantsManage = "Platform.Tenants.Manage";
+    public const string PlatformBillingVerify = "Platform.Billing.Verify";
+    public const string PlatformSettingsManage = "Platform.Settings.Manage";
+    public const string PlatformAuditView = "Platform.Audit.View";
     public const string PlatformSwitchTenant = "Platform.SwitchTenant";
 }
 
@@ -142,6 +149,13 @@ public static class PermissionCatalog
         new(PermissionCodes.CustomersManage, "Manage customers", "Conversion", "Convert won opportunities into customers, record the commercial agreement and cancel subscriptions."),
         new(PermissionCodes.PaymentsRequest, "Create payment requests", "Conversion", "Create and cancel payment requests. Nothing is charged and nothing is activated by a request."),
         new(PermissionCodes.PaymentsVerify, "Verify payments", "Conversion", "Confirm that a payment arrived (with evidence) and manage payment provider webhooks. Verifying a payment activates the subscription."),
+        new(PermissionCodes.BillingView, "View billing", "Billing", "See the subscription, usage against plan limits, invoices and payments of this workspace."),
+        new(PermissionCodes.BillingManage, "Manage billing", "Billing", "Request plan upgrades and downgrades and report payments for open invoices."),
+        new(PermissionCodes.PlatformPlansManage, "Manage subscription plans", "Platform", "Create, edit and archive plans, their prices, limits and features.", IsPlatform: true),
+        new(PermissionCodes.PlatformTenantsManage, "Manage tenant subscriptions", "Platform", "Grant plans, set per-tenant overrides, suspend and reactivate tenants for non-payment or abuse.", IsPlatform: true),
+        new(PermissionCodes.PlatformBillingVerify, "Verify platform payments", "Platform", "Confirm that a tenant's invoice was paid (with evidence). Verifying a payment activates or renews the subscription.", IsPlatform: true),
+        new(PermissionCodes.PlatformSettingsManage, "Manage platform settings", "Platform", "Registration switch, grace period, renewal lead time, invoice issuer and tax.", IsPlatform: true),
+        new(PermissionCodes.PlatformAuditView, "View platform audit", "Platform", "Read platform-level actions across tenants.", IsPlatform: true),
         new(PermissionCodes.TenantsManage, "Manage tenants", "Platform", "Create, edit, suspend and activate tenants.", IsPlatform: true),
         new(PermissionCodes.PlatformSwitchTenant, "Switch into tenants", "Platform", "Operate inside any active tenant (audited).", IsPlatform: true),
     ];
@@ -173,7 +187,7 @@ public static class SystemRoles
         new(PlatformOwner, "Full control of the platform and every tenant.", true, AllCodes),
         new(SaasAdministrator, "Operates tenants and supports customers; read-only on customer business data.", true,
         [
-            PermissionCodes.TenantsManage, PermissionCodes.PlatformSwitchTenant, PermissionCodes.UsersManage, PermissionCodes.SettingsManage, PermissionCodes.AuditView,
+            PermissionCodes.TenantsManage, PermissionCodes.PlatformTenantsManage, PermissionCodes.PlatformBillingVerify, PermissionCodes.PlatformAuditView, PermissionCodes.PlatformSwitchTenant, PermissionCodes.UsersManage, PermissionCodes.SettingsManage, PermissionCodes.AuditView,
             PermissionCodes.ReportsView, PermissionCodes.LeadsView, PermissionCodes.CampaignsView, PermissionCodes.ConversationsView
         ]),
         new(TenantAdministrator, "Full control of this workspace.", false, PermissionCatalog.TenantCodes.ToArray()),

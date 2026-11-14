@@ -1,5 +1,7 @@
 using System.Text.Json;
 using LeadPilot.Application.Abstractions;
+using LeadPilot.Application.Billing;
+using LeadPilot.Domain.Billing;
 using LeadPilot.Application.Common;
 using LeadPilot.Application.Crm;
 using LeadPilot.Application.Security;
@@ -14,7 +16,7 @@ using Microsoft.Extensions.Options;
 
 namespace LeadPilot.Infrastructure.Services.Crm;
 
-public sealed class LeadImportService(CrmContext crm, DuplicateDetector duplicates, ILeadScorer scorer, ITabularFileReader reader, ITenantFileStore files, IOptions<CrmOptions> options, ILogger<LeadImportService> logger) : ILeadImportService
+public sealed class LeadImportService(IEntitlementService entitlements, CrmContext crm, DuplicateDetector duplicates, ILeadScorer scorer, ITabularFileReader reader, ITenantFileStore files, IOptions<CrmOptions> options, ILogger<LeadImportService> logger) : ILeadImportService
 {
     private const int FlushEvery = 50;
 
@@ -146,7 +148,7 @@ public sealed class LeadImportService(CrmContext crm, DuplicateDetector duplicat
             job.Start(r.DuplicatePolicy, JsonSerializer.Serialize(mapping.Where(m => m.Field is not null)), crm.Now);
             await db.SaveChangesAsync(ct);
 
-            int created = 0, merged = 0, skipped = 0, pending = 0, errors = 0;
+            int created = 0, merged = 0, skipped = 0, pending = 0, errors = 0; string? limitMessage = null;
             var touched = new List<Guid>();
             var country = await crm.DefaultCountryCodeAsync(ct);
             var sourceName = string.IsNullOrWhiteSpace(r.SourceName) ? job.FileName : r.SourceName.Trim();
@@ -211,9 +213,26 @@ public sealed class LeadImportService(CrmContext crm, DuplicateDetector duplicat
                         }
                         else
                         {
-                            var leadId = await CreateLeadAsync(data, job, rowNumber, sourceName, categoryId ?? r.DefaultCategoryId, ownerId ?? r.DefaultOwnerUserId, stage ?? state.FirstStage, state, ct);
-                            touched.Add(leadId); created++; unsaved++;
-                            foreach (var k in keys) pendingKeys.Add(k);
+                            if (limitMessage is not null)
+                            {
+                                db.ImportRowErrors.Add(ImportRowError.Validation(tenantId, id, rowNumber, null, limitMessage, JsonSerializer.Serialize(rows[i]))); errors++; unsaved++;
+                            }
+                            else
+                            {
+                                // plan limit: each new lead is created under the entitlement guard (race-safe), so an import can never push the workspace past its plan
+                                var made = await entitlements.RunWithinLimitAsync(UsageDimension.Leads, 1, async c2 =>
+                                {
+                                    var newId = await CreateLeadAsync(data, job, rowNumber, sourceName, categoryId ?? r.DefaultCategoryId, ownerId ?? r.DefaultOwnerUserId, stage ?? state.FirstStage, state, c2);
+                                    await db.SaveChangesAsync(c2);
+                                    return Result.Success(newId);
+                                }, ct);
+                                if (made.IsFailure)
+                                {
+                                    limitMessage = made.Error.Message;
+                                    db.ImportRowErrors.Add(ImportRowError.Validation(tenantId, id, rowNumber, null, limitMessage, JsonSerializer.Serialize(rows[i]))); errors++; unsaved++;
+                                }
+                                else { touched.Add(made.Value); created++; unsaved++; foreach (var k in keys) pendingKeys.Add(k); }
+                            }
                         }
                     }
                     catch (DomainException ex)

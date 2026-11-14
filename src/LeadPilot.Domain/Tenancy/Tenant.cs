@@ -5,6 +5,9 @@ namespace LeadPilot.Domain.Tenancy;
 
 public enum TenantStatus { Active = 1, Suspended = 2 }
 
+/// <summary>Why a tenant is suspended. Only a NonPayment suspension is lifted automatically by a verified payment; Manual and Abuse need an operator. Stored in <c>TenantBillingState</c>.</summary>
+public enum SuspensionKind { Manual = 1, NonPayment = 2, Abuse = 3 }
+
 /// <summary>A customer workspace. Global entity (no TenantId): it *is* the tenant.</summary>
 public class Tenant : AuditableEntity
 {

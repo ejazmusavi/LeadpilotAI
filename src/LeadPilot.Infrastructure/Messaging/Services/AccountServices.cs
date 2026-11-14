@@ -1,3 +1,5 @@
+using LeadPilot.Application.Billing;
+using LeadPilot.Domain.Billing;
 using LeadPilot.Application.Campaigns;
 using System.Security.Cryptography;
 using LeadPilot.Application.Abstractions;
@@ -148,7 +150,7 @@ public sealed class AccountHealthService(CrmContext crm, ICampaignEvents campaig
 }
 
 public sealed class ChannelAccountService(
-    CrmContext crm, CredentialVault vault, GatewayConnections connections, IWhatsAppGateway gateway, IOptions<WahaOptions> waha,
+    IEntitlementService entitlements, CrmContext crm, CredentialVault vault, GatewayConnections connections, IWhatsAppGateway gateway, IOptions<WahaOptions> waha,
     ICampaignEvents campaigns, Microsoft.Extensions.Configuration.IConfiguration config, ILogger<ChannelAccountService> logger) : IChannelAccountService
 {
     public const int MaxAccountsPerTenant = 5;
@@ -216,14 +218,19 @@ public sealed class ChannelAccountService(
             account.SetLimits(r.HourlyCap ?? ChannelAccount.DefaultHourlyCap, r.DailyCap ?? ChannelAccount.DefaultDailyCap, r.MinDelaySeconds ?? ChannelAccount.DefaultMinDelaySeconds, now);
             var secret = string.IsNullOrWhiteSpace(r.WebhookSecret) ? Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32)) : r.WebhookSecret.Trim();
             if (secret.Length is < 16 or > 200) return Result.Failure<ChannelAccountDto>(Error.Validation("The webhook secret must be 16–200 characters (leave it empty to generate one)."));
-            db.ChannelAccounts.Add(account);
-            db.ChannelCredentials.Add(ChannelCredential.Create(tenantId, account.Id, vault.Seal(tenantId, account.Id, baseUrl), vault.Seal(tenantId, account.Id, r.ApiKey.Trim()), vault.Seal(tenantId, account.Id, secret), Hint(r.ApiKey), now));
-            crm.Record("Channel.Created", "ChannelAccount", account.Id, $"WhatsApp account '{account.DisplayName}' added (session '{session}').");
-            try { await db.SaveChangesAsync(ct); }
-            catch (DbUpdateException ex) when (TenancyResultFlow.IsDuplicate(ex))
+            var added = await entitlements.RunWithinLimitAsync(UsageDimension.MessagingAccounts, 1, async c2 =>
             {
-                return Result.Failure<ChannelAccountDto>(Error.Conflict("That WAHA session name is not available. Choose a different session name."));
-            }
+                db.ChannelAccounts.Add(account);
+                db.ChannelCredentials.Add(ChannelCredential.Create(tenantId, account.Id, vault.Seal(tenantId, account.Id, baseUrl), vault.Seal(tenantId, account.Id, r.ApiKey.Trim()), vault.Seal(tenantId, account.Id, secret), Hint(r.ApiKey), now));
+                crm.Record("Channel.Created", "ChannelAccount", account.Id, $"WhatsApp account '{account.DisplayName}' added (session '{session}').");
+                try { await db.SaveChangesAsync(c2); }
+                catch (DbUpdateException ex) when (TenancyResultFlow.IsDuplicate(ex))
+                {
+                    return Result.Failure<bool>(Error.Conflict("That WAHA session name is not available. Choose a different session name."));
+                }
+                return Result.Success(true);
+            }, ct);
+            if (added.IsFailure) { db.ChangeTracker.Clear(); return Result.Failure<ChannelAccountDto>(added.Error); }
             return Result.Success(await ToDtoAsync(account, ct));
         }, logger);
 

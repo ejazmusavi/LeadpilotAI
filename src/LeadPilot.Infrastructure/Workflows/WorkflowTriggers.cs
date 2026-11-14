@@ -1,3 +1,6 @@
+using LeadPilot.Shared.Results;
+using LeadPilot.Application.Billing;
+using LeadPilot.Domain.Billing;
 using System.Text.Json;
 using Hangfire;
 using LeadPilot.Application.Abstractions;
@@ -22,7 +25,7 @@ namespace LeadPilot.Infrastructure.Workflows;
 /// The one place an execution is created. Decides, in this order: kill switches → lead usable → already started by this event (idempotency) → trigger condition → monthly usage limit → re-entry policy,
 /// cool-down and per-lead frequency cap → create (unique per version+event+lead; exclusive per workflow+lead for the Once/AfterCompletion policies, so two concurrent events cannot both start) → schedule.
 /// </summary>
-internal sealed class WorkflowTriggerService(CrmContext crm, WorkflowSupport support, IContactEligibilityService eligibility, IWorkflowJobScheduler jobs, ILogger<WorkflowTriggerService> logger) : IWorkflowTriggerService
+internal sealed class WorkflowTriggerService(IEntitlementService entitlements, CrmContext crm, WorkflowSupport support, IContactEligibilityService eligibility, IWorkflowJobScheduler jobs, ILogger<WorkflowTriggerService> logger) : IWorkflowTriggerService
 {
     public async Task<IReadOnlyList<WorkflowStartResult>> HandleEventAsync(EventEnvelope envelope, CancellationToken ct = default)
     {
@@ -70,6 +73,7 @@ internal sealed class WorkflowTriggerService(CrmContext crm, WorkflowSupport sup
 
         var settings = await support.SettingsAsync(ct);
         if (settings.KillSwitch) return Blocked("The workspace kill switch is on.");
+        if (await entitlements.RequireFeatureAsync(Features.Workflows, ct) is { IsFailure: true } noFeature) return Blocked(noFeature.Error.Message);
         var wf = await db.Workflows.AsNoTracking().FirstOrDefaultAsync(w => w.Id == workflowId && w.TenantId == tenantId && !w.IsDeleted, ct);
         if (wf is null) return Blocked("The workflow does not exist.");
         if (wf.IsKilled) return Blocked("The workflow's kill switch is on.");
@@ -111,17 +115,24 @@ internal sealed class WorkflowTriggerService(CrmContext crm, WorkflowSupport sup
         var first = await db.WorkflowSteps.AsNoTracking().Where(s => s.WorkflowVersionId == versionId && s.TenantId == tenantId).OrderBy(s => s.Position).Select(s => s.Key).FirstOrDefaultAsync(ct);
         if (first is null) return Blocked("The version has no steps.");
         var exec = WorkflowExecution.Create(tenantId, workflowId, versionId, triggerEventId, triggerKey, leadId, contactId, conversationId, first, exclusive: version.ReEntry != ReEntryPolicy.Always, startedBy, now);
-        db.WorkflowExecutions.Add(exec);
-        db.WorkflowExecutionLogs.Add(WorkflowExecutionLog.Create(tenantId, exec.Id, null, null, null, 0, LogOutcome.Started, $"Started by '{triggerKey}'" + (startedBy is null ? "." : $" ({startedBy})."), null, now));
-        try { await db.SaveChangesAsync(ct); }
-        catch (DbUpdateException ex) when (ResultFlow.IsDuplicate(ex))
+        WorkflowStartResult? lost = null;
+        var started = await entitlements.RunWithinLimitAsync(UsageDimension.MonthlyAutomationRuns, 1, async c2 =>
         {
-            // lost a race: either the very same event (idempotent) or another live run of this lead (exclusivity)
-            db.Entry(exec).State = EntityState.Detached;
-            foreach (var e in db.ChangeTracker.Entries().Where(e => e.State == EntityState.Added).ToList()) e.State = EntityState.Detached;
-            var same = await db.WorkflowExecutions.AsNoTracking().AnyAsync(e => e.WorkflowVersionId == versionId && e.TenantId == tenantId && e.TriggerEventId == triggerEventId && e.EntityId == leadId, ct);
-            return same ? new(WorkflowStartOutcome.Duplicate, null, "Already started by this event.") : Blocked("A run for this lead is still in progress.");
-        }
+            db.WorkflowExecutions.Add(exec);
+            db.WorkflowExecutionLogs.Add(WorkflowExecutionLog.Create(tenantId, exec.Id, null, null, null, 0, LogOutcome.Started, $"Started by '{triggerKey}'" + (startedBy is null ? "." : $" ({startedBy})."), null, now));
+            try { await db.SaveChangesAsync(c2); return Result.Success(true); }
+            catch (DbUpdateException ex) when (ResultFlow.IsDuplicate(ex))
+            {
+                // lost a race: either the very same event (idempotent) or another live run of this lead (exclusivity)
+                db.Entry(exec).State = EntityState.Detached;
+                foreach (var e in db.ChangeTracker.Entries().Where(e => e.State == EntityState.Added).ToList()) e.State = EntityState.Detached;
+                var same = await db.WorkflowExecutions.AsNoTracking().AnyAsync(e => e.WorkflowVersionId == versionId && e.TenantId == tenantId && e.TriggerEventId == triggerEventId && e.EntityId == leadId, c2);
+                lost = same ? new(WorkflowStartOutcome.Duplicate, null, "Already started by this event.") : Blocked("A run for this lead is still in progress.");
+                return Result.Failure<bool>(Error.Conflict("lost"));
+            }
+        }, ct);
+        if (lost is not null) return lost;
+        if (started.IsFailure) { db.ChangeTracker.Clear(); return Blocked(started.Error.Message); }
         try { jobs.EnqueueRun(tenantId, exec.Id); }
         catch (Exception ex) { logger.LogWarning(ex, "The run job of execution {ExecutionId} could not be scheduled; the sweep will pick it up", exec.Id); }
         return new(WorkflowStartOutcome.Started, exec.Id, null);

@@ -1,0 +1,6 @@
+@model LeadPilot.Application.Billing.InvoiceDto
+@{ Layout = null; }
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>Invoice @Model.Number</title>
+<link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" /><style>@@media print { .no-print { display:none } body { background:#fff } }</style></head>
+<body class="p-3"><div class="container" style="max-width:820px"><div class="no-print mb-3"><button class="btn btn-primary" onclick="window.print()">Print / save as PDF</button></div>
+<h1 class="h4">Invoice @Model.Number</h1><partial name="_InvoiceBody" model="Model" /></div></body></html>

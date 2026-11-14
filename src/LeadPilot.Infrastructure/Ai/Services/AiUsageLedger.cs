@@ -1,5 +1,7 @@
 using LeadPilot.Application.Abstractions;
 using LeadPilot.Application.Ai;
+using LeadPilot.Application.Billing;
+using LeadPilot.Domain.Billing;
 using LeadPilot.Domain.Ai;
 using LeadPilot.Infrastructure.Ai.Providers;
 using LeadPilot.Infrastructure.Persistence;
@@ -10,9 +12,22 @@ using Microsoft.Extensions.Options;
 namespace LeadPilot.Infrastructure.Ai.Services;
 
 /// <summary>Appends provider calls to the tenant's AI usage ledger and enforces the monthly token limit and budget BEFORE a call is made.</summary>
-public sealed class AiUsageLedger(AppDbContext db, ITenantContext tenant, IClock clock, IOptions<AiOptions> options, AiCredentials credentials, ILogger<AiUsageLedger> logger)
+public sealed class AiUsageLedger(IEntitlementService entitlements, AppDbContext db, ITenantContext tenant, IClock clock, IOptions<AiOptions> options, AiCredentials credentials, ILogger<AiUsageLedger> logger)
 {
-    public async Task EnsureWithinLimitsAsync(CancellationToken ct)
+    /// <summary>
+    /// Limits BEFORE a call: the workspace's own AI settings (token limit, budget) AND the plan (feature 'ai' + the plan's token allowance, with a hold of <paramref name="estimatedTokens"/> so concurrent calls
+    /// cannot both spend the last tokens). Dispose the returned hold after the usage was recorded.
+    /// </summary>
+    public async Task<IAsyncDisposable> EnsureWithinLimitsAsync(long estimatedTokens, CancellationToken ct)
+    {
+        await EnsureWorkspaceLimitsAsync(ct);
+        if (await entitlements.RequireFeatureAsync(Features.Ai, ct) is { IsFailure: true } noFeature) throw new AiProviderException(AiFailureKind.LimitReached, noFeature.Error.Message, retryable: false);
+        var hold = await entitlements.HoldAsync(UsageDimension.MonthlyAiTokens, estimatedTokens, ct);
+        if (hold.IsFailure) throw new AiProviderException(AiFailureKind.LimitReached, hold.Error.Message, retryable: false);
+        return hold.Value;
+    }
+
+    private async Task EnsureWorkspaceLimitsAsync(CancellationToken ct)
     {
         var tenantId = tenant.RequireTenantId();
         var settings = await credentials.SettingsAsync(ct);
@@ -25,6 +40,9 @@ public sealed class AiUsageLedger(AppDbContext db, ITenantContext tenant, IClock
         if (limit > 0 && (totals?.Tokens ?? 0) >= limit) throw new AiProviderException(AiFailureKind.LimitReached, "The monthly AI token limit of this workspace is reached.", retryable: false);
         if (budget is { } b && (totals?.Cost ?? 0) >= b) throw new AiProviderException(AiFailureKind.LimitReached, "The monthly AI budget of this workspace is reached.", retryable: false);
     }
+
+    /// <summary>A cheap upper estimate used only for the concurrency hold: output cap plus about four characters per input token.</summary>
+    public static long Estimate(AiCompletionRequest r) => r.MaxTokens + (r.StableSystem.Length + (r.DynamicSystem?.Length ?? 0) + r.Messages.Sum(m => (long)m.Content.Length)) / 4 + 1;
 
     public static long EffectiveTokenLimit(AiTenantSettings? settings, AiOptions o) => settings?.MonthlyTokenLimit ?? o.DefaultMonthlyTokenLimit;
 
@@ -51,7 +69,7 @@ public sealed class MeteredAIProvider(IRawAIProvider inner, AiUsageLedger ledger
 
     public async Task<AiCompletion> CompleteAsync(AiCompletionRequest request, CancellationToken ct)
     {
-        await ledger.EnsureWithinLimitsAsync(ct);
+        await using var hold = await ledger.EnsureWithinLimitsAsync(AiUsageLedger.Estimate(request), ct);
         try
         {
             var result = await inner.CompleteAsync(request, ct);
@@ -72,7 +90,7 @@ public sealed class MeteredEmbeddingProvider(IRawEmbeddingProvider inner, AiUsag
 
     public async Task<EmbeddingResult> EmbedAsync(IReadOnlyList<string> texts, EmbeddingInputType type, CancellationToken ct)
     {
-        await ledger.EnsureWithinLimitsAsync(ct);
+        await using var hold = await ledger.EnsureWithinLimitsAsync(texts.Sum(t => (long)t.Length / 4 + 1), ct);
         try
         {
             var result = await inner.EmbedAsync(texts, type, ct);

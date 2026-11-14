@@ -34,6 +34,10 @@ public class TenancyArchitectureTests
         "src/LeadPilot.Infrastructure/Conversion/PaymentWebhook.cs",     // PaymentWebhookDirectory: resolves the tenant of an anonymous webhook id (then verifies the signature before anything else)
         "src/LeadPilot.Infrastructure/Campaigns/CampaignDirectory.cs",   // tenant ids with due or stuck campaigns (the sweep job; returns ids only)
         "src/LeadPilot.Infrastructure/Messaging/Services/MessagingDirectory.cs",   // webhook key → tenant, tenants with due outbox rows / stuck messages (everything that must happen BEFORE a tenant scope exists)
+        "src/LeadPilot.Infrastructure/Billing/PlatformAdmin.cs",   // PlatformDirectory: every cross-tenant READ of platform billing (tenant list, payment queue, invoices, platform audit, job ids); writes run in the target tenant's scope
+        "src/LeadPilot.Infrastructure/Services/Tenancy/TenantSuspensionService.cs", // the one suspension path (member count of the target tenant)
+        "src/LeadPilot.Infrastructure/Billing/BillingSeed.cs",     // start-up backfill: which existing tenants have no subscription yet
+        "src/LeadPilot.Infrastructure/Billing/Registration.cs",    // sign-up: the registrant's own memberships (e-mail verification, resend) in an explicit platform scope
     ];
 
     private static string RepoRoot()
@@ -107,7 +111,9 @@ public class TenancyArchitectureTests
     public void Entities_with_a_TenantId_column_must_implement_ITenantOwned_unless_explicitly_exempt()
     {
         // RefreshToken binds a session to a tenant but is a per-user credential record, deliberately not row-filtered.
-        var exempt = new[] { "RefreshToken" };
+        // TenantBillingState (Phase 12) is platform-level state ABOUT a tenant (self-registered, e-mail verified, suspension kind) keyed by the tenant id: operators and the sign-up flow read it across tenants, every
+        // query in the product names the tenant explicitly, and it is not reachable from any tenant-facing endpoint.
+        var exempt = new[] { "RefreshToken", "TenantBillingState" };
         var offenders = Model().GetEntityTypes()
             .Where(e => e.FindProperty("TenantId") is not null && !typeof(ITenantOwned).IsAssignableFrom(e.ClrType) && !exempt.Contains(e.ShortName()))
             .Select(e => e.ShortName()).ToList();

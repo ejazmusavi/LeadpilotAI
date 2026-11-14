@@ -1,3 +1,5 @@
+using LeadPilot.Application.Billing;
+using LeadPilot.Domain.Billing;
 using LeadPilot.Application.Abstractions;
 using LeadPilot.Application.Common;
 using LeadPilot.Application.Discovery;
@@ -12,7 +14,7 @@ using Microsoft.Extensions.Options;
 namespace LeadPilot.Infrastructure.Discovery.Services;
 
 public sealed class DiscoveryJobService(
-    CrmContext crm, IDiscoveryConnectorRegistry registry, DiscoveryUsage usage, DiscoveryCatalogService catalog, IDiscoveryJobScheduler scheduler, IOptions<DiscoveryOptions> options,
+    IEntitlementService entitlements, CrmContext crm, IDiscoveryConnectorRegistry registry, DiscoveryUsage usage, DiscoveryCatalogService catalog, IDiscoveryJobScheduler scheduler, IOptions<DiscoveryOptions> options,
     ILogger<DiscoveryJobService> logger) : IDiscoveryJobService
 {
     public const string UsageLimitCode = "usage_limit_reached";
@@ -87,6 +89,7 @@ public sealed class DiscoveryJobService(
             if (r.CategoryId is { } cid && !await crm.Db.LeadCategories.AnyAsync(c => c.Id == cid && c.TenantId == tenantId && c.IsActive, ct)) return Result.Failure<DiscoveryJobDto>(Error.Validation("Category not found."));
             if (r.MaxResults < 1 || r.MaxResults > d.MaxResultsPerJob) return Result.Failure<DiscoveryJobDto>(Error.Validation($"Maximum results must be between 1 and {d.MaxResultsPerJob}."));
 
+            if (await entitlements.RequireFeatureAsync(Features.Discovery, ct) is { IsFailure: true } noFeature) return Result.Failure<DiscoveryJobDto>(noFeature.Error);
             var decision = await usage.CheckAsync(desc.Key, ct);
             if (!decision.Allowed) return Result.Failure<DiscoveryJobDto>(new Error(UsageLimitCode, decision.Reason!));
 

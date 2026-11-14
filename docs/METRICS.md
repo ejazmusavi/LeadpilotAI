@@ -86,3 +86,6 @@ All reports are paginated (`page`, `pageSize` ≤ 200) with a totals row compute
 ## Export
 
 CSV (`GET /api/v1/analytics/reports/{key}/export`, `Reports → Export CSV`): permission `Reports.Export` (and `Reports.Team` for workspace-wide reports); UTF-8 with BOM; every text cell is passed through the shared formula-injection guard (`=`, `+`, `-`, `@`, tab and CR prefixes are neutralised); streamed to the response in chunks of 1 000 rows; **row cap 50 000** (`Analytics:MaxExportRows`) — larger reports answer 413 before anything is audited or sent. Each export writes an audit entry **before any data is sent**: action `Report.Exported`, who, report key, row count, date range and zone, scope, time (and IP/correlation id as for every audit entry) — visible in the audit log.
+
+## Phase 12 note
+Billing introduced no new dashboard metric and changed no existing definition. Revenue stays "verified customer payments only"; platform subscription payments (`BillingPayments`) are a different money flow (tenant → platform) and are not mixed into any tenant metric. MRR/ARR/churn are still not computed.

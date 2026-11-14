@@ -1,0 +1,15 @@
+@model OnboardingViewModel
+@{ ViewData["Title"] = "Getting started"; var o = Model.Overview; var pct = o.Steps.Count == 0 ? 0 : o.DoneCount * 100 / o.Steps.Count; }
+<h1 class="h3 mb-2">Getting started</h1>
+<p class="text-muted">Each step completes by itself when the real data exists: nothing is ticked by hand.</p>
+<div class="progress mb-3" role="progressbar" aria-label="Setup progress" aria-valuenow="@pct" aria-valuemin="0" aria-valuemax="100"><div class="progress-bar bg-success" style="width:@pct%">@o.DoneCount / @o.Steps.Count</div></div>
+@if (o.Complete) { <div class="alert alert-success">Your workspace is fully set up.</div> }
+<div class="list-group">
+@foreach (var s in o.Steps)
+{
+    <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center gap-3" asp-controller="@s.Controller" asp-action="@s.Action" data-step="@s.Key" data-done="@s.Done.ToString().ToLowerInvariant()">
+        <div><div class="fw-semibold"><span class="me-2" aria-hidden="true">@(s.Done ? "✔" : "○")</span>@s.Title</div><div class="small text-muted">@s.Description@if (s.Detail is not null) { <span> · @s.Detail</span> }</div></div>
+        <span class="badge @(s.Done ? "bg-success" : "bg-secondary")">@(s.Done ? "Done" : "To do")</span>
+    </a>
+}
+</div>

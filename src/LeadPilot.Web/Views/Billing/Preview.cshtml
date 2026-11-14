@@ -1,0 +1,18 @@
+@model PlanPreviewViewModel
+@using LeadPilot.Web.Models
+@{ ViewData["Title"] = "Review plan change"; var p = Model.Preview; }
+<h1 class="h3 mb-3">@p.FromPlanName → @p.ToPlanName <span class="badge bg-secondary">@p.Kind</span></h1>
+<div class="card mb-3"><div class="card-body">
+@if (p.Kind == LeadPilot.Domain.Billing.PlanChangeKind.Upgrade)
+{
+    <dl class="row mb-0"><dt class="col-sm-4">New plan price</dt><dd class="col-sm-8">@BillingFormat.Money(p.NewPrice, p.Currency)</dd><dt class="col-sm-4">Credit for unused time</dt><dd class="col-sm-8">− @BillingFormat.Money(p.Credit, p.Currency)</dd><dt class="col-sm-4">To pay</dt><dd class="col-sm-8 fw-bold">@BillingFormat.Money(p.Total, p.Currency)</dd></dl>
+}
+else { <p>The change is scheduled for the end of your current period; until then you keep your current plan. Nothing is refunded.</p> }
+@if (!p.Allowed)
+{
+    <div class="alert alert-danger mt-3 mb-0" role="alert"><strong>@p.BlockedReason</strong><ul class="mb-0">@foreach (var x in p.Exceeds) { <li>@x.Label: you use @BillingFormat.Amount(x.Used, x.UiFactor, x.Unit), the new plan allows @BillingFormat.Amount(x.Limit, x.UiFactor, x.Unit).</li> }</ul></div>
+}
+</div></div>
+<p class="small text-muted">@p.Policy</p>
+@if (p.Allowed) { <form asp-action="RequestChange" method="post"><input type="hidden" name="planId" value="@p.ToPlanId" /><button class="btn btn-primary">Confirm</button> <a class="btn btn-link" asp-action="Plans">Back</a></form> }
+else { <a class="btn btn-outline-secondary" asp-action="Plans">Back</a> }

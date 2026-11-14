@@ -1,3 +1,5 @@
+using LeadPilot.Application.Billing;
+using LeadPilot.Domain.Billing;
 using System.Text.Json;
 using LeadPilot.Application.Common;
 using LeadPilot.Application.Campaigns;
@@ -19,7 +21,7 @@ namespace LeadPilot.Infrastructure.Campaigns;
 /// and the workspace policy (approval, four-eyes, kill switch) is enforced for both MVC and REST.
 /// </summary>
 internal sealed class CampaignService(
-    CrmContext crm, CampaignCore core, CampaignSettingsStore settings, AudienceScanner scanner, ICampaignChannel channel, ICampaignJobScheduler jobs, IOutboundMessageService outbound,
+    IEntitlementService entitlements, CrmContext crm, CampaignCore core, CampaignSettingsStore settings, AudienceScanner scanner, ICampaignChannel channel, ICampaignJobScheduler jobs, IOutboundMessageService outbound,
     IOptions<CampaignOptions> options, ILogger<CampaignService> logger) : ICampaignService
 {
     private static readonly string[] MessagedStatuses = [nameof(RecipientStatus.Sent), nameof(RecipientStatus.Delivered), nameof(RecipientStatus.Read), nameof(RecipientStatus.Replied)];
@@ -95,10 +97,16 @@ internal sealed class CampaignService(
         CrmFlow.GuardAsync(async () =>
         {
             var c = Campaign.Create(crm.TenantId, r.Name, r.Type, crm.UserId, crm.Actor, crm.Now);
+            if (await entitlements.RequireFeatureAsync(Features.Campaigns, ct) is { IsFailure: true } noFeature) return Result.Failure<CampaignDto>(noFeature.Error);
             if (await Apply(c, r, ct) is { } error) return Result.Failure<CampaignDto>(error);
-            crm.Db.Campaigns.Add(c);
-            crm.Record("Campaign.Created", "Campaign", c.Id, $"Campaign '{c.Name}' ({c.Type}) created as a draft.");
-            await crm.Db.SaveChangesAsync(ct);
+            var saved = await entitlements.RunWithinLimitAsync(UsageDimension.Campaigns, 1, async c2 =>
+            {
+                crm.Db.Campaigns.Add(c);
+                crm.Record("Campaign.Created", "Campaign", c.Id, $"Campaign '{c.Name}' ({c.Type}) created as a draft.");
+                await crm.Db.SaveChangesAsync(c2);
+                return Result.Success(true);
+            }, ct);
+            if (saved.IsFailure) { crm.Db.ChangeTracker.Clear(); return Result.Failure<CampaignDto>(saved.Error); }
             return Result.Success(await ToDtoAsync(c, ct));
         }, logger);
 
@@ -156,9 +164,14 @@ internal sealed class CampaignService(
             if (src is null) return Result.Failure<CampaignDto>(Error.NotFound("Campaign"));
             var name = string.IsNullOrWhiteSpace(r.Name) ? Trim("Copy of " + src.Name, 150) : r.Name.Trim();
             var copy = Campaign.CloneOf(src, name, crm.TenantId, crm.UserId, crm.Actor, crm.Now);
-            crm.Db.Campaigns.Add(copy);
-            crm.Record("Campaign.Cloned", "Campaign", copy.Id, $"Campaign '{src.Name}' cloned as draft '{copy.Name}'.");
-            await crm.Db.SaveChangesAsync(ct);
+            var saved = await entitlements.RunWithinLimitAsync(UsageDimension.Campaigns, 1, async c2 =>
+            {
+                crm.Db.Campaigns.Add(copy);
+                crm.Record("Campaign.Cloned", "Campaign", copy.Id, $"Campaign '{src.Name}' cloned as draft '{copy.Name}'.");
+                await crm.Db.SaveChangesAsync(c2);
+                return Result.Success(true);
+            }, ct);
+            if (saved.IsFailure) { crm.Db.ChangeTracker.Clear(); return Result.Failure<CampaignDto>(saved.Error); }
             return Result.Success(await ToDtoAsync(copy, ct));
         }, logger);
 

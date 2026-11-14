@@ -1,4 +1,6 @@
 using LeadPilot.Application.Abstractions;
+using LeadPilot.Application.Billing;
+using LeadPilot.Domain.Billing;
 using LeadPilot.Application.Campaigns;
 using LeadPilot.Application.Common;
 using LeadPilot.Application.Contracts;
@@ -14,7 +16,7 @@ using Microsoft.Extensions.Options;
 
 namespace LeadPilot.Infrastructure.Services.Crm;
 
-public sealed class LeadService(CrmContext crm, DuplicateDetector duplicates, ILeadScorer scorer, IPipelineService pipelines, IOptions<CrmOptions> options, ICampaignEvents campaigns, ILogger<LeadService> logger) : ILeadService
+public sealed class LeadService(IEntitlementService entitlements, CrmContext crm, DuplicateDetector duplicates, ILeadScorer scorer, IPipelineService pipelines, IOptions<CrmOptions> options, ICampaignEvents campaigns, ILogger<LeadService> logger) : ILeadService
 {
     private static readonly LeadSourceType[] ClientSourceTypes = [LeadSourceType.Manual, LeadSourceType.Api, LeadSourceType.Referral, LeadSourceType.Website, LeadSourceType.Other];
 
@@ -162,6 +164,8 @@ public sealed class LeadService(CrmContext crm, DuplicateDetector duplicates, IL
                 if (found.Count > 0) return Result.Failure<LeadDto>(Error.Duplicate(DescribeDuplicates(found)));
             }
 
+            var saved = await entitlements.RunWithinLimitAsync(UsageDimension.Leads, 1, async c2 =>
+            {
             db.Leads.Add(lead);
             db.LeadSources.Add(LeadSource.Create(tenantId, lead.Id, lead.PrimarySourceType, externalId, r.SourceName, r.SourceUrl, attribution, retrievedAtUtc ?? now));
             foreach (var c in contacts) db.Contacts.Add(c);
@@ -169,7 +173,10 @@ public sealed class LeadService(CrmContext crm, DuplicateDetector duplicates, IL
             crm.Activity(lead.Id, LeadActivityType.Created, $"Lead created ({lead.PrimarySourceType}).");
             crm.Record("Lead.Created", "Lead", lead.Id, $"Lead '{lead.Name}' created.");
             Workflows.WorkflowEvents.Emit(crm, LeadPilot.Application.Workflows.WorkflowEventTypes.LeadCreated, lead.Id, contacts.FirstOrDefault(c => c.IsPrimary)?.Id);
-            await db.SaveChangesAsync(ct);
+            await db.SaveChangesAsync(c2);
+            return Result.Success(true);
+            }, ct);
+            if (saved.IsFailure) { db.ChangeTracker.Clear(); return Result.Failure<LeadDto>(saved.Error); }
             await scorer.RescoreAsync([lead.Id], ct);
             return await GetAsync(lead.Id, ct);
         }, logger);

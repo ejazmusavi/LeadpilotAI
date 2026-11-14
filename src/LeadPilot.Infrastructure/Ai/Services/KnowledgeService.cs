@@ -1,3 +1,5 @@
+using LeadPilot.Application.Billing;
+using LeadPilot.Domain.Billing;
 using LeadPilot.Application.Ai;
 using LeadPilot.Application.Common;
 using LeadPilot.Domain.Ai;
@@ -12,6 +14,7 @@ namespace LeadPilot.Infrastructure.Ai.Services;
 
 /// <summary>Knowledge base management used by the MVC pages and the REST API. Every read and write is scoped to the active tenant; foreign ids answer "not found".</summary>
 internal sealed class KnowledgeService(
+    IEntitlementService entitlements,
     CrmContext crm, KnowledgeWriter writer, IAiJobScheduler jobs, IVectorStore store, DocumentTextExtractor extractor, IOptions<AiOptions> options, ILogger<KnowledgeService> logger) : IKnowledgeService
 {
     public const string UploadsSourceName = "Uploaded files";
@@ -91,9 +94,16 @@ internal sealed class KnowledgeService(
             if (content.Length > DocumentVersion.MaxContentChars) return Result.Failure<KnowledgeDocumentListItemDto>(Error.Validation($"The text is longer than {DocumentVersion.MaxContentChars:N0} characters."));
             var source = await ResolveSourceAsync(r.SourceId, r.NewSourceName, KnowledgeSourceType.Text, WrittenSourceName, ct);
             if (source.IsFailure) return Result.Failure<KnowledgeDocumentListItemDto>(source.Error);
-            var (doc, version) = await writer.AddDocumentAsync(source.Value.Id, r.Title, r.Kind, null, content, null, "text/plain", System.Text.Encoding.UTF8.GetByteCount(content), ct);
-            crm.Record("Ai.DocumentAdded", "KnowledgeDocument", doc.Id, $"Document '{Cut(doc.Title)}' added as text ({content.Length:N0} characters).");
-            await crm.Db.SaveChangesAsync(ct);
+            var bytes = System.Text.Encoding.UTF8.GetByteCount(content);
+            var made = await entitlements.RunWithinLimitAsync(UsageDimension.KnowledgeStorageBytes, bytes, async c2 =>
+            {
+                var (d0, v0) = await writer.AddDocumentAsync(source.Value.Id, r.Title, r.Kind, null, content, null, "text/plain", bytes, c2);
+                crm.Record("Ai.DocumentAdded", "KnowledgeDocument", d0.Id, $"Document '{Cut(d0.Title)}' added as text ({content.Length:N0} characters).");
+                await crm.Db.SaveChangesAsync(c2);
+                return Result.Success((d0, v0));
+            }, ct);
+            if (made.IsFailure) { crm.Db.ChangeTracker.Clear(); return Result.Failure<KnowledgeDocumentListItemDto>(made.Error); }
+            var (doc, version) = made.Value;
             writer.Schedule(version.Id);
             return Result.Success((await SingleAsync(doc.Id, ct))!);
         }, logger);
@@ -115,9 +125,15 @@ internal sealed class KnowledgeService(
             if (source.IsFailure) return Result.Failure<KnowledgeDocumentListItemDto>(source.Error);
             var title = string.IsNullOrWhiteSpace(r.Title) ? (extracted.Title ?? Path.GetFileNameWithoutExtension(r.FileName)) : r.Title;
             if (string.IsNullOrWhiteSpace(title)) title = "Untitled document";
-            var (doc, version) = await writer.AddDocumentAsync(source.Value.Id, title.Length > 200 ? title[..200] : title, r.Kind, null, extracted.Text, Path.GetFileName(r.FileName), extracted.MimeType, r.Data.Length, ct);
-            crm.Record("Ai.DocumentAdded", "KnowledgeDocument", doc.Id, $"Document '{Cut(doc.Title)}' uploaded ({extracted.MimeType}, {r.Data.Length:N0} bytes).");
-            await crm.Db.SaveChangesAsync(ct);
+            var made = await entitlements.RunWithinLimitAsync(UsageDimension.KnowledgeStorageBytes, r.Data.Length, async c2 =>
+            {
+                var (d0, v0) = await writer.AddDocumentAsync(source.Value.Id, title.Length > 200 ? title[..200] : title, r.Kind, null, extracted.Text, Path.GetFileName(r.FileName), extracted.MimeType, r.Data.Length, c2);
+                crm.Record("Ai.DocumentAdded", "KnowledgeDocument", d0.Id, $"Document '{Cut(d0.Title)}' uploaded ({extracted.MimeType}, {r.Data.Length:N0} bytes).");
+                await crm.Db.SaveChangesAsync(c2);
+                return Result.Success((d0, v0));
+            }, ct);
+            if (made.IsFailure) { crm.Db.ChangeTracker.Clear(); return Result.Failure<KnowledgeDocumentListItemDto>(made.Error); }
+            var (doc, version) = made.Value;
             writer.Schedule(version.Id);
             return Result.Success((await SingleAsync(doc.Id, ct))!);
         }, logger);
@@ -139,9 +155,15 @@ internal sealed class KnowledgeService(
         var tenantId = crm.TenantId;
         var latestHash = await crm.Db.DocumentVersions.AsNoTracking().Where(v => v.TenantId == tenantId && v.DocumentId == doc.Id && v.VersionNumber == doc.LatestVersionNumber).Select(v => v.ContentHash).FirstOrDefaultAsync(ct);
         if (latestHash == KnowledgeWriter.Hash(content)) return Result.Failure<KnowledgeDocumentListItemDto>(Error.Conflict("The text is identical to the current version; nothing was changed."));
-        var version = writer.AddVersion(doc, content, fileName, mime, size);
-        crm.Record("Ai.DocumentVersionAdded", "KnowledgeDocument", doc.Id, $"Document '{Cut(doc.Title)}' got version {version.VersionNumber}; it replaces the current version once indexed.");
-        await crm.Db.SaveChangesAsync(ct);
+        var made = await entitlements.RunWithinLimitAsync(UsageDimension.KnowledgeStorageBytes, size, async c2 =>
+        {
+            var v0 = writer.AddVersion(doc, content, fileName, mime, size);
+            crm.Record("Ai.DocumentVersionAdded", "KnowledgeDocument", doc.Id, $"Document '{Cut(doc.Title)}' got version {v0.VersionNumber}; it replaces the current version once indexed.");
+            await crm.Db.SaveChangesAsync(c2);
+            return Result.Success(v0);
+        }, ct);
+        if (made.IsFailure) { crm.Db.ChangeTracker.Clear(); return Result.Failure<KnowledgeDocumentListItemDto>(made.Error); }
+        var version = made.Value;
         writer.Schedule(version.Id);
         return Result.Success((await SingleAsync(doc.Id, ct))!);
     }

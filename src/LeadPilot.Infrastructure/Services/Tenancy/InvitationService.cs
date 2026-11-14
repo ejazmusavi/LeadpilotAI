@@ -1,3 +1,5 @@
+using LeadPilot.Application.Billing;
+using LeadPilot.Domain.Billing;
 using LeadPilot.Application.Abstractions;
 using LeadPilot.Application.Common;
 using LeadPilot.Application.Contracts;
@@ -17,7 +19,7 @@ namespace LeadPilot.Infrastructure.Services.Tenancy;
 
 public sealed class InvitationService(
     AppDbContext db, ITenantContext tenant, ITenantContextAccessor accessor, ICurrentUser currentUser, IAuditService audit, IClock clock,
-    IPermissionEvaluator evaluator, InvitationIssuer issuer, UserManager<ApplicationUser> users, IValidator<CreateInvitationRequest> validator,
+    IPermissionEvaluator evaluator, LeadPilot.Application.Billing.IEntitlementService entitlements, InvitationIssuer issuer, UserManager<ApplicationUser> users, IValidator<CreateInvitationRequest> validator,
     ILogger<InvitationService> logger) : IInvitationService
 {
     public async Task<PagedResult<InvitationDto>> ListAsync(int page, int pageSize, CancellationToken ct = default)
@@ -55,9 +57,17 @@ public sealed class InvitationService(
             var now = clock.UtcNow;
             foreach (var old in await db.TenantInvitations.Where(i => i.TenantId == tenantId && i.Email == email && i.Status == InvitationStatus.Pending).ToListAsync(ct)) old.Revoke(now);
 
-            var (invitation, raw) = issuer.Create(tenantId, email, role.Id, currentUser.UserId);
-            audit.Record(new AuditEntry("Invitation.Created", "TenantInvitation", invitation.Id.ToString(), $"Invitation sent to {email} for role '{role.Name}'."));
-            await db.SaveChangesAsync(ct);
+            // a pending invitation holds a seat: the plan's user limit counts active members plus live invitations
+            TenantInvitation? madeInv = null; var raw = string.Empty;
+            var seat = await entitlements.RunWithinLimitAsync(LeadPilot.Domain.Billing.UsageDimension.Users, 1, async c2 =>
+            {
+                var created = issuer.Create(tenantId, email, role.Id, currentUser.UserId); madeInv = created.Invitation; raw = created.RawToken;
+                audit.Record(new AuditEntry("Invitation.Created", "TenantInvitation", madeInv.Id.ToString(), $"Invitation sent to {email} for role '{role.Name}'."));
+                await db.SaveChangesAsync(c2);
+                return Result.Success(true);
+            }, ct);
+            if (seat.IsFailure) { db.ChangeTracker.Clear(); return Result.Failure<InvitationDto>(seat.Error); }
+            var invitation = madeInv!;
 
             var tenantName = await db.Tenants.AsNoTracking().Where(t => t.Id == tenantId).Select(t => t.Name).FirstAsync(ct);
             try { await issuer.SendAsync(tenantName, role.Name, invitation, raw, currentUser.Email, ct); }

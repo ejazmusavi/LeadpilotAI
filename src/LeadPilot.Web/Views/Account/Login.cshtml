@@ -1,4 +1,5 @@
 @model LoginViewModel
+@inject LeadPilot.Application.Billing.IRegistrationService Registration
 @{ Layout = "_AuthLayout"; ViewData["Title"] = "Sign in"; }
 <form asp-action="Login" method="post" data-loading-form novalidate>
     <input type="hidden" asp-for="ReturnUrl" />
@@ -20,6 +21,7 @@
     <button type="submit" class="btn btn-primary w-100"><span class="spinner-border spinner-border-sm d-none" aria-hidden="true"></span> Sign in</button>
     <div class="d-flex justify-content-between mt-3 small">
         <a asp-action="ForgotPassword">Forgot password?</a>
-        @if ((bool?)ViewBag.SelfRegistration == true) { <a asp-action="Register">Create account</a> }
+        @if (await Registration.IsOpenAsync()) { <a asp-controller="Register" asp-action="Index">Create a workspace</a> }
+        <a asp-controller="Register" asp-action="Resend">Resend verification</a>
     </div>
 </form>

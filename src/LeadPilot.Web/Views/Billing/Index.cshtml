@@ -1,0 +1,32 @@
+@model BillingIndexViewModel
+@using LeadPilot.Domain.Billing
+@{ ViewData["Title"] = "Plan & billing"; var e = Model.Overview.Entitlements; var sub = e.Subscription; }
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3"><h1 class="h3 mb-0">Plan &amp; billing</h1>
+<div class="d-flex gap-2"><a class="btn btn-outline-secondary" asp-action="Invoices">Invoices</a><a class="btn btn-outline-secondary" asp-action="Payments">Payments</a>@if (Model.CanManage) { <a class="btn btn-primary" asp-action="Plans">Change plan</a> }</div></div>
+@if (e.IsPlatformTenant) { <div class="alert alert-info">This is the platform workspace: it has no plan and no limits.</div> }
+else
+{
+    @if (e.EmailVerificationPending) { <div class="alert alert-warning">Your e-mail address is not verified yet: messaging, AI, discovery, campaigns and workflows are locked. <a asp-controller="Register" asp-action="Resend">Send a new verification link</a>.</div> }
+    @foreach (var n in e.Notices) { <div class="alert @(n.Threshold >= 100 ? "alert-danger" : "alert-warning") py-2" role="alert">@(n.Threshold >= 100 ? "Limit reached" : "Approaching the limit"): <strong>@n.Label</strong> (@n.Threshold% of your plan) since @n.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm") UTC. @if (Model.CanManage) { <a asp-action="Plans">Upgrade</a> }</div> }
+    @if (sub is null) { <div class="alert alert-secondary">No plan is configured for this workspace, so nothing is limited.</div> }
+    else
+    {
+        <div class="card mb-3" data-subscription><div class="card-body"><div class="row g-3">
+            <div class="col-md-4"><div class="text-muted small">Plan</div><div class="h5 mb-0">@sub.PlanName</div><span class="badge @BillingFormat.StateBadge(sub.State)">@sub.State</span></div>
+            <div class="col-md-4"><div class="text-muted small">Price</div><div class="h5 mb-0">@(sub.Price == 0 ? "Free" : BillingFormat.Money(sub.Price, sub.Currency)) <span class="small text-muted">/ @sub.Cycle.ToString().ToLowerInvariant()</span></div></div>
+            <div class="col-md-4"><div class="text-muted small">Current period (UTC)</div><div>@sub.PeriodStartUtc.ToString("yyyy-MM-dd") → @sub.PeriodEndUtc.ToString("yyyy-MM-dd")</div>@if (sub.TrialEndsAtUtc is not null) { <div class="small text-muted">Trial ends @sub.TrialEndsAtUtc.Value.ToString("yyyy-MM-dd")</div> }</div>
+        </div>
+        @if (sub.State == SubscriptionState.PastDue) { <div class="alert alert-warning mt-3 mb-0">Payment is overdue. Access continues until @sub.GraceEndsAtUtc?.ToString("yyyy-MM-dd") (grace period); after that the workspace is suspended.</div> }
+        @if (sub.PendingPlanName is not null) { <div class="alert alert-info mt-3 mb-0">A downgrade to <strong>@sub.PendingPlanName</strong> takes effect on @sub.PeriodEndUtc.ToString("yyyy-MM-dd").@if (Model.CanManage && Model.Overview.OpenChange is { } oc) { <form asp-action="CancelChange" asp-route-id="@oc.Id" method="post" class="d-inline"><button class="btn btn-link btn-sm p-0 ms-2">Cancel</button></form> }</div> }
+        @if (sub.GrantReason is not null) { <div class="small text-muted mt-2">Granted by the platform: @sub.GrantReason</div> }
+        </div></div>
+    }
+    @if (Model.Overview.OpenInvoices.Count > 0)
+    {
+        <div class="card mb-3"><div class="card-header">Open invoices</div><div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Number</th><th>For</th><th class="text-end">Total</th><th>Due</th><th></th></tr></thead><tbody>
+        @foreach (var i in Model.Overview.OpenInvoices) { <tr><td>@i.Number</td><td>@i.PlanName (@i.PeriodStartUtc.ToString("yyyy-MM-dd") → @i.PeriodEndUtc.ToString("yyyy-MM-dd"))</td><td class="text-end">@BillingFormat.Money(i.Total, i.Currency)</td><td>@i.DueAtUtc?.ToString("yyyy-MM-dd")@if (i.HasOpenReport) { <span class="badge bg-info text-dark ms-1">payment reported</span> }</td><td class="text-end"><a class="btn btn-outline-primary btn-sm" asp-action="Invoice" asp-route-id="@i.Id">Open</a></td></tr> }
+        </tbody></table></div></div>
+    }
+    <partial name="_UsageBars" model="e" />
+    <p class="small text-muted">Period usage counts what happened inside your subscription period (UTC); the other limits count what exists now. Limits are enforced when you create something: a request that would pass a limit is refused with an explanation.</p>
+}

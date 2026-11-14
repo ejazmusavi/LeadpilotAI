@@ -1,3 +1,5 @@
+using LeadPilot.Application.Billing;
+using LeadPilot.Domain.Billing;
 using System.Globalization;
 using System.Text;
 using LeadPilot.Application.Abstractions;
@@ -16,7 +18,7 @@ namespace LeadPilot.Infrastructure.Analytics;
 /// Dashboard, reports and CSV export of the ACTIVE workspace. Scope is decided here, server-side, from the caller's permissions: with Reports.Team the whole workspace, without it only the caller's own leads
 /// (team-only reports and metrics are refused or marked unavailable, never silently shown as zero). Period metrics read the daily rollup when it covers the range, otherwise the raw rows ("Live").
 /// </summary>
-public sealed class AnalyticsService(AppDbContext db, ITenantContext tenant, ICurrentUser user, IPermissionEvaluator permissions, IClock clock, IOptions<AnalyticsOptions> options, AnalyticsCache cache, IAuditService audit) : IAnalyticsService
+public sealed class AnalyticsService(AppDbContext db, ITenantContext tenant, ICurrentUser user, IPermissionEvaluator permissions, IClock clock, IOptions<AnalyticsOptions> options, AnalyticsCache cache, IAuditService audit, IEntitlementService? entitlements = null) : IAnalyticsService
 {
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
     private static readonly string[] DashboardOrder =
@@ -233,6 +235,7 @@ public sealed class AnalyticsService(AppDbContext db, ITenantContext tenant, ICu
     public async Task<Result<ReportFile>> ExportCsvAsync(string key, RangeRequest request, Func<ReportFile, Stream> openOutput, CancellationToken ct = default)
     {
         if (!await permissions.HasAsync(PermissionCodes.ReportsExport, ct)) return Result.Failure<ReportFile>(Error.Forbidden("You do not have permission to export reports."));
+        if (entitlements is not null && await entitlements.RequireFeatureAsync(Features.ReportsExport, ct) is { IsFailure: true } noFeature) return Result.Failure<ReportFile>(noFeature.Error);
         var ctx = await PrepareAsync(request, ct);
         if (ctx.IsFailure) return Result.Failure<ReportFile>(ctx.Error);
         var c = ctx.Value; var d = Authorize(key, c);

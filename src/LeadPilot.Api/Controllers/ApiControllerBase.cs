@@ -14,8 +14,9 @@ public abstract class ApiControllerBase : ControllerBase
         var status = result.Error.Code switch
         {
             "not_found" => StatusCodes.Status404NotFound,
-            "forbidden" or "tenant_suspended" => StatusCodes.Status403Forbidden,
-            "conflict" or "duplicate" or "ai_not_configured" or "connector_not_configured" or "account_paused" or "account_not_connected" or "not_eligible" or "suppressed" or "opted_out" or "new_contacts_blocked" => StatusCodes.Status409Conflict,
+            "forbidden" or "tenant_suspended" or "email_not_verified" or "subscription_inactive" or "registration_closed" => StatusCodes.Status403Forbidden,
+            "conflict" or "duplicate" or "ai_not_configured" or "connector_not_configured" or "account_paused" or "account_not_connected" or "registration_unavailable" or "not_eligible" or "suppressed" or "opted_out" or "new_contacts_blocked" => StatusCodes.Status409Conflict,
+            "plan_limit_exceeded" or "feature_not_in_plan" => StatusCodes.Status402PaymentRequired,
             "usage_limit_reached" or "rate_limited" => StatusCodes.Status429TooManyRequests,
             "too_large" => StatusCodes.Status413PayloadTooLarge,
             "invalid_credentials" or "invalid_refresh_token" or "sign_in_required" => StatusCodes.Status401Unauthorized,

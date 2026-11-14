@@ -159,3 +159,12 @@ Published through the existing outbox/RabbitMQ topic exchange (routing keys): `l
 | IPaymentProviderAdapter | none | every payment provider — none has been chosen; the neutral webhook endpoint `POST /api/v1/payments/webhooks/{webhookId}` is tested against a test-only HMAC fake |
 | IServiceNoticeSender | Phase 5 pipeline (WAHA) | e-mail / SMS notices |
 Phase 8 ports `IDemoScheduler`, `ITrialProvisioner`, `IPaymentRequestGateway` are now real; events `demo.booked`, `demo.completed`, `trial.created`, `trial.expires`, `payment.confirmed` are published through the outbox (payload `WorkflowEventPayload`, `Detail` = `demo:{id}` / `trial:{id}` / `payment:{id}`).
+
+## Phase 12: ports and what is NOT integrated
+| Port | Shipped implementation | Not integrated |
+|---|---|---|
+| IPaymentProviderAdapter (platform billing) | none: manual (bank-transfer style) verification by an operator is the shipped flow | every payment provider: none chosen; there is no platform webhook endpoint |
+| ICaptchaVerifier | none installed; `registration.captcha_required` with no verifier REFUSES sign-up | hCaptcha / Turnstile / reCAPTCHA |
+| IDisposableDomainPolicy | built-in seed list + owner list (`registration.blocked_domains`) | a maintained disposable-domain feed |
+| IEmailSender | existing SMTP / dev logger (verification e-mails) | n/a |
+Invoices are HTML pages ("Print / save as PDF" in the browser); no PDF or accounting integration. Nothing in this phase calls an external service.

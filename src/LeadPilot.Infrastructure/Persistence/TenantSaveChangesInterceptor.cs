@@ -1,5 +1,6 @@
 using System.Reflection;
 using LeadPilot.Application.Abstractions;
+using LeadPilot.Domain.Billing;
 using LeadPilot.Domain.Common;
 using LeadPilot.Domain.Tenancy;
 using LeadPilot.Domain.Workflows;
@@ -44,6 +45,8 @@ public sealed class TenantSaveChangesInterceptor : SaveChangesInterceptor
             if (entry.Entity is ISealable && entry.State is EntityState.Modified or EntityState.Deleted && entry.Property(nameof(ISealable.IsSealed)).OriginalValue is true)
                 throw new InvalidOperationException($"{entry.Metadata.ShortName()} rows of an activated workflow version are immutable: create a new version instead.");
 
+            if (entry.Entity is Invoice) GuardIssuedInvoice(entry);
+
             if (entry.Entity is not ITenantOwned) continue;
 
             var prop = entry.Property(nameof(ITenantOwned.TenantId));
@@ -72,6 +75,18 @@ public sealed class TenantSaveChangesInterceptor : SaveChangesInterceptor
                     break;
             }
         }
+    }
+
+    private static readonly HashSet<string> InvoiceMovableColumns = [nameof(Invoice.Status), nameof(Invoice.PaidAtUtc), nameof(Invoice.VoidedAtUtc), nameof(Invoice.VoidReason), nameof(Invoice.UpdatedAtUtc), nameof(Invoice.UpdatedBy)];
+
+    /// <summary>An issued invoice is a legal record: it is never deleted and only its status columns can move (Issued → Paid / Void). Anything else is rejected here even if domain code were bypassed.</summary>
+    private static void GuardIssuedInvoice(EntityEntry entry)
+    {
+        if (entry.State is not (EntityState.Modified or EntityState.Deleted)) return;
+        if (entry.Property(nameof(Invoice.Status)).OriginalValue is InvoiceStatus.Draft) return;
+        if (entry.State == EntityState.Deleted) throw new InvalidOperationException("An issued invoice can never be deleted: void it instead.");
+        var illegal = entry.Properties.Where(p => p.IsModified && !InvoiceMovableColumns.Contains(p.Metadata.Name)).Select(p => p.Metadata.Name).ToList();
+        if (illegal.Count > 0) throw new InvalidOperationException($"An issued invoice is immutable (attempted change of {string.Join(", ", illegal)}).");
     }
 
     private static void EnsureActiveTenantOrPlatform(ITenantContext tenant, Guid entityTenantId, EntityEntry entry)

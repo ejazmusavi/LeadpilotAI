@@ -1,0 +1,31 @@
+@model WorkflowSimulateViewModel
+@{ ViewData["Title"] = "Simulate " + Model.Workflow.Name; var r = Model.Result; }
+<div class="mb-3"><h1 class="h3 mb-1">Simulate · @Model.Workflow.Name</h1>
+    <p class="text-muted mb-0">Walks the workflow against a lead and shows what <em>would</em> happen. It reads data and writes nothing: no message is sent, nothing is changed or scheduled.</p></div>
+@if (!ViewData.ModelState.IsValid) { <div class="alert alert-danger" role="alert"><div asp-validation-summary="All"></div></div> }
+<form method="post" asp-action="Simulate" asp-route-id="@Model.Workflow.Id" class="card card-body mb-3"><div class="row g-3 align-items-end">
+    <div class="col-12 col-md-5"><label class="form-label" for="lead-search">Lead</label>
+        <input id="lead-search" class="form-control" autocomplete="off" placeholder="Type to search leads" value="@Model.LeadName" data-find="@Url.Action("FindLeads")" />
+        <input type="hidden" name="leadId" id="lead-id" value="@Model.LeadId" /><div id="lead-results" class="list-group position-absolute shadow-sm" style="z-index:5"></div></div>
+    <div class="col-12 col-md-4"><label class="form-label" for="msg">Incoming message text (optional)</label><input id="msg" name="messageText" class="form-control" maxlength="500" value="@Model.MessageText" /></div>
+    <div class="col-12 col-md-3"><button class="btn btn-primary" type="submit">Simulate</button></div>
+</div></form>
+@if (r is not null)
+{
+    <div class="alert @(r.Triggered ? "alert-info" : "alert-warning")" role="status"><strong>@r.TriggerNote</strong> <span class="text-muted">Nothing was changed.</span></div>
+    @if (r.Steps.Count > 0)
+    {
+        <div class="card mb-3"><ol class="list-group list-group-numbered list-group-flush">
+        @foreach (var s in r.Steps)
+        {
+            <li class="list-group-item"><span class="fw-semibold">@s.Name</span> <span class="badge @(s.Outcome == "blocked" ? "text-bg-danger" : s.Outcome == "skipped" ? "text-bg-secondary" : s.Outcome == "waits" ? "text-bg-info" : "text-bg-success")">@s.Outcome</span><div class="small">@s.Detail</div></li>
+        }
+        </ol><div class="card-footer small">@r.Ending</div></div>
+    }
+    @if (Model.CanRun && r.Triggered && Model.LeadId is { } lid)
+    {
+        <form asp-action="Run" asp-route-id="@Model.Workflow.Id" method="post"><input type="hidden" name="leadId" value="@lid" />
+            <button class="btn btn-warning" type="submit" data-confirm="Run this workflow for real for @Model.LeadName? Its steps will run, including any messages (only to contacts who agreed to receive them)." data-confirm-label="Run now">Run it for real now</button></form>
+    }
+}
+@section Scripts { <script src="~/js/workflow-leadpicker.js" asp-append-version="true"></script> }

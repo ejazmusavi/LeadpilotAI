@@ -45,6 +45,7 @@ public sealed class AppFixture : IAsyncLifetime
     public RecordingScheduler Scheduler { get; } = new();
     public RecordingMessagingScheduler Messaging { get; } = new();
     public RecordingCampaignScheduler Campaigns { get; } = new();
+    public RecordingWorkflowScheduler Workflows { get; } = new();
     public AiTestControls Ai { get; } = new();
     public OffsetClock Clock { get; } = new();
     public FakeWahaServer Waha { get; private set; } = default!;
@@ -109,7 +110,7 @@ public sealed class AppFixture : IAsyncLifetime
             s.RemoveAll<IEmailSender>();
             s.AddSingleton<IEmailSender>(Outbox);
             DiscoveryKit.RegisterTestServices(s, Script, Scheduler);   // TEST-ONLY fake connector, recording scheduler, no-network website enricher
-            MessagingKit.RegisterTestServices(s, Clock, Messaging, Campaigns, Ai);    // TEST-ONLY adjustable clock and recording job scheduler (jobs are run by the tests, deterministically)
+            MessagingKit.RegisterTestServices(s, Clock, Messaging, Campaigns, Ai, Workflows);    // TEST-ONLY adjustable clock and recording job scheduler (jobs are run by the tests, deterministically)
         });
         Web = new WebApplicationFactory<Program>().WithWebHostBuilder(UseOutbox);
         Web.CreateClient().Dispose(); // boots the app: migrates + seeds the catalog, platform tenant and platform owner

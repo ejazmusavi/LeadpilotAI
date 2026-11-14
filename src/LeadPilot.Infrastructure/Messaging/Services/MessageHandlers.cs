@@ -71,6 +71,12 @@ public sealed class InboundMessageHandler(
             db.OutboxMessages.Add(OutboxMessage.Create(tenantId, MessagingEventTypes.AiReplyRequested, JsonSerializer.Serialize(new AiReplyRequestedPayload(conv.Id, message.Id, conv.ChannelAccountId)), envelope.CorrelationId, envelope.MessageId.ToString(), now));
 
         we.MarkProcessed(now, optedOut ? "opt-out processed" : null);
+        // "customer replies": a linked contact answered after we had messaged them (an opt-out is not a reply)
+        if (!optedOut && conv.ContactId is { } replyContact && conv.LastOutboundAtUtc is not null)
+        {
+            var replyLead = await db.Contacts.AsNoTracking().Where(c => c.Id == replyContact && c.TenantId == tenantId && !c.IsDeleted).Select(c => (Guid?)c.LeadId).FirstOrDefaultAsync(ct);
+            if (replyLead is { } rl) Workflows.WorkflowEvents.Emit(crm, LeadPilot.Application.Workflows.WorkflowEventTypes.CustomerReplied, rl, replyContact, conv.Id, message.Id, correlationId: envelope.CorrelationId);
+        }
         // a reply to a campaign message inside the attribution window (an opt-out is logged, never counted as a reply); staged into the same transaction as the idempotency record
         await campaigns.StageInboundAsync(conv.Id, message.Id, optedOut, ct);
         await ConsumerIdempotency.CommitAsync(crm, Name, envelope.MessageId, ct);

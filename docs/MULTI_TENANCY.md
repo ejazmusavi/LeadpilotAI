@@ -117,3 +117,10 @@ All eight new tables are `ITenantOwned` (architecture test); services use the te
 - **Tools never take a tenant from the model:** the tenant comes from `ITenantContext` inside `CrmContext`; the conversation, lead and agent are resolved server-side; arguments named like a tenant/user/lead/conversation are refused and logged. A tool aimed at another tenant's conversation finds nothing.
 - API, MVC, the AI consumer (forged tenant header / foreign ids → dead letter) and the worker scope are covered: every new endpoint answers 404 for another workspace's ids, every page 404s, the permission matrix is tested for the six default roles and for anonymous callers.
 - Existing tenants receive the new permissions through the role sync at start-up (verified on a Phase 7 database).
+
+## Phase 9 additions
+- The 8 workflow entities are `ITenantOwned` (filter + save guard); an execution that points at another tenant's lead or workflow is rejected by the guard (tested).
+- API/MVC: every id of another workspace answers 404 (workflows, versions, runs, notices, simulation, manual run, retry, cancel, kill switches); a `TenantId` in a body that is not the caller's is a 400.
+- Consumer: the tenant comes from the verified header; an envelope/header mismatch or a lead that is not in that tenant is dead-lettered; events of tenant A never match workflows of tenant B (queries carry the tenant; tested with two workspaces).
+- Jobs: `WorkflowJob` runs inside `ITenantScopeRunner`; running A's execution id in B's scope does nothing. The sweeps first read tenant ids only (allow-listed `WorkflowDirectory`) and then work inside each tenant scope.
+- Existing tenants receive the six `Workflows.*` permissions through the start-up role sync (verified on a Phase 8 database).

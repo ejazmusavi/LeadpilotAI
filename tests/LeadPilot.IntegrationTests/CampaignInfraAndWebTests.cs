@@ -86,7 +86,9 @@ public class CampaignInfrastructureTests(AppFixture app)
         try
         {
             await consumer.StartAsync(default); await Task.Delay(500);
-            Assert.True(await harness.DispatchAsync() >= 1);                                          // campaign.recipient / campaign.status rows of the run above
+            // the shared workspace also holds the lead.created/consent events of earlier tests (Phase 9 events are now routed to a queue), so the outbox is drained in rounds
+            var dispatched = 0; for (var round = 0; round < 40; round++) { var n = await harness.DispatchAsync(); dispatched += n; if (n == 0) break; }
+            Assert.True(dispatched >= 1);                                                              // campaign.recipient / campaign.status rows of the run above
             var stats = await Eventually(() => w.StatsAsync(camp.Id), s => s.RollupMatchesLive, 30);
             Assert.True(stats.RollupMatchesLive); Assert.Equal(3, stats.Counts.Total);
             Assert.True(await app.Db(db => db.OutboxMessages.IgnoreQueryFilters().AnyAsync(o => o.TenantId == w.TenantId && (o.Type == "campaign.recipient" || o.Type == "campaign.status") && o.Status == LeadPilot.Domain.Messaging.OutboxStatus.Published)));

@@ -1,0 +1,28 @@
+@model WorkflowSettingsViewModel
+@{ ViewData["Title"] = "Workflow limits"; var s = Model.Settings; var f = Model.Form; }
+<div class="mb-3"><h1 class="h3 mb-1">Workflow limits and kill switch</h1><p class="text-muted mb-0">Workspace-wide controls for every workflow.</p></div>
+<div class="alert @(s.KillSwitch ? "alert-danger" : "alert-secondary")" role="status">
+    <strong>Workspace kill switch: @(s.KillSwitch ? "ON" : "off").</strong> @(s.KillSwitch ? (string.IsNullOrWhiteSpace(s.KillSwitchReason) ? "" : s.KillSwitchReason + ". ") + "No workflow starts and running ones stop before their next step." : "Workflows start and run normally.")
+    @if (Model.CanActivate)
+    {
+        <form asp-action="TenantKillSwitch" method="post" class="d-flex flex-wrap gap-2 mt-2">
+            <input type="hidden" name="on" value="@((!s.KillSwitch).ToString().ToLowerInvariant())" />
+            @if (!s.KillSwitch) { <input name="reason" class="form-control w-auto" maxlength="300" placeholder="Reason (optional)" aria-label="Reason" /> }
+            <button type="submit" class="btn @(s.KillSwitch ? "btn-outline-success" : "btn-danger")" data-confirm="@(s.KillSwitch ? "Turn the workspace kill switch off?" : "Turn the workspace kill switch on? Every running workflow stops before its next step.")" data-confirm-label="@(s.KillSwitch ? "Turn off" : "Turn on")">@(s.KillSwitch ? "Turn off" : "Turn on")</button>
+        </form>
+    }
+</div>
+<div class="card"><div class="card-header">Limits</div><div class="card-body">
+    <p class="small text-muted">Used now: @s.RunningNow running · @s.ExecutionsThisMonth runs this month · @s.MessagesLast24Hours workflow messages in the last 24 hours. Workflow messages also count against every WhatsApp account's own limits and the workspace sending limit.</p>
+    @if (Model.CanActivate)
+    {
+        <form asp-action="SaveLimits" method="post" class="row g-3" novalidate>
+            <input type="hidden" name="ExpectedVersion" value="@f.ExpectedVersion" />
+            <div class="col-12 col-md-4"><label class="form-label" for="c">Runs at the same time</label><input id="c" name="MaxConcurrentExecutions" type="number" min="1" max="500" class="form-control" value="@f.MaxConcurrentExecutions" /></div>
+            <div class="col-12 col-md-4"><label class="form-label" for="m">Runs per month (0 = unlimited)</label><input id="m" name="MonthlyExecutionLimit" type="number" min="0" max="1000000" class="form-control" value="@f.MonthlyExecutionLimit" /></div>
+            <div class="col-12 col-md-4"><label class="form-label" for="d">Messages per 24 hours</label><input id="d" name="DailyMessageLimit" type="number" min="0" max="10000" class="form-control" value="@f.DailyMessageLimit" /></div>
+            <div class="col-12"><button class="btn btn-primary" type="submit">Save limits</button></div>
+        </form>
+    }
+    else { <p class="mb-0">@f.MaxConcurrentExecutions at a time · @(f.MonthlyExecutionLimit == 0 ? "unlimited" : f.MonthlyExecutionLimit.ToString()) per month · @f.DailyMessageLimit messages per 24 hours</p> }
+</div></div>

@@ -168,6 +168,7 @@ public sealed class LeadService(CrmContext crm, DuplicateDetector duplicates, IL
             foreach (var t in tagIds) db.LeadTagMaps.Add(LeadTagMap.Create(tenantId, lead.Id, t, now));
             crm.Activity(lead.Id, LeadActivityType.Created, $"Lead created ({lead.PrimarySourceType}).");
             crm.Record("Lead.Created", "Lead", lead.Id, $"Lead '{lead.Name}' created.");
+            Workflows.WorkflowEvents.Emit(crm, LeadPilot.Application.Workflows.WorkflowEventTypes.LeadCreated, lead.Id, contacts.FirstOrDefault(c => c.IsPrimary)?.Id);
             await db.SaveChangesAsync(ct);
             await scorer.RescoreAsync([lead.Id], ct);
             return await GetAsync(lead.Id, ct);
@@ -261,6 +262,7 @@ public sealed class LeadService(CrmContext crm, DuplicateDetector duplicates, IL
         lead.MoveToStage(lead.PipelineId, target.Id, crm.Now, crm.Actor);
         var activityId = crm.Activity(lead.Id, LeadActivityType.StageChanged, $"Stage changed from {from} to {target.Name}.", new { from = lead.PipelineStageId, to = target.Id, fromName = from, toName = target.Name });
         crm.StageChanges.Add(new StageChange(lead.Id, fromStageId, target.Id, activityId));
+        if (string.Equals(target.Name, "Interested", StringComparison.OrdinalIgnoreCase)) Workflows.WorkflowEvents.Emit(crm, LeadPilot.Application.Workflows.WorkflowEventTypes.LeadInterested, lead.Id, detail: target.Name);
         crm.Record("Lead.StageChanged", "Lead", lead.Id, $"Lead '{lead.Name}' moved from '{from}' to '{target.Name}'.");
         return null;
     }

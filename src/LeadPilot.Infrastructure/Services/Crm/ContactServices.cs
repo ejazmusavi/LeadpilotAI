@@ -178,6 +178,9 @@ public sealed class ConsentService(CrmContext crm, ILogger<ConsentService> logge
             var lead = await db.Leads.AsNoTracking().Where(l => l.Id == contact.LeadId && l.TenantId == tenantId).Select(l => l.Name).FirstAsync(ct);
             crm.Activity(contact.LeadId, LeadActivityType.ConsentRecorded, $"Consent {r.Status.ToString().ToLowerInvariant()} for {r.Channel} / {r.Purpose}.");
             crm.Record(r.Status == ConsentStatus.Granted ? "Consent.Granted" : "Consent.Revoked", "ConsentRecord", record.Id, $"Consent {r.Status.ToString().ToLowerInvariant()} for {r.Channel}/{r.Purpose} (lead '{lead}', source: {record.Source}).");
+            // a WhatsApp marketing grant may make the contact eligible: the workflow consumer re-checks real eligibility before anything starts
+            if (r.Status == ConsentStatus.Granted && r.Channel == ConsentChannel.WhatsApp && r.Purpose == ConsentPurpose.Marketing)
+                Workflows.WorkflowEvents.Emit(crm, LeadPilot.Application.Workflows.WorkflowEventTypes.LeadContactEligible, contact.LeadId, contactId);
             await db.SaveChangesAsync(ct);
             var users = await crm.UserNamesAsync([record.RecordedByUserId], ct);
             return Result.Success(new ConsentRecordDto(record.Id, contactId, contact.Name ?? contact.PhoneE164 ?? contact.Email, record.Channel, record.Purpose, record.Status, record.Source,

@@ -1,0 +1,23 @@
+@model ExecutionListViewModel
+@using LeadPilot.Domain.Workflows
+@{ ViewData["Title"] = "Workflow runs"; var q = Model.Query; }
+<div class="mb-3"><h1 class="h3 mb-1">Workflow runs</h1><p class="text-muted mb-0">Every time a workflow ran for a lead, with the log of each step.</p></div>
+<form method="get" asp-action="Index" class="card card-body mb-3"><div class="row g-3 align-items-end">
+    <div class="col-12 col-md-5"><label class="form-label" for="workflowId">Workflow</label><select id="workflowId" name="workflowId" class="form-select"><option value="">All</option>@foreach (var w in Model.Workflows) { <option value="@w.Id" selected="@(q.WorkflowId == w.Id)">@w.Name</option> }</select></div>
+    <div class="col-6 col-md-3"><label class="form-label" for="status">Status</label><select id="status" name="status" class="form-select"><option value="">All</option>@foreach (var s in Enum.GetValues<ExecutionStatus>()) { <option value="@s" selected="@(q.Status == s)">@s</option> }</select></div>
+    <div class="col-12 col-md-2"><button type="submit" class="btn btn-outline-primary">Filter</button> <a asp-action="Index" class="btn btn-link">Clear</a></div>
+</div></form>
+@if (Model.Result.Items.Count == 0) { <div class="card"><partial name="_EmptyState" model='("No runs", "A run is created when an event matches an active workflow, or when a person runs a workflow for a lead.")' /></div> }
+else
+{
+    <div class="card"><div class="table-responsive"><table class="table align-middle mb-0">
+        <thead><tr><th>Workflow</th><th>Lead</th><th>Started by</th><th>Status</th><th>Created</th></tr></thead><tbody>
+        @foreach (var e in Model.Result.Items)
+        {
+            <tr><td><a asp-action="Details" asp-route-id="@e.Id" class="fw-semibold text-decoration-none">@e.WorkflowName</a> <span class="small text-muted">v@(e.VersionNumber)</span></td><td>@e.LeadName</td><td class="small">@e.TriggerKey</td>
+                <td><span class="badge @WorkflowDescribe.StatusClass(e.Status)">@e.Status</span>@if (!string.IsNullOrWhiteSpace(e.StatusReason)) { <div class="small text-muted">@e.StatusReason</div> }</td>
+                <td class="small text-nowrap">@e.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm") UTC</td></tr>
+        }
+        </tbody></table></div></div>
+    <partial name="_Pager" model='new PagerModel(Model.Result.Page, Model.Result.TotalPages, Model.Result.TotalCount, "Index", Model.QueryValues)' />
+}

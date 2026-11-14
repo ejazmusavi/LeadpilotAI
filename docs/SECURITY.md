@@ -117,3 +117,10 @@ Cross-tenant data leakage (IDOR, filter bypass, cache/vector leakage) · credent
 - **Opt-out:** the keyword rule, or the classifier at ≥ 0.8 confidence, triggers `StopMarketingMessages` (same code as the keyword path: suppression, consent revoked, chat blocked, AI paused); the customer is not answered.
 - **Tenancy:** all 10 new entities are tenant-owned and covered by the save guard and query filters; `ConversationNote`, `HandoffEvent` and `AiToolExecution` are append-only.
 - **Limits (not hidden):** the validator proves numbers, offers, actions and links are backed by cited text, not that every sentence is true; the scripted-model tests prove what the platform refuses, not how the live model behaves; WAHA remains unofficial (more automatic replies = more volume = more ban risk).
+
+## Phase 9: automation
+- **No code in workflows:** conditions and actions come from closed catalogs; unknown fields, operators, actions or properties are rejected when saving; size, depth and text length are bounded; regular expressions, scripts and template evaluation do not exist (unit-tested with hostile input, architecture-tested for banned APIs).
+- **Compliance:** a workflow can only message through `WorkflowMessageSender`: always marketing (consent mandatory), eligibility (consent, suppression, opt-out, archived/excluded lead, valid number) re-checked when the step runs and again by the Phase 5 queue and send runner, so consent revoked mid-run or after queueing still stops the message (tested against the fake WAHA's received requests). A compliance block ends the run and is never retried.
+- **No duplicates:** persisted step state + idempotency keys; retry, redelivery, concurrent triggers and crash recovery are tested.
+- **Control:** per-workflow and workspace kill switches, usage limits (runs per month, concurrent runs, messages per day), cancellation; all audited. Versions are immutable once active (domain rule + save guard).
+- **Data:** lead values placed in messages, tasks and notices are sanitised (braces, formatting marks, control and bidi characters removed). Workflow notices are visible only to their recipient.

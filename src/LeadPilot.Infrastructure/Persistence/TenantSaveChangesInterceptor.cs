@@ -2,6 +2,7 @@ using System.Reflection;
 using LeadPilot.Application.Abstractions;
 using LeadPilot.Domain.Common;
 using LeadPilot.Domain.Tenancy;
+using LeadPilot.Domain.Workflows;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -38,6 +39,10 @@ public sealed class TenantSaveChangesInterceptor : SaveChangesInterceptor
         {
             if (entry.Entity is IAppendOnly && entry.State != EntityState.Added)
                 throw new InvalidOperationException($"{entry.Metadata.ShortName()} rows are append-only: they cannot be changed or deleted.");
+
+            // a sealed row (a step or trigger of an activated workflow version) can never be changed or removed
+            if (entry.Entity is ISealable && entry.State is EntityState.Modified or EntityState.Deleted && entry.Property(nameof(ISealable.IsSealed)).OriginalValue is true)
+                throw new InvalidOperationException($"{entry.Metadata.ShortName()} rows of an activated workflow version are immutable: create a new version instead.");
 
             if (entry.Entity is not ITenantOwned) continue;
 

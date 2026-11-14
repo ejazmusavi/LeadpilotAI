@@ -79,3 +79,35 @@ The Application defines `IDemoScheduler`, `ITrialProvisioner`, `IPaymentRequestG
 
 ### 20. "QualifySchool" is `QualifyLead`
 The platform is product-agnostic, so the tool records answers to the **tenant's own qualification questions** (configured per agent) instead of school-specific fields.
+
+## Phase 9 (automation workflow engine) — all **(default taken)**
+
+### 21. Triggers are real domain events through the existing outbox; Phase 10 triggers are declared but have no producer
+- **Options:** fake the demo/trial/payment events, or declare them without a producer.
+- **Why:** README rule 4 (no fake functionality). `demo.booked`, `demo.completed`, `trial.created`, `trial.expires`, `payment.confirmed` are in the trigger catalog and the consumer binding, shown as "available when Phase 10 ships", and an architecture test proves nothing in the product publishes them. A workflow may be prepared with them (saved with a warning); it never starts until Phase 10 publishes the event.
+- **Change:** Phase 10 only has to write the outbox rows (`WorkflowEvents.Emit`).
+
+### 22. "Lead becomes interested" = the pipeline stage named "Interested"; "contact eligible" = a WhatsApp marketing consent that really makes the contact eligible
+Stage names are tenant-editable; the default pipeline has "Interested". The consent event is re-checked against the real eligibility rule by the consumer before anything starts. **Change:** rename the stage, or add another event in `LeadService.ApplyStage`.
+
+### 23. Inactivity is evaluated hourly by Hangfire (`workflow-inactivity`), not by an event
+Open-stage, non-archived leads whose last activity is older than the trigger's days start the workflow once per idle stretch (deterministic trigger-event id → the unique key absorbs repeats). At most 100 leads per workflow per run.
+
+### 24. Workflow messages are always MARKETING and use an approved (active) template
+Consent is therefore mandatory even inside a customer-started conversation. Free text cannot be sent by a workflow. A compliance block ends the run as **Stopped** (never retried); a transient problem (account paused, rate limit, usage limit) retries 2× by default with backoff, then the run is **Failed** and a person can retry. The template is filled from the lead (name, first name, city, country, business name) with sanitised values; the Phase 5 renderer only knew name and phone.
+**Change:** a "service reply" mode would need its own sender and tests.
+
+### 25. Retry never repeats an effect
+Each step has a persisted state and an idempotency key `wf:{execution}:{step}:{generation}`. A message that exists (queued/sent/unknown) is never sent again; only a message that provably failed moves the step to a new generation. Failed-run retry restarts at the failed step with a fresh attempt budget.
+
+### 26. Deactivate stops new starts; running runs finish. The kill switches stop running runs
+Per workflow and per workspace; both cancel runs before their next step (reason recorded). Steps that already ran are never undone (no compensation).
+
+### 27. Defaults for limits and repeat rules
+Workspace: 20 concurrent runs, 5,000 runs per month, 200 workflow messages per 24 h (all editable, `Workflows.Activate`). Per version: re-entry "after the previous run ended", cool-down 0 h, at most 3 starts per lead in 30 days. Definition limits: 25 steps, 5 triggers, 5 if/else steps on one path, conditions nested 5 deep / 40 nodes.
+
+### 28. Closed language, no scripting
+Conditions use a closed field list and operators (no regular expressions, no templates in conditions); update-CRM is limited to city, province, country, district, area; status changes cannot close or disqualify a lead (a person decides). "Notify sales representative" creates an in-app notice (page "My notices") because the platform has no e-mail/push channel for staff yet.
+
+### 29. Schedule demo cannot be activated until Phase 10
+The step exists and talks to the Phase 8 `IDemoScheduler` port; while the port reports "not connected", activation is refused with a clear message and a run that reaches it fails honestly.

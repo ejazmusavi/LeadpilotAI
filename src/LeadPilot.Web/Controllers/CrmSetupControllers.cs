@@ -13,7 +13,7 @@ using Microsoft.Extensions.Options;
 namespace LeadPilot.Web.Controllers;
 
 [Authorize(Policy = PermissionCodes.LeadsImport)]
-public class ImportsController(ILeadImportService imports, ILeadService leads, IPermissionEvaluator permissions, IOptions<CrmOptions> options) : AppController
+public class ImportsController(ILeadImportService imports, ILeadService leads, IPermissionEvaluator permissions, IOptions<CrmOptions> options, LeadPilot.Application.Config.ICustomFieldService customFields) : AppController
 {
     [HttpGet]
     public async Task<IActionResult> Index(int page = 1, CancellationToken ct = default)
@@ -51,13 +51,13 @@ public class ImportsController(ILeadImportService imports, ILeadService leads, I
         if (Reject(preview) is { } r) return r;
         if (preview.IsFailure) { Failure(preview.Error.Message); return RedirectToAction(nameof(Result), new { id }); }
         Crumbs(("Leads", Url.Action("Index", "Leads")), ("Imports", Url.Action(nameof(Index))), ("Map columns", null));
-        return View(new ImportMapViewModel { Preview = preview.Value, Lookups = await leads.LookupsAsync(ct), CanAssign = await permissions.HasAsync(PermissionCodes.LeadsAssign, ct), MaxRows = options.Value.MaxImportRows });
+        return View(new ImportMapViewModel { Preview = preview.Value, Lookups = await leads.LookupsAsync(ct), CanAssign = await permissions.HasAsync(PermissionCodes.LeadsAssign, ct), MaxRows = options.Value.MaxImportRows, CustomFields = await customFields.ListAsync(LeadPilot.Domain.Config.CustomEntityType.Lead, false, ct) });
     }
 
     [HttpPost]
     public async Task<IActionResult> Run(Guid id, List<string?> fields, DuplicatePolicy duplicatePolicy, bool createMissingCategories, Guid? defaultCategoryId, Guid? defaultOwnerUserId, string? sourceName, CancellationToken ct)
     {
-        var mapping = fields.Select((f, i) => new ColumnMapping(i, Enum.TryParse<ImportField>(f, out var parsed) && Enum.IsDefined(parsed) ? parsed : null)).ToList();
+        var mapping = fields.Select((f, i) => f is not null && f.StartsWith("cf:", StringComparison.Ordinal) ? new ColumnMapping(i, null, f[3..]) : new ColumnMapping(i, Enum.TryParse<ImportField>(f, out var parsed) && Enum.IsDefined(parsed) ? parsed : null)).ToList();
         var result = await imports.RunAsync(id, new RunImportRequest(mapping, duplicatePolicy, createMissingCategories, defaultCategoryId, defaultOwnerUserId, sourceName), ct);
         if (result.IsFailure)
         {

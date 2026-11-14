@@ -76,7 +76,7 @@ public sealed class LeadImportService(IEntitlementService entitlements, CrmConte
             crm.Db.ImportJobs.Add(job);
             crm.Record("Import.Uploaded", "ImportJob", job.Id, $"File '{job.FileName}' uploaded for import ({job.TotalRows} rows).");
             await crm.Db.SaveChangesAsync(ct);
-            return Result.Success(BuildPreview(job, rows));
+            return Result.Success(await BuildPreviewAsync(job, rows, ct));
         }, logger);
 
     public async Task<Result<ImportPreviewDto>> PreviewAsync(Guid id, CancellationToken ct = default)
@@ -88,7 +88,7 @@ public sealed class LeadImportService(IEntitlementService entitlements, CrmConte
         try
         {
             var rows = (await ReadAll(job, ct)).Take(7).ToList();
-            return Result.Success(BuildPreview(job, rows));
+            return Result.Success(await BuildPreviewAsync(job, rows, ct));
         }
         catch (SpreadsheetFormatException ex) { return Result.Failure<ImportPreviewDto>(Error.Validation(ex.Message)); }
     }
@@ -100,11 +100,47 @@ public sealed class LeadImportService(IEntitlementService entitlements, CrmConte
         return reader.ReadRows(ms, job.FileType).ToList();
     }
 
-    private ImportPreviewDto BuildPreview(ImportJob job, List<string[]> rows)
+    /// <summary>Checks the row's custom values against the field rules (type, options, range, pattern, required). Each failure becomes a row error; nothing is created for that row.</summary>
+    private static List<(Domain.Config.CustomFieldDefinition Def, Domain.Config.CustomFieldValueData Data)> CheckCustom(Dictionary<string, Domain.Config.CustomFieldDefinition> defs, IReadOnlyDictionary<string, string>? values, out List<string> errors)
+    {
+        errors = []; var ok = new List<(Domain.Config.CustomFieldDefinition, Domain.Config.CustomFieldValueData)>();
+        foreach (var d in defs.Values)
+        {
+            string? raw = null; var mapped = values is not null && values.TryGetValue(d.Key, out raw);
+            if (!mapped && !d.IsRequired) continue;
+            var data = d.Normalize(raw, out var err);
+            if (err is not null) errors.Add(err); else if (data is not null) ok.Add((d, data));
+        }
+        return ok;
+    }
+
+    private void AddCustom(Guid leadId, List<(Domain.Config.CustomFieldDefinition Def, Domain.Config.CustomFieldValueData Data)> values, bool onlyIfMissing)
+    {
+        foreach (var (def, data) in values) crm.Db.CustomFieldValues.Add(Domain.Config.CustomFieldValue.Create(crm.TenantId, def, leadId, data, crm.Now));
+    }
+
+    /// <summary>Merging fills blanks only: a custom field the lead already has is left alone.</summary>
+    private async Task MergeCustomAsync(Guid leadId, List<(Domain.Config.CustomFieldDefinition Def, Domain.Config.CustomFieldValueData Data)> values, CancellationToken ct)
+    {
+        if (values.Count == 0) return;
+        var tenantId = crm.TenantId; var have = (await crm.Db.CustomFieldValues.AsNoTracking().Where(v => v.TenantId == tenantId && v.EntityType == Domain.Config.CustomEntityType.Lead && v.EntityId == leadId).Select(v => v.FieldId).ToListAsync(ct)).ToHashSet();
+        AddCustom(leadId, values.Where(v => !have.Contains(v.Def.Id)).ToList(), onlyIfMissing: true);
+    }
+
+    private async Task<Dictionary<string, string>> CustomHeaderMapAsync(CancellationToken ct)
+    {
+        var tenantId = crm.TenantId;
+        var defs = await crm.Db.CustomFieldDefinitions.AsNoTracking().Where(d => d.TenantId == tenantId && d.EntityType == Domain.Config.CustomEntityType.Lead && d.IsActive).Select(d => new { d.Key, d.Label }).ToListAsync(ct);
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var d in defs) { map.TryAdd(ImportRowMapper.HeaderKey(d.Key), d.Key); map.TryAdd(ImportRowMapper.HeaderKey(d.Label), d.Key); }
+        return map;
+    }
+
+    private async Task<ImportPreviewDto> BuildPreviewAsync(ImportJob job, List<string[]> rows, CancellationToken ct)
     {
         var headers = rows[0].Select((h, i) => string.IsNullOrWhiteSpace(h) ? $"Column {i + 1}" : h.Trim()).ToList();
-        var guess = ImportRowMapper.Guess(headers);
-        var columns = headers.Select((h, i) => new ImportColumnDto(i, h, guess[i].Field)).ToList();
+        var guess = ImportRowMapper.Guess(headers, await CustomHeaderMapAsync(ct));
+        var columns = headers.Select((h, i) => new ImportColumnDto(i, h, guess[i].Field, guess[i].CustomKey)).ToList();
         var sample = rows.Skip(1).Take(5).Select(r => (IReadOnlyList<string>)Enumerable.Range(0, headers.Count).Select(i => i < r.Length ? r[i] : "").ToList()).ToList();
         return new ImportPreviewDto(ToDto(job), columns, sample);
     }
@@ -144,8 +180,11 @@ public sealed class LeadImportService(IEntitlementService entitlements, CrmConte
             if (r.DefaultOwnerUserId is { } defOwner && !await crm.IsActiveMemberAsync(defOwner, ct)) return Result.Failure<ImportJobDto>(Error.Validation("The default owner must be an active member of this workspace."));
             if (r.DefaultCategoryId is { } defCat && !await db.LeadCategories.AnyAsync(c => c.Id == defCat && c.TenantId == tenantId && c.IsActive, ct)) return Result.Failure<ImportJobDto>(Error.Validation("Default category not found."));
 
+            var customDefs = await db.CustomFieldDefinitions.Where(d => d.TenantId == tenantId && d.EntityType == Domain.Config.CustomEntityType.Lead && d.IsActive).ToDictionaryAsync(d => d.Key, StringComparer.Ordinal, ct);
+            if (mapping.FirstOrDefault(m => m.CustomKey is not null && !customDefs.ContainsKey(m.CustomKey)) is { } badCustom) return Result.Failure<ImportJobDto>(Error.Validation($"There is no custom field '{badCustom.CustomKey}'."));
+
             var state = await LoadState(ct);
-            job.Start(r.DuplicatePolicy, JsonSerializer.Serialize(mapping.Where(m => m.Field is not null)), crm.Now);
+            job.Start(r.DuplicatePolicy, JsonSerializer.Serialize(mapping.Where(m => m.Field is not null || m.CustomKey is not null)), crm.Now);
             await db.SaveChangesAsync(ct);
 
             int created = 0, merged = 0, skipped = 0, pending = 0, errors = 0; string? limitMessage = null;
@@ -175,6 +214,12 @@ public sealed class LeadImportService(IEntitlementService entitlements, CrmConte
                         continue;
                     }
                     var data = mapped.Data;
+                    var customChecked = CheckCustom(customDefs, data.Custom, out var customErrors);
+                    if (customErrors.Count > 0)
+                    {
+                        foreach (var message in customErrors) { db.ImportRowErrors.Add(ImportRowError.Validation(tenantId, id, rowNumber, null, message, JsonSerializer.Serialize(rows[i]))); errors++; unsaved++; }
+                        continue;
+                    }
                     var resolveError = ResolveReferences(data, r, state, out var categoryId, out var ownerId, out var stage);
                     if (resolveError is not null)
                     {
@@ -206,7 +251,7 @@ public sealed class LeadImportService(IEntitlementService entitlements, CrmConte
                                 default:
                                     await FlushAsync();
                                     if (first.IsArchived) { db.ImportRowErrors.Add(ImportRowError.Duplicate(tenantId, id, rowNumber, message + " The existing lead is archived, so nothing was merged.", data.ToJson(), first.LeadId, DuplicateResolution.Skipped)); skipped++; unsaved++; break; }
-                                    if (await MergeAsync(first.LeadId, data, job, rowNumber, stage, ct)) { merged++; touched.Add(first.LeadId); unsaved++; }
+                                    if (await MergeAsync(first.LeadId, data, job, rowNumber, stage, ct)) { merged++; touched.Add(first.LeadId); unsaved++; await MergeCustomAsync(first.LeadId, customChecked, ct); }
                                     else { db.ImportRowErrors.Add(ImportRowError.Duplicate(tenantId, id, rowNumber, message + " Nothing new to merge.", data.ToJson(), first.LeadId, DuplicateResolution.Skipped)); skipped++; unsaved++; }
                                     break;
                             }
@@ -231,7 +276,7 @@ public sealed class LeadImportService(IEntitlementService entitlements, CrmConte
                                     limitMessage = made.Error.Message;
                                     db.ImportRowErrors.Add(ImportRowError.Validation(tenantId, id, rowNumber, null, limitMessage, JsonSerializer.Serialize(rows[i]))); errors++; unsaved++;
                                 }
-                                else { touched.Add(made.Value); created++; unsaved++; foreach (var k in keys) pendingKeys.Add(k); }
+                                else { touched.Add(made.Value); created++; unsaved++; foreach (var k in keys) pendingKeys.Add(k); AddCustom(made.Value, customChecked, onlyIfMissing: false); }
                             }
                         }
                     }
@@ -442,7 +487,7 @@ public sealed class LeadImportService(IEntitlementService entitlements, CrmConte
         }, logger);
 }
 
-public sealed class LeadExportService(CrmContext crm, IOptions<CrmOptions> options) : ILeadExportService
+public sealed class LeadExportService(CrmContext crm, IOptions<CrmOptions> options, Application.Config.ICustomFieldService customFields) : ILeadExportService
 {
     private static readonly string[] Headers =
     [
@@ -460,6 +505,8 @@ public sealed class LeadExportService(CrmContext crm, IOptions<CrmOptions> optio
         if (total > max) return Result.Failure<ExportFile>(Error.Validation($"{total} leads match; the export limit is {max}. Narrow the filters and try again."));
 
         var data = new List<IReadOnlyList<string?>>();
+        var customDefs = await customFields.ListAsync(Domain.Config.CustomEntityType.Lead, false, ct);
+        var headers = Headers.Concat(customDefs.Select(d => d.Label)).ToArray();
         var ordered = LeadQueries.Sort(db, filtered, q);
         for (var skip = 0; skip < total; skip += 500)
         {
@@ -474,17 +521,18 @@ public sealed class LeadExportService(CrmContext crm, IOptions<CrmOptions> optio
             var owners = await crm.UserNamesAsync(page.Select(p => p.OwnerUserId), ct);
             var contacts = (await db.Contacts.AsNoTracking().Where(c => c.TenantId == tenantId && !c.IsDeleted && ids.Contains(c.LeadId)).ToListAsync(ct)).ToLookup(c => c.LeadId);
             var tags = (await (from m in db.LeadTagMaps.AsNoTracking() join t in db.LeadTags.AsNoTracking() on m.TagId equals t.Id where m.TenantId == tenantId && ids.Contains(m.LeadId) select new { m.LeadId, t.Name }).ToListAsync(ct)).ToLookup(x => x.LeadId, x => x.Name);
+            var customValues = await customFields.DisplayValuesAsync(Domain.Config.CustomEntityType.Lead, ids, ct);
             foreach (var l in page)
             {
                 var cs = contacts[l.Id].OrderByDescending(c => c.IsPrimary).ThenBy(c => c.CreatedAtUtc).ToList();
                 var p = cs.FirstOrDefault();
                 data.Add([l.Name, l.Category, l.Country, l.Province, l.City, l.District, l.Area, l.Address, l.Website, l.Stage, l.Status, l.OwnerUserId is { } o ? owners.GetValueOrDefault(o) : null,
                     l.Score.ToString(), l.Confidence.ToString(), string.Join("; ", tags[l.Id].OrderBy(t => t)), l.PrimarySourceType.ToString(), l.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm"),
-                    p?.Name, p?.Role, p?.PhoneE164, p?.Email, cs.Count.ToString()]);
+                    p?.Name, p?.Role, p?.PhoneE164, p?.Email, cs.Count.ToString(), .. customDefs.Select(d => customValues.TryGetValue(l.Id, out var cv) && cv.TryGetValue(d.Key, out var disp) ? disp : null)]);
             }
         }
 
-        var bytes = format == ExportFormat.Csv ? SpreadsheetWriter.Csv(Headers, data) : SpreadsheetWriter.Xlsx("Leads", Headers, data);
+        var bytes = format == ExportFormat.Csv ? SpreadsheetWriter.Csv(headers, data) : SpreadsheetWriter.Xlsx("Leads", headers, data);
         var fileName = $"leads-{crm.Now:yyyyMMdd-HHmmss}.{(format == ExportFormat.Csv ? "csv" : "xlsx")}";
         crm.Record("Leads.Exported", "Lead", Guid.Empty, $"{data.Count} lead(s) exported as {format} (archived: {q.Archived}{(string.IsNullOrWhiteSpace(q.Search) ? "" : ", search filter applied")}).");
         await db.SaveChangesAsync(ct);

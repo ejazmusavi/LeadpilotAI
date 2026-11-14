@@ -1,3 +1,4 @@
+using LeadPilot.Application.Crm;
 using LeadPilot.Domain.Config;
 using LeadPilot.Shared.Results;
 
@@ -43,7 +44,7 @@ public enum PackResolution { Keep = 1, Replace = 2 }
 /// <summary>Options of a preview/apply. <see cref="Resolutions"/> overrides the policy for single items ("type:key").</summary>
 public sealed record ApplyPackOptions(
     ConflictPolicy Policy = ConflictPolicy.KeepMine, IReadOnlyDictionary<string, PackResolution>? Resolutions = null,
-    IReadOnlyCollection<string>? Sections = null, string? DefaultPipelineKey = null);
+    IReadOnlyCollection<string>? Sections = null, string? DefaultPipelineKey = null) : TenantScopedRequest;
 
 public sealed record PackSummaryDto(
     Guid Id, string Key, int Version, string Name, string? Description, string? Industry, PackScope Scope, bool IsPublished, bool IsSample, string? Notice, int ItemCount,
@@ -51,7 +52,9 @@ public sealed record PackSummaryDto(
 
 public sealed record PackApplicationDto(Guid Id, string PackKey, int PackVersion, string PackName, PackApplyMode Mode, string ConflictPolicy, string SummaryJson, string? AppliedBy, DateTime AppliedAtUtc);
 
-public sealed record PackExportRequest(string Key, string Name, string? Description, string? Industry, int Version = 1, IReadOnlyCollection<string>? Sections = null);
+public sealed record PackExportRequest(string Key, string Name, string? Description, string? Industry, int Version = 1, IReadOnlyCollection<string>? Sections = null) : TenantScopedRequest;
+
+public sealed record UploadPackRequest(string Json, bool Publish = false) : TenantScopedRequest;
 
 public sealed record PackExportDto(string Json, string FileName, IReadOnlyDictionary<string, int> Counts, IReadOnlyList<string> Warnings);
 

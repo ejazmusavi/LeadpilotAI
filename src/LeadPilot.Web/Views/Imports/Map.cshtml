@@ -20,6 +20,12 @@
                     <td><select name="fields" class="form-select form-select-sm" aria-label="Field for @c.Header">
                         <option value="">Do not import</option>
                         @foreach (var f in fields) { <option value="@f" selected="@(c.SuggestedField == f)">@LeadPilot.Application.Crm.ImportRowMapper.Label(f)</option> }
+                        @if (Model.CustomFields.Count > 0)
+                        {
+                            <optgroup label="Custom fields">
+                            @foreach (var cf in Model.CustomFields) { <option value="cf:@cf.Key" selected="@(c.SuggestedCustomKey == cf.Key)">@cf.Label (@cf.Type)</option> }
+                            </optgroup>
+                        }
                     </select></td>
                 </tr>
             }

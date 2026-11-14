@@ -5,11 +5,13 @@ namespace LeadPilot.Application.Crm;
 
 public enum ImportField { Name = 1, Category, Country, Province, City, District, Area, Address, Website, Tags, Stage, OwnerEmail, ContactName, ContactRole, Phone, Email }
 
-public sealed record ColumnMapping(int ColumnIndex, ImportField? Field);
+/// <summary>A column goes to a standard lead field, or to a custom field (<see cref="CustomKey"/>), or nowhere.</summary>
+public sealed record ColumnMapping(int ColumnIndex, ImportField? Field, string? CustomKey = null);
 
 public sealed record ImportRowData(
     string Name, string? Category, string? Country, string? Province, string? City, string? District, string? Area, string? Address, string? Website,
-    IReadOnlyList<string> Tags, string? Stage, string? OwnerEmail, string? ContactName, string? ContactRole, string? PhoneRaw, string? PhoneE164, string? Email)
+    IReadOnlyList<string> Tags, string? Stage, string? OwnerEmail, string? ContactName, string? ContactRole, string? PhoneRaw, string? PhoneE164, string? Email,
+    IReadOnlyDictionary<string, string>? Custom = null)
 {
     public string ToJson() => JsonSerializer.Serialize(this);
     public static ImportRowData? FromJson(string? json)
@@ -53,12 +55,14 @@ public static class ImportRowMapper
         ImportField.Phone => "Contact phone", ImportField.Email => "Contact e-mail", _ => f.ToString()
     };
 
+    public static string HeaderKey(string? header) => Key(header);
     private static string Key(string? header) => new string((header ?? "").Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
 
     /// <summary>Best-effort mapping by header name; each field is used at most once.</summary>
-    public static IReadOnlyList<ColumnMapping> Guess(IReadOnlyList<string> headers)
+    /// <param name="customFields">Normalized header text (field key or label) → custom field key, for the workspace's lead fields.</param>
+    public static IReadOnlyList<ColumnMapping> Guess(IReadOnlyList<string> headers, IReadOnlyDictionary<string, string>? customFields = null)
     {
-        var used = new HashSet<ImportField>();
+        var used = new HashSet<ImportField>(); var usedCustom = new HashSet<string>();
         var result = new List<ColumnMapping>();
         for (var i = 0; i < headers.Count; i++)
         {
@@ -67,7 +71,9 @@ public static class ImportRowMapper
             foreach (var (field, names) in Aliases)
                 if (!used.Contains(field) && names.Contains(key)) { match = field; break; }
             if (match is { } m) used.Add(m);
-            result.Add(new ColumnMapping(i, match));
+            string? custom = null;
+            if (match is null && customFields is not null && customFields.TryGetValue(key, out var ck) && usedCustom.Add(ck)) custom = ck;
+            result.Add(new ColumnMapping(i, match, custom));
         }
         return result;
     }
@@ -92,6 +98,14 @@ public static class ImportRowMapper
             if (m.Field is not { } f || m.ColumnIndex >= cells.Count) continue;
             var v = cells[m.ColumnIndex]?.Trim();
             if (!string.IsNullOrEmpty(v)) values[f] = (v, m.ColumnIndex < headers.Count ? headers[m.ColumnIndex] : $"Column {m.ColumnIndex + 1}");
+        }
+
+        var custom = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var m in mapping)
+        {
+            if (m.CustomKey is not { } ck || m.Field is not null || m.ColumnIndex >= cells.Count) continue;
+            var v = cells[m.ColumnIndex]?.Trim();
+            if (!string.IsNullOrEmpty(v)) custom[ck] = v;
         }
 
         var issues = new List<RowIssue>();
@@ -146,7 +160,7 @@ public static class ImportRowMapper
         var data = new ImportRowData(
             name ?? string.Empty, Get(ImportField.Category, 100), Get(ImportField.Country, 100), Get(ImportField.Province, 100), Get(ImportField.City, 100),
             Get(ImportField.District, 100), Get(ImportField.Area, 100), Get(ImportField.Address, 500), website, tags, Get(ImportField.Stage, 100), ownerEmail,
-            Get(ImportField.ContactName, 200), Get(ImportField.ContactRole, 100), phoneRaw, phoneE164, email);
+            Get(ImportField.ContactName, 200), Get(ImportField.ContactRole, 100), phoneRaw, phoneE164, email, custom.Count == 0 ? null : custom);
 
         if (issues.Count == 0 && data.ContactName is null && data.PhoneE164 is null && data.Email is null && (data.ContactRole is not null))
             issues.Add(new RowIssue(values[ImportField.ContactRole].Column, "A contact role needs a contact name, phone or e-mail."));

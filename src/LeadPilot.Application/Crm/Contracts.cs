@@ -63,7 +63,8 @@ public class LeadQuery
     public DateTime? CreatedFromUtc { get; set; }
     public DateTime? CreatedToUtc { get; set; }
     /// <summary>Filters on tenant-defined custom fields (only fields marked filterable match). Built from <c>cf.&lt;key&gt;</c>, <c>cf.&lt;key&gt;.min</c>, <c>.max</c> and <c>.contains</c> query parameters.</summary>
-    public List<Config.CustomFieldFilter> CustomFilters { get; set; } = [];
+    public Dictionary<string, string?> Cf { get; set; } = [];
+    public IReadOnlyList<Config.CustomFieldFilter> CustomFilters => Config.CustomFieldFilters.FromQuery(Cf.Select(kv => new KeyValuePair<string, string?>("cf." + kv.Key, kv.Value)));
     public ArchivedFilter Archived { get; set; } = ArchivedFilter.Active;
     public LeadSort Sort { get; set; } = LeadSort.Created;
     public bool Descending { get; set; } = true;
@@ -176,7 +177,7 @@ public sealed record ImportJobDto(
     Guid Id, string FileName, ImportFileType FileType, long FileSizeBytes, ImportStatus Status, DuplicatePolicy DuplicatePolicy, int TotalRows, int CreatedCount, int MergedCount,
     int SkippedDuplicateCount, int PendingDuplicateCount, int ErrorCount, string? FailureReason, DateTime CreatedAtUtc, string? CreatedBy, DateTime? CompletedAtUtc);
 
-public sealed record ImportColumnDto(int Index, string Header, ImportField? SuggestedField);
+public sealed record ImportColumnDto(int Index, string Header, ImportField? SuggestedField, string? SuggestedCustomKey = null);
 public sealed record ImportPreviewDto(ImportJobDto Job, IReadOnlyList<ImportColumnDto> Columns, IReadOnlyList<IReadOnlyList<string>> SampleRows);
 
 public sealed record RunImportRequest(

@@ -30,6 +30,7 @@ public static class LeadFilterQuery
         Add("search", q.Search); Add("categoryId", q.CategoryId); Add("statusId", q.StatusId); Add("stageId", q.StageId); Add("stageKind", q.StageKind);
         Add("ownerUserId", q.OwnerUserId); Add("unassigned", q.Unassigned); Add("tagId", q.TagId); Add("country", q.Country); Add("province", q.Province); Add("city", q.City);
         Add("minScore", q.MinScore); Add("maxScore", q.MaxScore); Add("sourceType", q.SourceType); Add("createdFromUtc", q.CreatedFromUtc); Add("createdToUtc", q.CreatedToUtc);
+        foreach (var f in q.CustomFilters) d[f.Op == "eq" ? "cf." + f.Key : $"cf.{f.Key}.{f.Op}"] = f.Value;
         if (q.Archived != ArchivedFilter.Active) d["archived"] = q.Archived.ToString();
         if (q.Sort != LeadSort.Created) d["sort"] = q.Sort.ToString();
         if (!q.Descending) d["descending"] = "false";
@@ -128,6 +129,7 @@ public class ImportMapViewModel
 {
     public required ImportPreviewDto Preview { get; set; }
     public required CrmLookupsDto Lookups { get; set; }
+    public IReadOnlyList<LeadPilot.Application.Config.CustomFieldDto> CustomFields { get; set; } = [];
     public bool CanAssign { get; set; }
     public DuplicatePolicy DuplicatePolicy { get; set; } = DuplicatePolicy.Skip;
     public bool CreateMissingCategories { get; set; }

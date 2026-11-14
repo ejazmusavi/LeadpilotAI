@@ -33,7 +33,7 @@ public class CustomFieldsController(ICustomFieldService fields) : ApiControllerB
 public sealed record SetCustomValuesRequest(Dictionary<string, string?> Values) : LeadPilot.Application.Crm.TenantScopedRequest;
 
 /// <summary>Values of custom fields on one record. Writing needs the permission that edits that kind of record.</summary>
-[Route("api/v1/custom-fields/values")]
+[Route("api/v1/custom-fields/values"), Authorize]
 public class CustomFieldValuesController(ICustomFieldService fields, IPermissionEvaluator permissions) : ApiControllerBase
 {
     private static string Needed(CustomEntityType t) => t == CustomEntityType.Customer ? PermissionCodes.CustomersManage : PermissionCodes.LeadsUpdate;

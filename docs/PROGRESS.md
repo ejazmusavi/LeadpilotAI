@@ -444,3 +444,60 @@ Sales agent (empty and with the sample), agent edit, tool log, approvals, catalo
 
 ### Next
 Phase 9 (automation workflow engine). Not started.
+
+---
+
+## Phase 9: Automation workflow engine
+
+**Status: completed against fakes and real infrastructure in the sandbox.** Tested with real MySQL 8, real RabbitMQ, real Hangfire-independent engine runs and the test-only fake WAHA. **Never run against a live WAHA, live Claude/Voyage or a real Qdrant; Docker never verified (no daemon).** No real message was sent and no money spent.
+
+### 1. Implemented
+- Workflow, immutable WorkflowVersion (draft → active → retired; steps/triggers sealed on activation, enforced by the save guard), WorkflowTrigger, WorkflowStep, WorkflowExecution (unique per version + event + lead), append-only WorkflowExecutionLog, plus WorkflowTenantSettings (workspace kill switch and limits) and WorkflowNotification.
+- Triggers from real outbox events: lead created (manual, import), lead enriched (discovery merge), contact eligible (WhatsApp marketing consent that really makes the contact eligible), incoming WhatsApp message, customer replies, lead interested (stage "Interested"), lead inactive (hourly Hangfire evaluation). Demo booked/completed, trial created/expires, payment confirmed are declared and wired to the contract, shown as "available when Phase 10 ships", and have no producer.
+- Actions: assign lead, change status, change stage, send approved message, wait, create follow-up task, notify (in-app notice), schedule demo (Phase 8 port; activation refused while not connected), escalate to human (shared Phase 8 handoff), update CRM field, add tag, if/else, stop.
+- Declarative condition language (all/any/not, comparisons, business-hours windows in tenant time zone); validation on save (unknown fields/actions/settings, loops, max steps/triggers/depth, references, repeat rules); re-entry policy, cool-down, per-lead frequency cap.
+- Engine: persisted step state, step-level idempotency keys, bounded retry with backoff and per-step failure policy (retry/skip/stop), safe manual retry, cancellation, crash recovery (lease + minute sweep), per-tenant concurrency / monthly / daily-message limits, workflow and workspace kill switches, simulation without side effects.
+- UI: list, builder (no JSON editing: trigger picker, step add/reorder/remove, condition builder, action forms, template variable preview with sample data, "Check workflow"), details with version history/activate/deactivate/kill switch, version pages, simulation, runs list/detail with retry/cancel and step log, limits and kill switch, My notices; breadcrumbs, empty states, confirm dialogs. API with Swagger.
+
+### 2. Files
+`Domain/Workflows`, `Application/Workflows` (Conditions, Definition, Contracts), `Infrastructure/Workflows` (Engine, Actions, Triggers + Hangfire jobs, Services, RunServices, Support, Events), `Infrastructure/Messaging/Services/WorkflowMessageSender.cs`, `Infrastructure/Agents/HandoffActions.cs` (extracted from the AI tool, behaviour unchanged), `Persistence/WorkflowModel.cs` + migration `Phase9Workflows`, event emission in `LeadService`, `LeadIntakeService`, `ImportExportServices`, `ContactServices`, `InboundMessageHandler`, Api/Web controllers, models, views, `workflow-builder.js`, `workflow-leadpicker.js`. Tests: `WorkflowFlowTests`, `WorkflowSendTests`, `WorkflowControlTests`, `WorkflowSecurityTests`, `WorkflowMigrationTests`, `WorkflowWebTests`, `WorkflowLogicTests`, `WorkflowArchitectureTests`, `WorkflowKit`.
+
+### 3. Database
+Migration `Phase9Workflows`: 8 new tables, no change to existing tables (see DATABASE_DESIGN.md). Verified on an empty database and on a database at the Phase 8 schema holding a tenant, roles and a lead.
+
+### 4. Tests (actual results)
+| | |
+|---|---|
+| Build | succeeded, 0 warnings, 0 errors (TreatWarningsAsErrors) |
+| Unit | 1022 passed, 0 failed, 0 skipped |
+| Architecture | 97 passed, 0 failed |
+| Integration | see the final line of the report; includes 29 new workflow tests; 1 skipped (live Claude/Voyage), as before |
+| Not executed | live WAHA, live Claude/Voyage, real Qdrant, Docker, load tests |
+
+Existing tests changed on purpose: the worker harness now delivers an event to every queue bound to its routing key (as the real topic exchange does), and the real-broker campaign test drains the outbox in rounds because the shared workspace now also holds Phase 9 events. A first full run exposed two real defects that were fixed: a Swagger schema-name clash (`KillSwitchRequest`) and a builder form model that failed validation on server-side properties.
+
+### Playwright render check (Chromium, scratch DB, desktop 1280 px and 390 px)
+Workflow list (empty), builder with five step types and a condition row, "Check workflow" showing the real server-side validation: no JS errors, no horizontal overflow. The builder's save and the other pages are covered by `WorkflowWebTests` (not by screenshots).
+
+### 5. Security and architecture review
+See SECURITY.md / MULTI_TENANCY.md. Highlights: no code execution (closed catalogs, bounded parser, architecture-tested); workflows reach customers only through `WorkflowMessageSender` (always marketing, eligibility re-checked, then the Phase 5 pipeline); consent revoked mid-run or after queueing stops the message; retries/redelivery/concurrent triggers/crash recovery never duplicate (asserted on the fake WAHA's received requests); tenant isolation tested through API, MVC, consumer, job and DB guard.
+
+### 6. Outstanding / known limits
+1. A step that already ran is never undone (no compensation); a message already `Sending` when a run is cancelled still finishes.
+2. A workflow message counts as done when the Phase 5 pipeline has queued it; a later send-time refusal (e.g. suppression after queueing) is visible on the message, not on the run.
+3. Condition builder in the UI edits one level (ALL/ANY of rows, business hours); nested/NOT conditions saved through the API are shown read-only and kept.
+4. Notification of staff is an in-app notice only (no e-mail/push channel exists).
+5. Schedule demo and the five Phase 10 triggers are unavailable until Phase 10; the booking path was only tested with the test-only scheduler double.
+6. Decisions taken by default: docs/OWNER_DECISIONS.md items 21–29.
+
+### 7. Acceptance criteria
+| Criterion | Result |
+|---|---|
+| A workflow can be created and activated | **Passed** (API and UI; versions immutable) |
+| Trigger conditions work | **Passed** (conditions, hostile input, all producible triggers through the real outbox/consumer) |
+| Steps execute in the intended order | **Passed** (order, branches, waits via the scheduler and clock) |
+| Failed steps can be retried safely | **Passed** (no duplicate message on the fake WAHA across retry, redelivery, crash recovery) |
+| A workflow cannot send messages to suppressed contacts | **Passed** (also no consent, revoked, opted out, revoked mid-run and after queueing, archived lead) |
+
+### Next
+Phase 10 (demo, trial and customer conversion). Prerequisite: register real `IDemoScheduler`, `ITrialProvisioner`, `IPaymentRequestGateway` and publish the five reserved events through `WorkflowEvents.Emit`. Not started.

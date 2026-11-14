@@ -18,11 +18,12 @@ public static class MessagingTopology
         new($"{o.Prefix}.inbound", "messaging.inbound", [MessagingEventTypes.MessageReceived]),
         new($"{o.Prefix}.status", "messaging.status", [MessagingEventTypes.MessageStatusChanged, MessagingEventTypes.AccountStatusChanged]),
         new($"{o.Prefix}.campaigns", "campaigns.events", [CampaignEventTypes.RecipientChanged, CampaignEventTypes.StatusChanged]),
+        new($"{o.Prefix}.ai", "ai.reply", [MessagingEventTypes.AiReplyRequested]),
     ];
 
     /// <summary>
     /// Idempotent declaration. Per consumer queue Q: Q (rejected messages dead-letter to Q.dlq), Q.dlq, and one TTL retry queue per backoff step that dead-letters back into Q.
-    /// <c>ai.reply.requested</c> is published to the exchange but no queue is bound yet (Phase 7 binds its own); RabbitMQ drops unroutable messages by design.
+    /// <c>ai.reply.requested</c> is consumed from <c>{prefix}.ai</c> (Phase 7).
     /// </summary>
     public static async Task DeclareAsync(IChannel channel, RabbitMqOptions o, CancellationToken ct)
     {

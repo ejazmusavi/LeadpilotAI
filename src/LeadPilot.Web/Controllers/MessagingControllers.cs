@@ -1,3 +1,4 @@
+using LeadPilot.Application.Ai;
 using LeadPilot.Application.Common;
 using LeadPilot.Application.Contracts;
 using LeadPilot.Application.Messaging;
@@ -151,7 +152,7 @@ public class ChannelsController(IChannelAccountService accounts, IWebhookEventSe
 
 /// <summary>A working minimal inbox: list with filters, thread with delivery status, reply. The full hand-off experience is Phase 8.</summary>
 [Authorize(Policy = PermissionCodes.ConversationsView)]
-public class ConversationsController(IConversationService conversations, IChannelAccountService accounts, IMessageTemplateService templates, IPermissionEvaluator permissions) : AppController
+public class ConversationsController(IConversationService conversations, IChannelAccountService accounts, IMessageTemplateService templates, IPermissionEvaluator permissions, IAiSuggestionService suggestions) : AppController
 {
     [HttpGet]
     public async Task<IActionResult> Index([FromQuery] ConversationQuery query, CancellationToken ct)
@@ -178,7 +179,32 @@ public class ConversationsController(IConversationService conversations, IChanne
         var msgs = await conversations.MessagesAsync(id, page, 30, ct);
         Crumbs(("Conversations", Url.Action(nameof(Index))), (conv.Value.Summary.PeerName ?? conv.Value.Summary.PeerPhoneE164 ?? "Conversation", null));
         var canReply = await permissions.HasAsync(PermissionCodes.ConversationsReply, ct);
-        return View(new ThreadViewModel { Conversation = conv.Value, Messages = msgs.Value, CanReply = canReply, Templates = canReply ? await templates.ListAsync(activeOnly: true, ct) : [] });
+        var latest = await suggestions.LatestAsync(id, ct);
+        return View(new ThreadViewModel { Conversation = conv.Value, Messages = msgs.Value, CanReply = canReply, Templates = canReply ? await templates.ListAsync(activeOnly: true, ct) : [], Suggestion = latest.IsSuccess ? latest.Value : null, DraftText = TempData["AiDraft"] as string });
+    }
+
+    /// <summary>Takes the AI's suggestion as the starting point of a reply: it is marked as used and put into the reply box for the person to review, edit and send (the send itself is the normal, consent-checked reply).</summary>
+    [HttpPost, Authorize(Policy = PermissionCodes.ConversationsReply)]
+    public async Task<IActionResult> UseSuggestion(Guid id, Guid suggestionId, CancellationToken ct)
+    {
+        var s = await suggestions.GetAsync(suggestionId, ct);
+        if (Reject(s) is { } rej) return rej;
+        if (s.Value.ConversationId != id) return NotFound();
+        var r = await suggestions.MarkUsedAsync(suggestionId, ct);
+        if (r.IsFailure) Failure(r.Error.Message);
+        else { TempData["AiDraft"] = s.Value.DraftText; Success("The AI's suggestion is in the reply box. Read it, change what you need, then send."); }
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    [HttpPost, Authorize(Policy = PermissionCodes.ConversationsReply)]
+    public async Task<IActionResult> DismissSuggestion(Guid id, Guid suggestionId, CancellationToken ct)
+    {
+        var s = await suggestions.GetAsync(suggestionId, ct);
+        if (Reject(s) is { } rej) return rej;
+        if (s.Value.ConversationId != id) return NotFound();
+        var r = await suggestions.DismissAsync(suggestionId, ct);
+        if (r.IsFailure) Failure(r.Error.Message); else Success("Suggestion dismissed.");
+        return RedirectToAction(nameof(Details), new { id });
     }
 
     [HttpPost, Authorize(Policy = PermissionCodes.ConversationsReply)]

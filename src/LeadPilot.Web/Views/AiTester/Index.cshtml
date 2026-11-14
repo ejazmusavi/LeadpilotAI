@@ -1,0 +1,51 @@
+@model AiTesterViewModel
+@using LeadPilot.Domain.Ai
+@{ ViewData["Title"] = "Retrieval tester"; var r = Model.Result; var a = r?.Answer; }
+<h1 class="h3 mb-1">Retrieval tester</h1>
+<p class="text-muted">Ask a question the way a customer would. You see which passages of <strong>your</strong> knowledge were found (and how well they match) and what the AI would answer. Nothing is sent to anyone.</p>
+@if (!Model.Configured) { <div class="alert alert-warning" role="alert">The AI is not set up yet. Save the provider keys under <a asp-controller="AiSettings" asp-action="Index">AI settings</a> first.</div> }
+else if (Model.IndexedDocuments == 0) { <div class="alert alert-info" role="alert">No document is indexed yet, so nothing can be found. <a asp-controller="Knowledge" asp-action="Index">Open the knowledge base</a>.</div> }
+@if (Model.Error is not null) { <div class="alert alert-danger" role="alert">@Model.Error</div> }
+<form asp-action="Ask" method="post" data-loading-form novalidate class="card card-body mb-3">
+    <div class="mb-2"><label asp-for="Question" class="form-label">Question</label><textarea asp-for="Question" class="form-control" rows="3" maxlength="2000" placeholder="e.g. How much does the Standard plan cost per month?"></textarea><span asp-validation-for="Question" class="text-danger"></span></div>
+    <div class="form-check mb-2"><input class="form-check-input" type="checkbox" asp-for="RetrieveOnly" /><label class="form-check-label" asp-for="RetrieveOnly">Only show the matching passages (no AI answer; uses embedding tokens only)</label></div>
+    <div><button class="btn btn-primary" type="submit"><span class="spinner-border spinner-border-sm d-none" aria-hidden="true"></span> Ask</button> <span class="small text-muted ms-2">An answer uses AI tokens of this workspace (see AI usage).</span></div>
+</form>
+@if (r is not null)
+{
+    @if (a is not null)
+    {
+        <div class="card mb-3 @(a.Decision == AiDecision.Draft ? "border-success" : "border-warning")"><div class="card-header d-flex flex-wrap gap-2 align-items-center">
+            <strong>Answer</strong>
+            <span class="badge @(a.Decision == AiDecision.Draft ? "text-bg-success" : "text-bg-warning")">@(a.Decision == AiDecision.Draft ? "Would suggest this reply" : "Would hand to a person")</span>
+            <span class="badge text-bg-light border">intent: @a.Intent.Replace('_', ' ')</span><span class="badge text-bg-light border">confidence @a.Confidence.ToString("0.00")</span>
+            @if (a.InjectionSuspected) { <span class="badge text-bg-danger">manipulation attempt suspected</span> }
+            <span class="text-muted small ms-auto">@a.LatencyMs ms · @a.Model</span></div>
+        <div class="card-body">
+            @if (!string.IsNullOrWhiteSpace(a.ReplyText)) { <p style="white-space:pre-wrap" class="mb-2">@a.ReplyText</p> } else { <p class="text-muted mb-2">No reply text.</p> }
+            @if (a.EscalationReason is not null) { <p class="small mb-1"><strong>Why a person:</strong> @a.EscalationReason</p> }
+            @if (a.NextAction is not null) { <p class="small mb-1"><strong>Suggested next step:</strong> @a.NextAction</p> }
+            @if (a.Citations.Count > 0) { <p class="small mb-1"><strong>Sources:</strong> @foreach (var c in a.Citations) { <a asp-controller="Knowledge" asp-action="Document" asp-route-id="@c.DocumentId" class="me-2">@c.DocumentTitle (v@(c.VersionNumber), passage @(c.Ordinal + 1))</a> }</p> }
+            @if (a.Issues.Count > 0) { <div class="alert alert-warning small mt-2 mb-1"><strong>Safety checks rejected the AI's wording:</strong><ul class="mb-0">@foreach (var i in a.Issues) { <li><code>@i.Code</code> @i.Detail</li> }</ul></div> }
+            @if (a.Extracted.Count > 0) { <p class="small mb-1"><strong>Facts the customer stated:</strong> @string.Join("; ", a.Extracted.Select(e => e.Key + ": " + e.Value))</p> }
+            @if (a.ToolRequests.Count > 0) { <p class="small text-muted mb-0">Actions requested by the AI (not executed in the tester): @string.Join(", ", a.ToolRequests.Select(t => t.Name))</p> }
+        </div></div>
+    }
+    <div class="card"><div class="card-header">Matching passages @if (r.Retrieval.Chunks.Count > 0) { <span class="text-muted small">(@r.Retrieval.Chunks.Count)</span> }</div>
+        @if (r.Retrieval.Chunks.Count == 0)
+        {
+            <partial name="_EmptyState" model='(r.Retrieval.Outcome == RetrievalOutcome.NotConfigured ? "Not configured" : "Nothing found", r.Retrieval.Note ?? "No passage of your knowledge matches well enough (below the minimum score in AI settings). The AI would say it does not know and hand over to a person.")' />
+        }
+        else
+        {
+            <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Score</th><th>Passage</th><th>Document</th></tr></thead><tbody>
+            @foreach (var c in r.Retrieval.Chunks)
+            {
+                <tr><td><span class="badge @(c.Score >= 0.6 ? "text-bg-success" : c.Score >= 0.45 ? "text-bg-primary" : "text-bg-secondary")">@c.Score.ToString("0.000")</span></td>
+                    <td style="white-space:pre-wrap;overflow-wrap:anywhere;max-width:40rem">@(c.Heading is null ? "" : "# " + c.Heading + "\n")@c.Text</td>
+                    <td class="small"><a asp-controller="Knowledge" asp-action="Document" asp-route-id="@c.DocumentId">@c.DocumentTitle</a><div class="text-muted">v@(c.VersionNumber) · passage @(c.Ordinal + 1) · @c.SourceName</div></td></tr>
+            }
+            </tbody></table></div>
+        }
+    </div>
+}

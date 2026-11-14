@@ -135,3 +135,12 @@ Automating WhatsApp Web violates WhatsApp's terms for unofficial clients; **acco
 
 ## Phase 6 — campaigns and the gateway
 Campaigns add **no** gateway calls: every message goes through the Phase 5 queue and the single `WahaGateway.SendTextAsync` path (never retried automatically; unknown outcomes are reconciled, never re-sent). Pacing relies on the account's own limits plus a campaign batch pause (default 60–180 s random, hard minimum 15 s). **Not verified live**: how WAHA behaves under a real campaign (ack timing, reachout timelocks for new contacts, `@lid` ids) is only known from the documentation; the first live run should use a small audience on a disposable number.
+
+
+## Phase 7: AI providers (Claude, Voyage AI, Qdrant)
+| Provider | Used for | Status |
+|---|---|---|
+| Anthropic Claude Messages API (`POST /v1/messages`, `anthropic-version: 2023-06-01`, per-tenant `x-api-key`) | intent/query triage, grounded answers, conversation summaries | Adapter **tested against a local server that speaks the API's shape; NOT verified against the live service** (no key in the sandbox). Prompt caching: `cache_control: ephemeral` on the stable system block. No sampling parameters are sent (current models reject non-default values). Refusals (`stop_reason: refusal`) are final and escalate. Models: `claude-sonnet-5-5` (answers), `claude-haiku-5-5` (triage/summaries), alternatives `claude-opus-5-5`, `claude-fable-5-2`. |
+| Voyage AI embeddings (`POST /v1/embeddings`, Bearer per-tenant key, `input_type` document/query) | passage and query vectors | Same: local fake only. Default `voyage-3.5`. |
+| Qdrant (REST) | optional vector store | Adapter tested against a local Qdrant-compatible fake; **no real Qdrant instance exercised**. |
+Provider terms: customer message text is sent to Anthropic when the AI answers; check the data-processing terms of your Anthropic account (retention, zero-data-retention eligibility of the chosen model) before enabling the AI for a workspace.

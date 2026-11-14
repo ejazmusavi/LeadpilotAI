@@ -117,3 +117,20 @@ Guid storage format; Pomelo provider version for .NET 10; Hangfire MySQL storage
 
 ## Phase 6 — campaign tables (as built, migration `Phase6Campaigns`)
 `Campaigns` (status, schedule UTC + zone, template/account/parent FKs, audience JSON + version, limits, approval fields, lease, `Version` concurrency token), `CampaignAudienceSnapshots`, `CampaignRecipients` (**unique `(CampaignId, ContactId)`**, `(TenantId, CampaignId, Status, Sequence)`, `(TenantId, ContactId, QueuedAtUtc)` for the cool-down, `EligibilityJson` with selection and send decisions, `Round`), `CampaignExecutionLogs` (append-only), `CampaignStatsRollups` (unique per campaign), `CampaignConversions` (unique `(TenantId, RecipientId, Kind, ReferenceId)`), `CampaignUsageEntries` (append-only, unique `(TenantId, RecipientId, Round)`), `CampaignTenantSettings` (unique per tenant). `Messages` gained nullable `CampaignId` (FK) and `CampaignRecipientId` (indexed, no FK: it would be circular with `CampaignRecipients.MessageId`). Every table has `TenantId` (FK, index, query filter) and every FK is checked for same-tenant by the SaveChanges guard.
+
+
+## Phase 7 tables (migration `Phase7AiKnowledge`, all tenant-owned with a mandatory FK to Tenants and `(TenantId, …)` indexes)
+| Table | Notes |
+|---|---|
+| `KnowledgeSources` | upload / text / website; website URL, last sync + error |
+| `KnowledgeDocuments` | title, kind, `CurrentVersionId`, `LatestVersionNumber`, index status, `IsEnabled`; index `(TenantId, SourceId, SourceUrl)` |
+| `DocumentVersions` | immutable `Content` (longtext), hash, status, `IndexingStartedAtUtc`; **unique (DocumentId, VersionNumber)** |
+| `DocumentChunks` | only the current version's passages exist; **unique (VersionId, Ordinal)** |
+| `EmbeddingRecords` | L2-normalised float32 `Vector` (longblob), model, dimensions, store name; **unique (ChunkId, Model)** — the MySQL store searches these rows; Qdrant holds a second copy |
+| `RetrievalLogs` | append-only; query hash + length (query text only for staff-typed tester questions), result ids/scores, outcome, latency |
+| `AiTenantSettings` | one row per tenant (**unique TenantId**); keys stored as `enc:v1:` ciphertext + last-4 hint; models, thresholds, limits, tone, escalation keywords; concurrency token |
+| `AiUsageEntries` | append-only ledger; tokens incl. cache read/write, estimated cost `decimal(18,8)` (see OWNER_DECISIONS 9), success/error code |
+| `ConversationSummaries` | rolling summary; **unique (TenantId, ConversationId)** |
+| `AiInteractions` | the suggestion/escalation of one AI run; **unique (TenantId, TriggerMessageId)** = one run per inbound message, FK to Conversation and Message |
+| `AiToolExecutions` | append-only tool log (allowed/denied/failed + redacted arguments) |
+Deleting a document removes versions, passages, embedding rows and vectors (vectors first; if the store is down nothing is deleted and the user is told). Delete behaviours are Restrict; the application deletes in dependency order inside a transaction. Applied and checked on an empty MySQL 8 database and on a database at the Phase 6 schema holding a tenant, roles, a lead and a contact (`AiMigrationTests`).

@@ -181,3 +181,31 @@ Hangfire queue `campaigns` is processed by the Worker; recurring job `campaign-s
 5. Pause, resume, cancel or use the workspace **kill switch** at any time.
 
 Tests: `CampaignKit` (integration) provides `CampaignWorld` (a tenant with a connected fake-WAHA account, a template and a worker harness that ticks and runs the Phase 5 send jobs deterministically with an adjustable clock) and a recording campaign scheduler. Two tests use the real Hangfire server and the real broker. Migration: `Phase6Campaigns` is the only new migration; `CampaignMigrationTests` upgrades a Phase 5 database with data.
+
+
+## Configuration added in Phase 7
+| Key | Where | Meaning |
+|---|---|---|
+| `Ai:Claude:BaseUrl` / `ApiVersion` / `TimeoutSeconds` (60) / `MaxRetries` (2) / `RetryBaseDelayMs` / `BreakerFailureThreshold` (5) / `BreakerOpenSeconds` (30) / `ServerSideFallback` (false) | Web, Api, Worker | Claude adapter. Keys are NOT configuration: each workspace saves its own under AI settings (encrypted). |
+| `Ai:Voyage:*` | same | Embedding adapter. |
+| `Ai:VectorStore:Provider` (`mysql` \| `qdrant`) / `MysqlMaxScan` (20000) / `Qdrant:BaseUrl` / `Qdrant:ApiKey` / `Qdrant:CollectionPrefix` | all | Vector store. The Qdrant key is a platform secret (environment/secret store). Switching store or embedding model needs a re-index. |
+| `Ai:Ingestion:*` | all | Upload size (10 MB), PDF pages (300), DOCX limits, chunk sizes (900/1400/120), max passages per document (2000), website pages (10), documents per workspace (500), stale-indexing takeover (15 min). |
+| `Ai:DefaultMonthlyTokenLimit` (2,000,000) / `MaxReplyTokens` / `MaxMessageChars` / `Ai:Prices:<model>` | all | Limits and the ESTIMATED price table of the usage page (USD per million tokens). |
+Hangfire queue `knowledge` is processed by the Worker; recurring job `knowledge-sweep` (every 5 minutes). RabbitMQ gets a fourth consumer queue `{Prefix}.ai` (+ retry/DLQ) for `ai.reply.requested`. `DataProtection:KeysPath` must be shared by Web, Api and Worker (the Worker decrypts the workspace keys).
+
+## Using the AI locally
+1. Sign in as an administrator → **AI → AI settings**: paste your Anthropic key and Voyage AI key (stored encrypted), press *Test connection* on each, then *Turn on*.
+2. **AI → Knowledge base → Add knowledge**: write text, upload a file or add your website. The Worker indexes it (status Waiting → Indexed).
+3. **AI → Retrieval tester**: ask a question; check passages, scores and the answer.
+4. Open a conversation, set **AI mode: Active**, and have a customer write: a suggested reply (or an escalation) appears above the reply box; *Use as reply draft* puts it into the box for a person to check and send. Nothing is sent automatically.
+
+## Runbook: live check of Claude and Voyage (NOT performed; needs real keys and spends real money)
+Cost: roughly 40 short Claude calls (about 0.3–1 USD with the default models) and a few hundred embedding tokens. Use a disposable workspace.
+1. Put the keys in the **environment of the shell only** (never in a file or in git): `ANTHROPIC_API_KEY`, `VOYAGE_API_KEY`.
+2. Quick manual check: AI settings → paste each key → *Test connection* → expect "Connected: model … answered" / "returned a 1024-dimension vector". 401 = wrong key, 400 = unknown model name, 429 = quota.
+3. Evaluation: `LEADPILOT_EVAL_LIVE=1 ANTHROPIC_API_KEY=… VOYAGE_API_KEY=… LEADPILOT_TEST_CONNECTION=… dotnet test tests/LeadPilot.IntegrationTests --filter LIVE_` runs the 12-scenario skeleton (`tests/LeadPilot.IntegrationTests/Evaluation/sales-scenarios.json`) against the real services and prints a per-category report (passes when at least 80% of the scenarios pass; without the variables it is reported as SKIPPED, not passed).
+4. Verify in the usage page that cache read tokens appear on the second request of the same workspace (prompt caching) and that costs look plausible; then consider `Ai:Claude:ServerSideFallback=true`.
+5. Report anything that differs from the fake (response shapes, model names, latency) so the adapter can be corrected.
+
+## Tests for Phase 7
+`dotnet test` as before (MySQL and RabbitMQ variables as in Phase 5). Test doubles live in the test projects only: `ScriptedLlm` (grounded by default; overridden per test to invent prices, obey injections, leak, fail), `FakeEmbeddingProvider` (hashed bag of words), `RecordingAiScheduler`, `ScriptedWebsite`, `FakeProviderServer` (speaks the Claude/Voyage shapes so the REAL adapters run end to end), `FakeQdrantServer`, `TamperedVectorStore`. Migration: `Phase7AiKnowledge` is the only new migration; `AiMigrationTests` upgrades a Phase 6 database that holds data.

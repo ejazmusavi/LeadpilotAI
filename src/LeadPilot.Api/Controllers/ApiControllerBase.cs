@@ -15,12 +15,12 @@ public abstract class ApiControllerBase : ControllerBase
         {
             "not_found" => StatusCodes.Status404NotFound,
             "forbidden" or "tenant_suspended" => StatusCodes.Status403Forbidden,
-            "conflict" or "duplicate" or "connector_not_configured" or "account_paused" or "account_not_connected" or "not_eligible" or "suppressed" or "opted_out" or "new_contacts_blocked" => StatusCodes.Status409Conflict,
+            "conflict" or "duplicate" or "ai_not_configured" or "connector_not_configured" or "account_paused" or "account_not_connected" or "not_eligible" or "suppressed" or "opted_out" or "new_contacts_blocked" => StatusCodes.Status409Conflict,
             "usage_limit_reached" or "rate_limited" => StatusCodes.Status429TooManyRequests,
             "too_large" => StatusCodes.Status413PayloadTooLarge,
             "invalid_credentials" or "invalid_refresh_token" or "sign_in_required" => StatusCodes.Status401Unauthorized,
             "locked_out" => StatusCodes.Status423Locked,
-            "email_failed" => StatusCodes.Status502BadGateway,
+            "email_failed" or "ai_provider_error" => StatusCodes.Status502BadGateway,
             _ => StatusCodes.Status400BadRequest,
         };
         var problem = new ProblemDetails { Status = status, Title = result.Error.Code, Detail = result.Error.Message };

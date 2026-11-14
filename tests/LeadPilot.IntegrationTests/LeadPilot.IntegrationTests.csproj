@@ -29,4 +29,8 @@
     <ProjectReference Include="..\..\src\LeadPilot.Web\LeadPilot.Web.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="Evaluation\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

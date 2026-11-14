@@ -25,6 +25,11 @@ public static class PermissionCodes
     public const string ConversationsView = "Conversations.View";
     public const string ConversationsReply = "Conversations.Reply";
     public const string AgentsManage = "Agents.Manage";
+    public const string KnowledgeView = "Knowledge.View";
+    public const string KnowledgeManage = "Knowledge.Manage";
+    public const string AiView = "Ai.View";
+    public const string AiTest = "Ai.Test";
+    public const string AiSettings = "Ai.Settings";
     public const string ReportsView = "Reports.View";
     public const string UsersManage = "Users.Manage";
     public const string SettingsManage = "Settings.Manage";
@@ -73,6 +78,11 @@ public static class PermissionCatalog
         new(PermissionCodes.ConversationsView, "View conversations", "Conversations", "Read conversations."),
         new(PermissionCodes.ConversationsReply, "Reply to conversations", "Conversations", "Send replies and take over from the AI agent."),
         new(PermissionCodes.AgentsManage, "Manage AI agents", "AI", "Configure AI agents and knowledge."),
+        new(PermissionCodes.KnowledgeView, "View knowledge base", "AI", "See knowledge sources, documents, versions and their index status."),
+        new(PermissionCodes.KnowledgeManage, "Manage knowledge base", "AI", "Add, edit, re-index, disable and delete knowledge documents and sources (the AI answers from them)."),
+        new(PermissionCodes.AiView, "View AI activity and usage", "AI", "See AI suggestions, escalations, tool logs and token usage."),
+        new(PermissionCodes.AiTest, "Use the retrieval tester", "AI", "Ask test questions against the knowledge base (uses AI tokens)."),
+        new(PermissionCodes.AiSettings, "Manage AI settings", "AI", "Store AI provider keys, choose models and thresholds, enable AI for the workspace."),
         new(PermissionCodes.ReportsView, "View reports", "Reports", "See analytics and reports."),
         new(PermissionCodes.UsersManage, "Manage users and roles", "Administration", "Invite users, assign roles and edit custom roles."),
         new(PermissionCodes.SettingsManage, "Manage settings", "Administration", "Edit workspace profile and settings."),
@@ -124,7 +134,8 @@ public static class SystemRoles
         new(TenantStaff, "Day-to-day work with leads and conversations.", false,
         [
             PermissionCodes.LeadsView, PermissionCodes.LeadsCreate, PermissionCodes.LeadsUpdate, PermissionCodes.CampaignsView,
-            PermissionCodes.ConversationsView, PermissionCodes.ConversationsReply, PermissionCodes.ReportsView, PermissionCodes.DiscoveryView, PermissionCodes.ChannelsView
+            PermissionCodes.ConversationsView, PermissionCodes.ConversationsReply, PermissionCodes.ReportsView, PermissionCodes.DiscoveryView, PermissionCodes.ChannelsView,
+            PermissionCodes.KnowledgeView
         ]),
         new(SalesManager, "Manages the sales team, leads and conversations.", false,
         [
@@ -133,12 +144,13 @@ public static class SystemRoles
             PermissionCodes.LeadsImport, PermissionCodes.LeadsExport, PermissionCodes.LeadsAssign, PermissionCodes.ConsentManage,
             PermissionCodes.SuppressionManage, PermissionCodes.PipelinesManage, PermissionCodes.ScoringManage,
             PermissionCodes.DiscoveryView, PermissionCodes.DiscoveryRun, PermissionCodes.DiscoveryReview, PermissionCodes.DiscoveryManage,
-            PermissionCodes.ChannelsView, PermissionCodes.MessagesSend, PermissionCodes.CampaignsApprove, PermissionCodes.AudiencesPreview
+            PermissionCodes.ChannelsView, PermissionCodes.MessagesSend, PermissionCodes.CampaignsApprove, PermissionCodes.AudiencesPreview,
+            PermissionCodes.KnowledgeView, PermissionCodes.KnowledgeManage, PermissionCodes.AiView, PermissionCodes.AiTest
         ]),
         new(SalesAgent, "Works leads and conversations.", false,
         [
             PermissionCodes.LeadsView, PermissionCodes.LeadsCreate, PermissionCodes.LeadsUpdate, PermissionCodes.ConversationsView, PermissionCodes.ConversationsReply,
-            PermissionCodes.DiscoveryView, PermissionCodes.ChannelsView
+            PermissionCodes.DiscoveryView, PermissionCodes.ChannelsView, PermissionCodes.KnowledgeView
         ]),
         new(MarketingManager, "Plans and runs campaigns.", false,
         [
@@ -146,11 +158,11 @@ public static class SystemRoles
             PermissionCodes.CampaignsCancel, PermissionCodes.CampaignsDelete, PermissionCodes.AudiencesPreview,
             PermissionCodes.ConversationsView, PermissionCodes.ReportsView,
             PermissionCodes.LeadsExport, PermissionCodes.ConsentManage, PermissionCodes.SuppressionManage, PermissionCodes.DiscoveryView, PermissionCodes.DiscoveryRun,
-            PermissionCodes.ChannelsView, PermissionCodes.MessagesSend
+            PermissionCodes.ChannelsView, PermissionCodes.MessagesSend, PermissionCodes.KnowledgeView, PermissionCodes.AiTest
         ]),
         new(ReadOnly, "Can view everything operational but change nothing.", false,
         [
-            PermissionCodes.LeadsView, PermissionCodes.CampaignsView, PermissionCodes.ConversationsView, PermissionCodes.ReportsView
+            PermissionCodes.LeadsView, PermissionCodes.CampaignsView, PermissionCodes.ConversationsView, PermissionCodes.ReportsView, PermissionCodes.KnowledgeView
         ]),
     ];
 

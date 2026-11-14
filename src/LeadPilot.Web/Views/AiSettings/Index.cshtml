@@ -1,0 +1,68 @@
+@model AiSettingsViewModel
+@{ ViewData["Title"] = "AI settings"; var s = Model.Settings; var f = Model.Form; }
+<h1 class="h3 mb-1">AI settings</h1>
+<p class="text-muted">The AI reads your customers' WhatsApp messages and drafts replies from your knowledge base for your team to review. <strong>It never sends anything by itself.</strong></p>
+<div class="card mb-3 @(s.IsEnabled ? "border-success" : "")"><div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <div><div class="fw-semibold">AI is @(s.IsEnabled ? "ON" : "off") for this workspace</div><div class="small text-muted">@(s.IsEnabled ? "Conversations switched to AI mode receive a suggested reply (or an escalation) for your team." : "Nothing is analysed or drafted until it is turned on. Both keys below are required.")</div></div>
+    <form asp-action="SetEnabled" method="post"><input type="hidden" name="enabled" value="@((!s.IsEnabled).ToString().ToLowerInvariant())" /><button class="btn @(s.IsEnabled ? "btn-outline-secondary" : "btn-primary")" type="submit" @(!s.IsEnabled && !(s.HasKey && s.HasEmbeddingKey) ? "disabled" : "")>@(s.IsEnabled ? "Turn off" : "Turn on")</button></form>
+</div></div>
+<div class="row g-3 mb-3">
+    @foreach (var kind in new[] { (Name: "Chat", Title: "AI provider key (Claude)", Has: s.HasKey, Hint: s.KeyHint, Help: "Anthropic API key used to understand and answer messages."), (Name: "Embedding", Title: "Embedding key (Voyage AI)", Has: s.HasEmbeddingKey, Hint: s.EmbeddingKeyHint, Help: "Voyage AI API key used to index your documents and find the right passages.") })
+    {
+        <div class="col-12 col-lg-6"><div class="card h-100"><div class="card-header">@kind.Title</div><div class="card-body">
+            <p class="small text-muted">@kind.Help Stored encrypted for this workspace, never shown again and never written to logs.</p>
+            @if (kind.Has) { <p class="mb-2"><span class="badge text-bg-success">Saved</span> <span class="text-muted">ending @kind.Hint</span></p> } else { <p class="mb-2"><span class="badge text-bg-warning">Not saved</span></p> }
+            <form asp-action="SetKey" method="post" class="row g-2 mb-2" autocomplete="off"><input type="hidden" name="kind" value="@kind.Name" />
+                <div class="col-12 col-sm-8"><label class="visually-hidden" for="key-@kind.Name">API key</label><input id="key-@kind.Name" name="ApiKey" type="password" class="form-control" placeholder="@(kind.Has ? "Paste a new key to replace it" : "Paste the API key")" autocomplete="off" /></div>
+                <div class="col-12 col-sm-4"><button class="btn btn-primary w-100" type="submit">Save key</button></div></form>
+            @if (kind.Has)
+            {
+                <div class="d-flex flex-wrap gap-2">
+                    <form asp-action="Test" method="post"><input type="hidden" name="kind" value="@kind.Name" /><button class="btn btn-outline-secondary btn-sm" type="submit">Test connection</button></form>
+                    <form asp-action="ClearKey" method="post"><input type="hidden" name="kind" value="@kind.Name" /><button class="btn btn-outline-danger btn-sm" type="submit" data-confirm="Remove this key? The AI is switched off until a key is saved and it is enabled again." data-confirm-label="Remove key">Remove key</button></form>
+                </div>
+            }
+        </div></div></div>
+    }
+</div>
+@if (s.DocumentsNeedingReindex > 0 && Model.CanManageKnowledge)
+{
+    <div class="alert alert-info" role="alert">@s.DocumentsNeedingReindex document version(s) were indexed with another embedding model. <a asp-controller="Knowledge" asp-action="Index">Re-index them in the knowledge base</a>.</div>
+}
+<form asp-action="Save" method="post" data-loading-form novalidate class="card card-body mb-3">
+    <div asp-validation-summary="All" class="text-danger"></div>
+    <h2 class="h5">Models</h2>
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-md-6 col-lg-3"><label asp-for="Form.ChatModel" class="form-label">Answer model</label><input asp-for="Form.ChatModel" class="form-control" list="models" /><span asp-validation-for="Form.ChatModel" class="text-danger"></span></div>
+        <div class="col-12 col-md-6 col-lg-3"><label asp-for="Form.ClassifierModel" class="form-label">Intent model</label><input asp-for="Form.ClassifierModel" class="form-control" list="models" /></div>
+        <div class="col-12 col-md-6 col-lg-3"><label asp-for="Form.SummaryModel" class="form-label">Summary model</label><input asp-for="Form.SummaryModel" class="form-control" list="models" /></div>
+        <div class="col-12 col-md-6 col-lg-3"><label asp-for="Form.EmbeddingModel" class="form-label">Embedding model</label><input asp-for="Form.EmbeddingModel" class="form-control" list="embedmodels" /><div class="form-text">Changing it means re-indexing all documents.</div></div>
+        <datalist id="models">@foreach (var m in s.SuggestedChatModels) { <option value="@m"></option> }</datalist>
+        <datalist id="embedmodels"><option value="voyage-3.5"></option><option value="voyage-3.5-lite"></option><option value="voyage-3-large"></option></datalist>
+    </div>
+    <h2 class="h5">Thresholds</h2>
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-md-3"><label asp-for="Form.TopK" class="form-label">Passages per question</label><input asp-for="Form.TopK" type="number" min="1" max="12" class="form-control" /></div>
+        <div class="col-6 col-md-3"><label asp-for="Form.MinRetrievalScore" class="form-label">Minimum match score (0–1)</label><input asp-for="Form.MinRetrievalScore" type="number" step="0.01" min="0" max="1" class="form-control" /><div class="form-text">Below this a passage is ignored: the AI says it does not know.</div></div>
+        <div class="col-6 col-md-3"><label asp-for="Form.MinConfidence" class="form-label">Minimum confidence (0–1)</label><input asp-for="Form.MinConfidence" type="number" step="0.01" min="0" max="1" class="form-control" /><div class="form-text">Below this the answer goes to a person.</div></div>
+        <div class="col-6 col-md-3"><label asp-for="Form.HistoryMessages" class="form-label">Recent messages read</label><input asp-for="Form.HistoryMessages" type="number" min="2" max="50" class="form-control" /></div>
+        <div class="col-6 col-md-3"><label asp-for="Form.MaxContextChars" class="form-label">Knowledge size per answer (characters)</label><input asp-for="Form.MaxContextChars" type="number" min="1000" max="40000" class="form-control" /></div>
+    </div>
+    <h2 class="h5">Limits</h2>
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-md-4"><label asp-for="Form.MonthlyTokenLimit" class="form-label">Monthly token limit (empty = @s.EffectiveMonthlyTokenLimit.ToString("N0"))</label><input asp-for="Form.MonthlyTokenLimit" type="number" min="0" class="form-control" /><div class="form-text">Used this month: @s.TokensThisMonth.ToString("N0"). 0 means unlimited.</div></div>
+        <div class="col-12 col-md-4"><label asp-for="Form.MonthlyBudgetUsd" class="form-label">Monthly budget in USD (estimate, optional)</label><input asp-for="Form.MonthlyBudgetUsd" type="number" step="0.01" min="0" class="form-control" /><div class="form-text">Estimated this month: $@s.EstimatedCostThisMonth.ToString("0.0000"). AI stops when reached.</div></div>
+    </div>
+    <h2 class="h5">Behaviour</h2>
+    <div class="row g-3 mb-3">
+        <div class="col-12"><label asp-for="Form.UnsupportedReply" class="form-label">Reply when the knowledge does not answer a question</label><textarea asp-for="Form.UnsupportedReply" class="form-control" rows="2" maxlength="500"></textarea><span asp-validation-for="Form.UnsupportedReply" class="text-danger"></span></div>
+        <div class="col-12 col-md-6"><label asp-for="Form.ToneInstructions" class="form-label">Tone (optional)</label><textarea asp-for="Form.ToneInstructions" class="form-control" rows="3" maxlength="1000" placeholder="Friendly and brief. Address people formally."></textarea><div class="form-text">Style only: it cannot add facts, prices or permissions.</div></div>
+        <div class="col-12 col-md-6"><label asp-for="Form.EscalationKeywords" class="form-label">Always hand to a person when the customer writes… (one per line)</label><textarea asp-for="Form.EscalationKeywords" class="form-control" rows="3" maxlength="2000" placeholder="contract&#10;board meeting"></textarea><div class="form-text">Refunds, payment disputes, complaints, legal and privacy matters and requests for a person are always escalated.</div></div>
+    </div>
+    <div><button class="btn btn-primary" type="submit"><span class="spinner-border spinner-border-sm d-none" aria-hidden="true"></span> Save settings</button></div>
+</form>
+<div class="card mb-3"><div class="card-body">
+    <div class="d-flex align-items-center gap-2"><div class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" role="switch" id="autosend" disabled aria-describedby="autosend-help" /><label class="form-check-label" for="autosend">Send AI replies automatically</label></div><span class="badge text-bg-secondary">not available yet</span></div>
+    <div id="autosend-help" class="small text-muted mt-1">Off, and it cannot be switched on in this version: the AI only drafts replies and your team sends them. Automatic sending needs the sales-agent controls of the next phase.</div>
+</div></div>
+<p class="small text-muted">Vector store: <code>@s.VectorStore</code> (platform setting). Prices shown on the usage page are estimates from a configurable price table, not billing data.</p>

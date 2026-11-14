@@ -122,9 +122,12 @@ public class MessagingOutboxTests(AppFixture app)
         Assert.Empty(worker.Unrouted);                                                       // default AI mode is Paused: no AI event
         Assert.True((await admin.Put($"/api/v1/conversations/{conv.Id}/ai-mode", new { mode = "Active" })).IsSuccessStatusCode);
         await MessagingKit.PostWebhookAsync(app, a, WahaEvents.Message(a.Session, a.ChatId(phone), "second")); await worker.PumpAsync();
-        var ai = Assert.Single(worker.Unrouted); Assert.Equal("ai.reply.requested", ai.Type); Assert.Equal(tenantId, ai.TenantId);   // no consumer is bound yet (Phase 7)
+        // Phase 7 binds the AI consumer queue: the event is routed (not "unrouted") and consumed; the workspace has no AI configured, so the consumer finishes without doing anything
+        Assert.Empty(worker.Unrouted);
+        var ai = Assert.Single(await app.Db(db => db.OutboxMessages.IgnoreQueryFilters().Where(o => o.TenantId == tenantId && o.Type == "ai.reply.requested").ToListAsync()));
+        Assert.Equal(LeadPilot.Domain.Messaging.OutboxStatus.Published, ai.Status); Assert.Empty(worker.DeadLettered);
         await MessagingKit.PostWebhookAsync(app, a, WahaEvents.Message(a.Session, a.ChatId(phone), "STOP")); await worker.PumpAsync();
-        Assert.Single(worker.Unrouted);                                                      // an opt-out never triggers an AI reply
+        Assert.Single(await app.Db(db => db.OutboxMessages.IgnoreQueryFilters().Where(o => o.TenantId == tenantId && o.Type == "ai.reply.requested").ToListAsync()));   // an opt-out never triggers an AI reply
     }
 
     [RequiresMySqlFact]

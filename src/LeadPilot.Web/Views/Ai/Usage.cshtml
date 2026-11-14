@@ -1,0 +1,32 @@
+@model AiUsageViewModel
+@{ ViewData["Title"] = "AI usage"; var s = Model.Summary; }
+<div class="d-flex flex-wrap justify-content-between align-items-start mb-3 gap-2">
+    <div><h1 class="h3 mb-1">AI usage</h1><p class="text-muted mb-0">Calls to the AI and embedding providers made for this workspace. Costs are <strong>estimates</strong> from a price table, not billing data.</p></div>
+    <form method="get" asp-action="Usage" class="d-flex gap-2"><label class="visually-hidden" for="period">Month</label><select id="period" name="period" class="form-select" onchange="this.form.submit()">@foreach (var p in Model.Periods) { <option value="@p.Key" selected="@(p.Key == Model.Period)">@p.Label</option> }</select><noscript><button class="btn btn-outline-primary">Show</button></noscript></form>
+</div>
+<div class="row g-3 mb-3">
+    <div class="col-6 col-lg-3"><div class="card card-body"><div class="text-muted small">Calls</div><div class="fs-4">@s.Calls.ToString("N0")</div><div class="small @(s.Failed > 0 ? "text-danger" : "text-muted")">@s.Failed failed</div></div></div>
+    <div class="col-6 col-lg-3"><div class="card card-body"><div class="text-muted small">Tokens (in + out)</div><div class="fs-4">@((s.InputTokens + s.OutputTokens).ToString("N0"))</div><div class="small text-muted">@s.InputTokens.ToString("N0") in · @s.OutputTokens.ToString("N0") out</div></div></div>
+    <div class="col-6 col-lg-3"><div class="card card-body"><div class="text-muted small">Cached prompt tokens</div><div class="fs-4">@s.CacheReadTokens.ToString("N0")</div><div class="small text-muted">@s.CacheWriteTokens.ToString("N0") written to cache</div></div></div>
+    <div class="col-6 col-lg-3"><div class="card card-body"><div class="text-muted small">Estimated cost</div><div class="fs-4">$@s.EstimatedCostUsd.ToString("0.0000")</div><div class="small text-muted">limit @(s.EffectiveTokenLimit == 0 ? "none" : s.EffectiveTokenLimit.ToString("N0") + " tokens")@(s.BudgetUsd is { } b ? $" · budget ${b:0.00}" : "")</div></div></div>
+</div>
+@if (s.UnpricedModels.Count > 0) { <div class="alert alert-info small" role="alert">No price is configured for: @string.Join(", ", s.UnpricedModels). Their tokens are counted but their cost shows as $0.</div> }
+@if (s.Calls == 0) { <div class="card mb-3"><partial name="_EmptyState" model='("No AI usage in this month", "Calls appear here as soon as the AI answers a message, indexes a document or you use the retrieval tester.")' /></div> }
+else
+{
+    <div class="row g-3 mb-3">
+        @foreach (var (title, rows) in new[] { ("By operation", s.ByOperation), ("By model", s.ByModel) })
+        {
+            <div class="col-12 col-lg-6"><div class="card"><div class="card-header">@title</div><div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th>Name</th><th class="text-end">Calls</th><th class="text-end">Failed</th><th class="text-end">Tokens</th><th class="text-end">Est. cost</th></tr></thead><tbody>
+            @foreach (var r in rows) { <tr><td>@r.Name</td><td class="text-end">@r.Calls</td><td class="text-end">@r.Failed</td><td class="text-end">@((r.InputTokens + r.OutputTokens).ToString("N0"))</td><td class="text-end">$@r.EstimatedCostUsd.ToString("0.0000")</td></tr> }
+            </tbody></table></div></div></div>
+        }
+    </div>
+    <div class="card mb-3"><div class="card-header">Per day</div><div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th>Day (UTC)</th><th class="text-end">Calls</th><th class="text-end">Tokens</th><th class="text-end">Est. cost</th></tr></thead><tbody>
+    @foreach (var d in s.Days) { <tr><td>@d.Day.ToString("yyyy-MM-dd")</td><td class="text-end">@d.Calls</td><td class="text-end">@d.Tokens.ToString("N0")</td><td class="text-end">$@d.EstimatedCostUsd.ToString("0.0000")</td></tr> }
+    </tbody></table></div></div>
+    <div class="card"><div class="card-header">Calls</div><div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th>Time (UTC)</th><th>Operation</th><th>Model</th><th class="text-end">In</th><th class="text-end">Out</th><th class="text-end">Cached</th><th class="text-end">ms</th><th>Result</th></tr></thead><tbody>
+    @foreach (var e in Model.Entries.Items) { <tr><td class="text-nowrap small">@e.OccurredAtUtc.ToString("yyyy-MM-dd HH:mm:ss")</td><td>@e.Operation</td><td class="small">@e.Model</td><td class="text-end">@e.InputTokens</td><td class="text-end">@e.OutputTokens</td><td class="text-end">@e.CacheReadTokens</td><td class="text-end">@e.LatencyMs</td><td>@if (e.Success) { <span class="badge text-bg-success">ok</span> } else { <span class="badge text-bg-danger" title="@e.ErrorCode">@e.ErrorCode</span> }</td></tr> }
+    </tbody></table></div></div>
+    <partial name="_Pager" model='new PagerModel(Model.Entries.Page, Model.Entries.TotalPages, Model.Entries.TotalCount, "Usage", Model.QueryValues)' />
+}

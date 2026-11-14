@@ -3,6 +3,7 @@ using LeadPilot.Application.Contracts;
 using LeadPilot.Infrastructure.Persistence;
 using LeadPilot.Infrastructure.Discovery;
 using LeadPilot.Infrastructure.Discovery.Jobs;
+using LeadPilot.Infrastructure.Ai.Jobs;
 using LeadPilot.Infrastructure.Campaigns;
 using LeadPilot.Infrastructure.Messaging;
 using LeadPilot.Infrastructure.Services;
@@ -88,6 +89,7 @@ public static class DependencyInjection
         services.AddDiscoveryHangfire(config, server: false);   // Web/Api only enqueue; the Worker processes
         services.AddMessaging(config);
         services.AddCampaigns(config);
+        services.AddAi(config);
         return services;
     }
 

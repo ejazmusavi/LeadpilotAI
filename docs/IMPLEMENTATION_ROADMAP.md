@@ -47,3 +47,7 @@ Phase 6 (campaigns) is **built and tested against the fake WAHA, real MySQL, rea
 
 ## Status after Phase 5
 Phase 5 (WhatsApp gateway via WAHA) is **built and tested against a fake WAHA and a real RabbitMQ/MySQL; not verified against a live WAHA instance** (no instance available, owner runbook in DEVELOPMENT.md). Docker/compose remains unverified. Phase 6 (campaigns) may use the outbound pipeline (`IOutboundQueueService`, eligibility gate, caps); Phase 7/8 consume the `ai.reply.requested` event. Not started.
+
+
+## Status after Phase 7
+Phase 7 (AI engine and knowledge base) is **built and tested with scripted/fake providers, real MySQL, real RabbitMQ and a real Hangfire server; the live Claude and Voyage services and a real Qdrant were never exercised** (runbook: DEVELOPMENT.md). AI replies are suggestions for staff; automatic sending is not available until Phase 8. Next: Phase 8 (AI sales agent and controlled tool calling) — not started.

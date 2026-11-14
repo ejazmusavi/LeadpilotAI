@@ -27,6 +27,7 @@ public class TenancyArchitectureTests
         "src/LeadPilot.Infrastructure/Services/Tenancy/TenantAdminService.cs",     // platform tenant lifecycle (member counts, provisioning)
         "src/LeadPilot.Infrastructure/Services/Tenancy/InvitationService.cs",      // token-keyed invitation preview/accept
         "src/LeadPilot.Infrastructure/Services/Tenancy/TenantSwitchService.cs",    // a user's memberships across tenants
+        "src/LeadPilot.Infrastructure/Ai/Jobs/AiJobs.cs",              // KnowledgeDirectory: tenant ids with stuck index versions (the sweep job; returns ids only)
         "src/LeadPilot.Infrastructure/Campaigns/CampaignDirectory.cs",   // tenant ids with due or stuck campaigns (the sweep job; returns ids only)
         "src/LeadPilot.Infrastructure/Messaging/Services/MessagingDirectory.cs",   // webhook key → tenant, tenants with due outbox rows / stuck messages (everything that must happen BEFORE a tenant scope exists)
     ];

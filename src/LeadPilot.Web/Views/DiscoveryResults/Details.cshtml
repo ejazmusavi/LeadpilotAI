@@ -1,0 +1,46 @@
+@model ResultDetailsViewModel
+@using LeadPilot.Domain.Discovery
+@{
+    var r = Model.Result; ViewData["Title"] = r.Name ?? "Result";
+    string Ver(string f) => r.Provenance.TryGetValue(f, out var v) ? v switch { "Corroborated" => "corroborated by a second source", "ProviderReported" => "reported by the provider, not independently verified", _ => "unverified" } : "";
+    string Dot(string f) => r.Provenance.TryGetValue(f, out var v) && v == "Corroborated" ? "text-success" : r.Provenance.ContainsKey(f) ? "text-warning" : "text-muted";
+}
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+    <div><h1 class="h3 mb-1">@(r.Name ?? "Content removed")</h1><div class="text-muted">@r.SourceName · retrieved @r.RetrievedAtUtc.ToString("yyyy-MM-dd HH:mm") UTC · <span class="badge text-bg-@(r.ReviewStatus == ReviewStatus.Approved ? "success" : r.ReviewStatus == ReviewStatus.Rejected ? "secondary" : "info")">@r.ReviewStatus</span></div></div>
+    <a asp-controller="Discovery" asp-action="Details" asp-route-id="@r.JobId" class="btn btn-outline-secondary">Back to the search</a>
+</div>
+@if (r.ContentPurged) { <div class="alert alert-info">The provider's retention period for this result ended and its content was removed. Only its identifier, status and lead link are kept.</div> }
+@if (r.DuplicateLeadId is not null) { <div class="alert alert-warning">Possible duplicate of <a asp-controller="Leads" asp-action="Details" asp-route-id="@r.DuplicateLeadId" class="alert-link">@r.DuplicateLeadName</a> (@r.DuplicateReasons). Approving merges into that lead unless you choose to create a new one.</div> }
+<div class="row g-3">
+    <div class="col-12 col-lg-7"><div class="card"><div class="card-header">Details</div><div class="card-body"><dl class="row mb-0">
+        <dt class="col-sm-4">Category</dt><dd class="col-sm-8">@(r.CategoryLabel ?? "—")</dd>
+        <dt class="col-sm-4">Location</dt><dd class="col-sm-8">@(string.Join(", ", new[] { r.Area, r.District, r.City, r.Province, r.Country }.Where(x => !string.IsNullOrWhiteSpace(x))) is { Length: > 0 } loc ? loc : "—")</dd>
+        <dt class="col-sm-4">Address</dt><dd class="col-sm-8">@(r.Address ?? "—") <span class="small @Dot("Address")">@Ver("Address")</span></dd>
+        <dt class="col-sm-4">Website</dt><dd class="col-sm-8">@if (r.Website is not null) { <a href="@r.Website" target="_blank" rel="noopener noreferrer nofollow">@r.Website</a> <span class="small @Dot("Website")">@Ver("Website")</span> } else { <span>—</span> }</dd>
+        <dt class="col-sm-4">Public phone</dt><dd class="col-sm-8">@(r.PublicPhone ?? "—") <span class="small @Dot("Phone")">@Ver("Phone")</span></dd>
+        <dt class="col-sm-4">Public e-mail</dt><dd class="col-sm-8">@(r.PublicEmail ?? "—") <span class="small @Dot("Email")">@Ver("Email")</span></dd>
+        <dt class="col-sm-4">Social profiles</dt><dd class="col-sm-8">@if (r.SocialLinks.Count == 0) { <span>—</span> } else { foreach (var s in r.SocialLinks) { <div><a href="@s" target="_blank" rel="noopener noreferrer nofollow">@s</a></div> } }</dd>
+        <dt class="col-sm-4">Confidence</dt><dd class="col-sm-8">@r.ConfidenceLevel (@r.Confidence/100)</dd>
+        <dt class="col-sm-4">Last verified against source</dt><dd class="col-sm-8">@(r.LastVerifiedAtUtc?.ToString("yyyy-MM-dd HH:mm") + " UTC")</dd>
+        <dt class="col-sm-4">Source reference</dt><dd class="col-sm-8 text-break">@r.ExternalId @if (r.SourceUrl is not null) { <div><a href="@r.SourceUrl" target="_blank" rel="noopener noreferrer nofollow">Open at source</a></div> }</dd>
+        @if (r.Attribution is not null) { <dt class="col-sm-4">Attribution</dt><dd class="col-sm-8">@r.Attribution</dd> }
+        @if (r.ExpiresAtUtc is { } ex) { <dt class="col-sm-4">Provider content kept until</dt><dd class="col-sm-8">@ex.ToString("yyyy-MM-dd") UTC</dd> }
+    </dl></div></div></div>
+    <div class="col-12 col-lg-5">
+        <div class="card mb-3"><div class="card-header">Research notes</div><div class="card-body small">@if (string.IsNullOrWhiteSpace(r.ResearchNotes)) { <span class="text-muted">None. Nothing was inferred beyond the fields shown.</span> } else { foreach (var n in r.ResearchNotes.Split('\n')) { <div>@n</div> } }</div></div>
+        @if (Model.CanReview && r.ReviewStatus == ReviewStatus.Pending && !r.ContentPurged)
+        {
+            <div class="card mb-3"><div class="card-header">Approve into the CRM</div><div class="card-body">
+                <form asp-action="Approve" asp-route-id="@r.Id" method="post">
+                    <label class="form-label" for="categoryId">Category</label><select id="categoryId" name="categoryId" class="form-select mb-2"><option value="">@(r.CategoryId is null ? "None" : "Keep the searched category")</option>@foreach (var c in Model.Categories) { <option value="@c.Id" selected="@(r.CategoryId == c.Id)">@c.Name</option> }</select>
+                    @if (Model.CanAssign) { <label class="form-label" for="ownerUserId">Owner</label><select id="ownerUserId" name="ownerUserId" class="form-select mb-2"><option value="">No owner</option>@foreach (var o in Model.Owners) { <option value="@o.UserId">@o.DisplayName</option> }</select> }
+                    @if (r.DuplicateLeadId is not null) { <label class="form-label" for="onDuplicate">Possible duplicate</label><select id="onDuplicate" name="onDuplicate" class="form-select mb-2"><option value="Merge">Merge into the existing lead</option><option value="CreateNew">Create a new lead anyway</option></select> }
+                    <div class="form-text mb-2">The lead is created with this source and retrieval time. Its public contact details are stored as <em>public</em> data with <strong>no consent</strong>, so they cannot be messaged until consent is recorded.</div>
+                    <button type="submit" class="btn btn-primary" data-confirm="Approve this result into the CRM?" data-confirm-label="Approve">Approve</button>
+                </form></div></div>
+            <div class="card"><div class="card-header">Reject</div><div class="card-body"><form asp-action="Reject" asp-route-id="@r.Id" method="post"><input name="note" class="form-control mb-2" maxlength="500" placeholder="Reason (optional)" aria-label="Reason" /><button type="submit" class="btn btn-outline-danger" data-confirm="Reject this result? It will not be offered again." data-confirm-label="Reject">Reject</button></form></div></div>
+        }
+        else if (r.LeadId is { } lid) { <div class="card"><div class="card-body">@(r.Approval == ApprovalAction.Created ? "A lead was created" : "Merged into an existing lead") on @r.ReviewedAtUtc?.ToString("yyyy-MM-dd HH:mm") UTC. <a asp-controller="Leads" asp-action="Details" asp-route-id="@lid">Open the lead</a></div></div> }
+        else if (r.ReviewStatus == ReviewStatus.Rejected) { <div class="card"><div class="card-body">Rejected@(string.IsNullOrWhiteSpace(r.ReviewNote) ? "" : ": " + r.ReviewNote)</div></div> }
+    </div>
+</div>

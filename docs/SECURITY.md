@@ -54,3 +54,39 @@ Cross-tenant data leakage (IDOR, filter bypass, cache/vector leakage) · credent
 - **Export**: permission-gated (`Leads.Export`), audited, capped at 10 000 rows (refuses instead of truncating), CSV `'`-prefix / XLSX quote-prefix neutralisation of `= + - @ TAB CR LF`, never includes another tenant's rows.
 - **Web**: every state-changing MVC action is POST + antiforgery, destructive ones behind a confirm dialog; output HTML-encoded (tested with a hostile lead name and note); `returnQuery` redirects are restricted to same-site query strings.
 - **Static assets** are served anonymously on purpose (the login page needs them); every application page still requires authentication.
+
+
+## Phase 4 — discovery security
+**SSRF-safe website fetching** (`UrlGuard`, `SafeWebFetcher`, `SafeHttpClientFactory`; unit-tested incl. real sockets):
+- URL checks before every request and on **every redirect hop**: scheme http/https only; no credentials in the URL; ports 80/443 only; host names such as `localhost`, `*.local`, `*.internal`, `metadata.google.internal`, single-label names rejected; IP literals (including decimal/hex/octal forms, which `Uri` normalises) checked; the name is resolved and **every** answer must be public.
+- Address policy (`IpAddressClassifier`): rejects 0/8, 10/8, 100.64/10 (CGNAT), 127/8, 169.254/16 (cloud metadata 169.254.169.254), 172.16/12, 192.0.0/24, 192.0.2/24, 192.88.99/24, 192.168/16, 198.18/15, 198.51.100/24, 203.0.113/24, ≥224/4; IPv6 `::`, `::1`, fc00::/7 (incl. fd00:ec2::254), fe80::/10, fec0::/10, ff00::/8, 2001:db8::/32, Teredo, 100::/64; IPv4-mapped, NAT64 and 6to4 addresses are classified by the IPv4 they embed; only 2000::/3 global unicast passes.
+- **DNS rebinding:** the HTTP handler resolves the name itself inside `SocketsHttpHandler.ConnectCallback`, filters with the same policy and connects the socket to the validated address; there is no second lookup between check and connect (tested with a resolver that answers public first, loopback afterwards).
+- Redirects are never followed by the handler (3 hops max, each re-validated); no proxy, no cookies, no `Authorization`; total timeout 10 s; body ≤ 1 MB read incrementally; only `text/html`, `application/xhtml+xml`, `text/plain`; 401/403/407 are "protected content" and never retried; a page with a password field or `noindex` is not read.
+- Only `ISafeHttpClientFactory` may produce a client for arbitrary hosts (architecture test: no other type in that namespace references `HttpClient`/`IHttpClientFactory`; a source scan rejects `new HttpClient`/handlers). The Google adapter uses its own named client to a fixed, configured base URL (not user input).
+- Logging: only the host and failure reason; never the path/query, never the API key.
+
+**Credentials:** connector keys are encrypted with ASP.NET Data Protection (`ISecretProtector`, `enc:v1:` prefix, shared key ring `DataProtection:KeysPath` — **the Worker must mount the same key ring as Web**, as compose does), shown only as a 4-character hint, excluded from DTOs (architecture test), audit text and logs; provider error messages are scrubbed of the key. Keys can be removed; saving needs `Integrations.Manage`.
+
+**Data-source rules enforced in code:** discovery never writes consent (contacts approved from discovery are `DataOrigin.Public` with no `ConsentRecord`; `IContactEligibilityService` blocks them on every channel/purpose until consent exists — integration-tested, and the same test shows consent opens the gate); no scraping of protected platforms (no such connector exists; the stubs return nothing); every unverified value is labelled; nothing is invented (the extractor has no field for student strength, software, decision makers).
+
+**Abuse and cost controls:** per-tenant monthly call limit (default 1000) and optional budget, enforced when creating/retrying a search and again before every provider call; page delay (`Discovery:PageDelayMs`); `Discovery.Run` is a separate permission; the result of a limit hit is `429 usage_limit_reached` / a failed, resumable job.
+
+**Hangfire dashboard:** `/hangfire`, authenticated users only, further restricted to `Tenants.Manage` or `Platform.SwitchTenant`; it can enqueue/delete jobs, so it stays platform-only. Hangfire job arguments contain ids only.
+
+**Known residual risks:** the Google caching question (INTEGRATIONS.md); `Hangfire.MySqlStorage` is unmaintained; website enrichment depends on the host's DNS answering truthfully for the *validation* only (the connect itself is pinned); a very large site could still return 1 MB per request (bounded by `MaxWebsitesPerJob`).
+
+
+## Phase 5 — WhatsApp / WAHA security
+**Ban and policy risk (read first).** WAHA drives a normal WhatsApp account through WhatsApp Web. That is not an official Business API integration; WhatsApp can restrict or ban the number, and a ban removes the customer's chat history and relationship. The UI shows this warning on the accounts pages and the docs list it in INTEGRATIONS.md. Code-level mitigations: consent-gated marketing (`IContactEligibilityService`), service replies only inside a 24 h customer window, suppression/opt-out blocks everything, warm-up (20 first day, +20/day), conservative caps (30/h, 150/day, 30 s gap; hard ceilings 120/h, 1000/day, 10 s), new-contact blocks on 463/475, auto-pause on 3 consecutive failures / session FAILED or STOPPED / unconfirmed delivery, humans resume. The owner should use a dedicated number, never one that holds the business's only customer history, and move to the official API for volume.
+
+**Webhook authentication.** Two independent secrets: the 192-bit key in the URL (identifies the account) and HMAC-SHA512 over the raw body with the account's own secret (`X-Webhook-Hmac`, constant-time compare). The signed session name must match the account. Body ≤ 256 KB, per (key, IP) rate limit, unknown key = ignored with nothing stored, bad signature = 401 and nothing stored. **Replay:** WAHA does not sign the timestamp header, so a captured valid request can be replayed; replays are harmless because storage is idempotent (unique WAHA event id / message id) and ack handling is monotonic. Keep the endpoint on HTTPS.
+
+**SSRF.** The WAHA base URL is operator-supplied, so it is validated (http/https, no credentials/query), resolved and checked inside the connect callback. Link-local and cloud-metadata addresses are always refused; private addresses are refused unless `Messaging:Waha:AllowPrivateHosts=true` (needed for WAHA on the same docker network; default false in compose).
+
+**Secrets.** Base URL, API key and webhook secret are encrypted with Data Protection, bound to tenant+account; masked everywhere (hint only), absent from DTOs, audit and logs. The Worker must share the key ring with Web.
+
+**Inbound content is untrusted.** Messages are stored and HTML-encoded on output; attachments are metadata only (size/MIME checked, no content downloaded in this phase); no inbound text is ever executed or sent to a model (the AI event is a stub).
+
+**Dead-letter queues** are shared by all tenants, so they are visible to platform operators only and show headers, never message bodies. **Opt-out:** keywords STOP/UNSUBSCRIBE/etc. in English, Roman Urdu and Urdu (whole message or short phrase; ordinary sentences containing the word are not opt-outs) create a suppression entry, revoke consent and are audited.
+
+**Residual risks:** WAHA is a third-party gateway with its own security posture (run it on a private network, set its API key); session loss needs a human QR scan; `sendText` has no idempotency key, so "unknown outcome" messages are reconciled rather than resent (a message that was truly lost is marked failed, not resent); live behaviour was not verified against a real WAHA.

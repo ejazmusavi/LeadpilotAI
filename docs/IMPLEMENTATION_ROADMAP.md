@@ -9,9 +9,9 @@ Rule: implement one phase at a time; no phase starts until the previous meets it
 | 1 | Solution, Identity auth, EF/MySQL, logging, Swagger, health, Docker, MVC shell | 0 | .NET 10 SDK + Docker available — **code done; Docker run unverified** |
 | 2 | Tenancy, users, roles, permissions, audit, isolation tests | 1 | — **built and verified on MySQL 8; see PROGRESS.md** |
 | 3 | CRM: leads, contacts, pipeline, import/export, scoring, consent, suppression | 2 | — **built and verified on MySQL 8; see PROGRESS.md** (import/rescoring still synchronous until Phase 6) |
-| 4 | Discovery & enrichment (Google Places, websites, imports) | 3 | Google Places key |
+| 4 | Discovery & enrichment (Google Places, websites, imports) | 3 | Google Places key — **built; verified with a fake connector and a local fake Google server; live Google NOT verified; see PROGRESS.md** |
 | 5 | WhatsApp gateway adapter, conversations, webhooks, outbox/RabbitMQ | 3 | WAHA docs + deployment details |
-| 6 | Campaigns, eligibility at send time, Hangfire scheduling | 3, 5 | — |
+| 6 | Campaigns, eligibility at send time, Hangfire scheduling (Hangfire itself arrived in Phase 4) | 3, 5 | — |
 | 7 | AI engine, knowledge base, RAG | 2, 5 | Claude API key, embedding provider, product info (any product) |
 | 8 | AI sales agent, controlled tools, human handoff | 7, 3, 5 | Product pricing/features, demo process |
 | 9 | Workflow engine, follow-ups | 6, 8 | — |
@@ -36,7 +36,11 @@ Build green · unit + integration tests green (incl. tenant-isolation tests for 
 |---|---|
 | .NET 10 package compatibility (Pomelo, Hangfire MySQL) | Verify in Phase 1 before committing versions; fallback to latest stable-compatible with documented note |
 | Gateway docs delayed | Phase 5 blocked, not faked; Phases 3/4/7 continue |
-| WhatsApp account bans | Rate caps, consent gate, monitoring, auto-pause (see INTEGRATIONS.md) |
+| WhatsApp account bans | Rate caps, consent gate, monitoring, auto-pause (see INTEGRATIONS.md). **Phase 5 built these; live WAHA verification pending** |
 | AI hallucination of price/features | Grounding + tool-only facts + validation + escalation + 100-scenario test suite |
 | Duplicate sends on retry | Idempotency keys, unique recipient/message constraints, outbox |
 | Scope creep | README Rule 5/10; changes to stack require approval |
+
+
+## Status after Phase 5
+Phase 5 (WhatsApp gateway via WAHA) is **built and tested against a fake WAHA and a real RabbitMQ/MySQL; not verified against a live WAHA instance** (no instance available, owner runbook in DEVELOPMENT.md). Docker/compose remains unverified. Phase 6 (campaigns) may use the outbound pipeline (`IOutboundQueueService`, eligibility gate, caps); Phase 7/8 consume the `ai.reply.requested` event. Not started.

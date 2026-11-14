@@ -1,0 +1,25 @@
+@model DeadLettersViewModel
+@{ ViewData["Title"] = "Dead-letter queues"; }
+<h1 class="h3 mb-1">Dead-letter queues</h1>
+<p class="text-muted">Messaging events that could not be processed (forged or missing tenant, unknown ids, or still failing after every retry). Shared by all workspaces: only headers are shown, never message content.</p>
+<div class="card mb-3"><div class="table-responsive"><table class="table align-middle mb-0">
+    <thead><tr><th>Queue</th><th>Source queue</th><th class="text-end">Messages</th><th></th></tr></thead><tbody>
+    @foreach (var q in Model.Queues)
+    {
+        <tr><td><code>@q.Queue</code></td><td><code>@q.Source</code></td>
+            <td class="text-end">@if (q.Available) { <span class="badge @(q.Messages > 0 ? "text-bg-danger" : "text-bg-success")">@q.Messages</span> } else { <span class="text-muted small">@q.Note</span> }</td>
+            <td class="text-end">@if (q.Available && q.Messages > 0) { <a asp-action="Index" asp-route-queue="@q.Queue" class="btn btn-sm btn-outline-primary">Show headers</a> }</td></tr>
+    }
+    </tbody></table></div></div>
+@if (Model.Selected is not null)
+{
+    <h2 class="h5">@Model.Selected</h2>
+    @if (Model.Messages.Count == 0) { <div class="card"><partial name="_EmptyState" model='("Queue is empty", "No messages to show.")' /></div> }
+    else
+    {
+        <div class="card"><div class="table-responsive"><table class="table align-middle mb-0 small">
+            <thead><tr><th>Tenant</th><th>Event</th><th>Reason</th><th>Attempts</th><th>Dead-lettered</th><th>Correlation</th></tr></thead><tbody>
+            @foreach (var m in Model.Messages) { <tr><td><code>@m.TenantId</code></td><td><code>@m.Type</code></td><td>@m.Reason</td><td>@m.Attempts</td><td>@m.DeadLetteredAtUtc?.ToString("yyyy-MM-dd HH:mm")</td><td><code>@m.CorrelationId</code></td></tr> }
+            </tbody></table></div></div>
+    }
+}

@@ -10,6 +10,8 @@ public interface ILeadService
     Task<PagedResult<LeadListItemDto>> ListAsync(LeadQuery query, CancellationToken ct = default);
     Task<Result<LeadDto>> GetAsync(Guid id, CancellationToken ct = default);
     Task<Result<LeadDto>> CreateAsync(CreateLeadRequest request, CancellationToken ct = default);
+    /// <summary>For server-side intake only (discovery approval); the HTTP API cannot reach it. Same duplicate check, pipeline defaults, contacts and scoring as CreateAsync.</summary>
+    Task<Result<LeadDto>> CreateFromSourceAsync(CreateLeadRequest request, LeadSourceType source, string? externalId, string? attribution, DateTime? retrievedAtUtc, CancellationToken ct = default);
     Task<Result<LeadDto>> UpdateAsync(Guid id, UpdateLeadRequest request, CancellationToken ct = default);
     Task<Result> ArchiveAsync(Guid id, CancellationToken ct = default);
     Task<Result> RestoreAsync(Guid id, CancellationToken ct = default);
@@ -171,4 +173,10 @@ public sealed class CrmOptions
     public string StorageRoot { get; set; } = "data/files";
     /// <summary>Tenant setting key holding the calling code (e.g. 966) used to expand local phone numbers.</summary>
     public const string DefaultCountryCodeSetting = "Crm.DefaultCountryCode";
+}
+
+/// <summary>Creates or merges a lead from an external source (discovery approval). Reuses the CRM duplicate detector, pipeline defaults, contacts and scoring. Contacts always get DataOrigin.Public and NO consent record.</summary>
+public interface ILeadIntakeService
+{
+    Task<Result<LeadIntakeResult>> IntakeAsync(LeadIntakeRequest request, CancellationToken ct = default);
 }

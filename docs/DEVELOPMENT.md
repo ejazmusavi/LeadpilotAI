@@ -91,3 +91,73 @@ Permissions: `Leads.View/Create/Update/Delete/Import/Export/Assign`, `Consent.Ma
 Tests: integration tests that need real tenants use `TestWorld` (tenants A and B with administrators, sales manager/agent, marketing manager and read-only users) and `NewTenantAsync` for tests that change tenant-wide configuration (scoring rules, default pipeline). Phones and names come from `Crm.Phone()` / `Crm.Token()` so tests never collide in the shared database. Integration tests set `RateLimiting__ApiPermitLimit`, `Crm__StorageRoot` and `Crm__MaxExportRows=100` in `AppFixture`.
 
 Migrations: `Phase3Crm` is the only new migration. To check an upgrade by hand: run the Phase 2 build against an empty database (migrate + seed), then `dotnet ef database update` with the Phase 3 build and start the Web host (the integration test `A_phase2_database_upgrades_and_existing_tenants_receive_crm_defaults_and_permissions` automates exactly this).
+
+
+## Configuration added in Phase 4
+| Key | Where | Meaning |
+|---|---|---|
+| `Discovery:PageSize` (20) / `MaxPagesPerQuery` (5) / `MaxResultsPerJob` (200) / `MaxBulkItems` (100) | all | Search limits. |
+| `Discovery:DefaultMonthlyCallLimit` (1000) | all | Used when a tenant sets no limit for a connector (tenants override under *Connectors & usage*). |
+| `Discovery:DefaultCostPerCallUsd` (0.035) | all | **Estimate** shown on the usage page; set it from Google's current price list. |
+| `Discovery:PageDelayMs` (500) | Worker | Minimum delay between provider calls of one job (rate limit). Tests set 0. |
+| `Discovery:GoogleContentRetentionDays` (30) | Worker | How long provider content of a result is kept (see INTEGRATIONS.md). |
+| `Discovery:StaleRunningMinutes` (30) | Worker | A Running job older than this may be taken over after a worker crash. |
+| `Discovery:GooglePlaces:BaseUrl` / `TimeoutSeconds` | all | Google endpoint (tests point it at a local fake). |
+| `Discovery:Website:UserAgent` / `RobotsToken` / `MaxBytes` (1 MB) / `TimeoutSeconds` (10) / `MaxRedirects` (3) / `MaxPagesPerSite` (2) / `MaxWebsitesPerJob` (100) | Worker | Website fetching limits. Put a real contact URL in the User-Agent before production. |
+| `Discovery:Hangfire:PollSeconds` (5) / `Workers` (2) | Worker | Hangfire queue polling and worker threads. |
+| `ConnectionStrings:Default` | Web, Api, Worker | Hangfire reuses it (adds `Allow User Variables=true`); its tables use the prefix `Hangfire` in the same database. |
+| `DataProtection:KeysPath` | Web, Api, **Worker** | Must be the SAME key ring everywhere, otherwise the Worker cannot decrypt connector keys saved in Web. |
+
+## Running discovery locally
+```bash
+dotnet run --project src/LeadPilot.Web      # migrates (EF) first; creates the Hangfire tables on first use
+dotnet run --project src/LeadPilot.Worker   # Hangfire server: processes discovery searches, runs the daily retention job
+# 1. sign in as an administrator -> Discovery -> Connectors & usage: paste your own Google Places API key (stored encrypted)
+# 2. Discovery -> New search: pick a saved location + category (education workspaces get the school starter pack automatically)
+# 3. watch it on the search page, then Review results: approve/reject/bulk. Approved results become leads (source = Discovery, public contacts, no consent)
+# Hangfire dashboard (platform operators only): http://localhost:5002/hangfire
+```
+Without a Google key you can still search public websites you provide (connector *Public websites*). Nothing in the app returns sample data.
+
+Permissions: `Discovery.View/Run/Review/Manage`, `Integrations.Manage` (defaults: Sales Manager View/Run/Review/Manage; Marketing Manager View/Run; Sales Agent and Staff View; Tenant Administrator all; Read-only none). Existing tenants receive them when Web starts (idempotent role sync).
+
+Tests: `DiscoveryKit` (integration) holds the TEST-ONLY fake connector (`test-fake`, `test-fake-keyed`), a recording scheduler and a no-network website enricher; they are registered by the test hosts only. `DiscoveryHangfireTests` build the real Worker composition (`AddWorkerServices`, Development ⇒ `ValidateOnBuild`) with a real Hangfire server on the test database. Migration: `Phase4Discovery` is the only new migration; `DiscoveryMigrationTests` upgrades a Phase 3 database that holds data.
+
+
+## Live check of the Google Places connector (runbook)
+Cost: **one** Text Search request (pageSize 5, Enterprise SKU because the field mask includes website and phone), roughly 0.03–0.04 USD at list price: check Google's current price list. It prints counts and field presence only; do not paste or commit Google responses (caching terms: see INTEGRATIONS.md).
+1. In the Google Cloud project: enable **Places API (New)**, enable billing, create an API key (restrict it to that API).
+2. Give the check the key in ONE of two ways: set the environment variable `GOOGLE_PLACES_API_KEY` in the shell (never in a file or in git), **or** (cloud sandbox) save it as a network secret for host `places.googleapis.com`, header `X-Goog-Api-Key`, bare value, and leave the variable unset: the tool then sends a dummy key and the proxy substitutes the real one. Environment variables and secrets only reach a NEW session or after a restart.
+3. Run: `SSL_CERT_FILE=/root/.ccr/ca-bundle.crt dotnet run --project tools/LiveGoogleCheck` (drop `SSL_CERT_FILE` outside the sandbox).
+4. Expected: `OK http=200 calls=1 candidates=<1..5>`, a line of field counts (name/address/website/phone/city/province/country/sourceUrl), types such as `school`, place ids starting with `ChIJ`, attribution `Place data from Google Maps`, retention 30 days.
+5. Errors the adapter reports: 400 `API key not valid` = the key (or the proxy substitution) is wrong; 403 = API not enabled/billing off/key restricted; 429 = quota. In the app itself: Connectors & usage → paste the key → Discovery → New search (Pakistan / Lahore / Private schools, max results 5) and watch the usage page.
+
+
+## Configuration added in Phase 5
+| Key | Where | Meaning |
+|---|---|---|
+| `RabbitMq:Host` / `Port` (5672) / `VirtualHost` (/) / `Username` / `Password` / `Prefix` (`leadpilot.messaging`) | Api, Web, Worker | Broker. Without `Host` events stay in the outbox and `/health/ready` omits the broker check. Compose adds a `rabbitmq` service (management UI on 15672). |
+| `RabbitMq:RetryDelaysSeconds` | Worker | Optional list; default 5, 30, 120, 600. Leave unset unless you need to change it. |
+| `Messaging:PublicWebhookBaseUrl` | Api, Web, Worker | **Public https URL of the Api** that WAHA can reach (compose: `PUBLIC_API_URL`). Used to build the webhook URL registered in WAHA. |
+| `Messaging:Waha:AllowPrivateHosts` (false) | Api, Web, Worker | Allow a WAHA on a private address (same docker network / localhost). Link-local/metadata always refused. Compose: `WAHA_ALLOW_PRIVATE_HOSTS`. |
+| `Messaging:*` caps and timing | all | Defaults are conservative (30/h, 150/day, 30 s gap, warm-up); see `MessagingOptions`. Per-account overrides are limited to the hard ceilings. |
+| Tenant settings `messaging.optout_keywords`, `messaging.auto_create_leads`, `messaging.service_window_hours` | per tenant | Extra opt-out words, create a lead for unknown senders (off), service window (24). |
+
+## Owner runbook: connecting WAHA (WhatsApp)
+**Read the ban-risk warning first** (SECURITY.md / the accounts page). Use a dedicated number you can afford to lose.
+1. **Run WAHA** (Core, WEBJS engine): `docker run -d --name waha -p 3000:3000 -e WAHA_API_KEY=<long-random-key> -e WHATSAPP_DEFAULT_ENGINE=WEBJS devlikeapro/waha`. Check the current image/tag and engine options at https://waha.devlike.pro; keep the port private (bind to localhost or a private network).
+2. **Settings you need:** base URL (e.g. `http://waha:3000` from compose, or `http://localhost:3000`), the API key from step 1, engine (WEBJS/NOWEB/GOWS), a session name (letters, digits, `-`, `_`; e.g. `school-main`; must be unique across the whole platform), and a webhook secret (generated for you by LeadPilot unless you type one; it is the HMAC key).
+3. **Prerequisites:** `Messaging:PublicWebhookBaseUrl` set to an address WAHA can reach (for local WAHA with `AllowPrivateHosts=true`, `http://localhost:5100` works). RabbitMQ and the Worker running (`docker compose up`, or `dotnet run` the three projects).
+4. **Add the account:** sign in as an administrator → Messaging → Channels → New account → enter the settings above. The credentials are encrypted and never shown again.
+5. **Webhook registration** happens when you press **Connect** (LeadPilot calls WAHA to create/start the session with the webhook URL `…/api/v1/webhooks/waha/<key>`, events `message`, `message.ack`, `session.status`, HMAC secret and retry policy). You do not register it by hand; if you must, use the URL and secret shown on the account page.
+6. **Scan the QR** shown on the account page with the phone (WhatsApp → Linked devices). Status moves to Working.
+7. **Minimal manual live check** (about 5 minutes, one conversation):
+   a. From another phone send "Hello" to the connected number → within seconds it appears under Conversations, and the Webhooks page lists a `message` event as Processed.
+   b. Reply from the conversation page → the message shows Sent, then Delivered/Read after the other phone opens it.
+   c. From the other phone send "STOP" → the conversation shows opted-out, the contact is suppressed and a further reply is refused.
+   d. Stop the Worker, send "Hello" again, start the Worker → the message appears (outbox/queue durability).
+   e. Compare each step with the fake-based tests; report anything that differs (response shapes, ack timing, `@lid` ids) so the adapter can be corrected.
+8. **Troubleshooting:** webhook 401 = wrong secret; nothing arrives = WAHA cannot reach the webhook URL (check `PublicWebhookBaseUrl`) or `Waha:AllowPrivateHosts`; events stuck in the outbox = broker unreachable (health check); account paused = read the notification on the account page, fix the cause, then Resume.
+
+## Tests for Phase 5
+`dotnet test` as before. Broker tests need a RabbitMQ: set `LEADPILOT_TEST_RABBITMQ=<host>` (e.g. `localhost`, default guest/guest; otherwise they are skipped and reported as skipped). The WAHA fake is test-only (`FakeWahaServer`).

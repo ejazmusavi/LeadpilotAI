@@ -2,6 +2,8 @@ using System.Reflection;
 using LeadPilot.Application.Abstractions;
 using LeadPilot.Domain.Common;
 using LeadPilot.Domain.Crm;
+using LeadPilot.Domain.Discovery;
+using LeadPilot.Domain.Messaging;
 using LeadPilot.Domain.Tenancy;
 using LeadPilot.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -53,6 +55,27 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
     public DbSet<OpportunityActivity> OpportunityActivities => Set<OpportunityActivity>();
     public DbSet<ImportJob> ImportJobs => Set<ImportJob>();
     public DbSet<ImportRowError> ImportRowErrors => Set<ImportRowError>();
+    public DbSet<DiscoveryJob> DiscoveryJobs => Set<DiscoveryJob>();
+    public DbSet<DiscoveryResult> DiscoveryResults => Set<DiscoveryResult>();
+    public DbSet<DiscoveryConnectorConfig> DiscoveryConnectorConfigs => Set<DiscoveryConnectorConfig>();
+    public DbSet<DiscoveryUsageEntry> DiscoveryUsageEntries => Set<DiscoveryUsageEntry>();
+    public DbSet<DiscoveryCategoryMapping> DiscoveryCategoryMappings => Set<DiscoveryCategoryMapping>();
+    public DbSet<DiscoveryLocationPreset> DiscoveryLocationPresets => Set<DiscoveryLocationPreset>();
+
+    // Messaging (Phase 5)
+    public DbSet<Channel> Channels => Set<Channel>();
+    public DbSet<ChannelAccount> ChannelAccounts => Set<ChannelAccount>();
+    public DbSet<ChannelCredential> ChannelCredentials => Set<ChannelCredential>();
+    public DbSet<Conversation> Conversations => Set<Conversation>();
+    public DbSet<ConversationAssignment> ConversationAssignments => Set<ConversationAssignment>();
+    public DbSet<Message> Messages => Set<Message>();
+    public DbSet<MessageAttachment> MessageAttachments => Set<MessageAttachment>();
+    public DbSet<MessageStatusEvent> MessageStatusEvents => Set<MessageStatusEvent>();
+    public DbSet<WebhookEvent> WebhookEvents => Set<WebhookEvent>();
+    public DbSet<MessageTemplate> MessageTemplates => Set<MessageTemplate>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+    public DbSet<ProcessedMessage> ProcessedMessages => Set<ProcessedMessage>();
+    public DbSet<ChannelAccountNotification> ChannelAccountNotifications => Set<ChannelAccountNotification>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -195,6 +218,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
         });
 
         CrmModel.Configure(builder);
+        DiscoveryModel.Configure(builder);
+        MessagingModel.Configure(builder);
 
         // Every tenant-owned entity: mandatory FK to Tenant (restrict), indexed TenantId and the global tenant filter.
         foreach (var type in builder.Model.GetEntityTypes().Select(e => e.ClrType).Where(t => typeof(ITenantOwned).IsAssignableFrom(t)).ToList())

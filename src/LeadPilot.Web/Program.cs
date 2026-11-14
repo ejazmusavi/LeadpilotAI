@@ -1,3 +1,4 @@
+using Hangfire;
 using FluentValidation;
 using LeadPilot.Application;
 using LeadPilot.Infrastructure;
@@ -112,6 +113,15 @@ app.MapControllerRoute("default", "{controller=Home}/{action=Index}/{id?}").With
 
 await DatabaseInitializer.MigrateIfConfiguredAsync(app.Services, app.Configuration);
 await PlatformSeeder.SeedAsync(app.Services, app.Configuration);
+
+// Hangfire dashboard: platform operators only (Tenants.Manage / Platform.SwitchTenant), behind authentication. The default local-only filter is replaced.
+app.MapHangfireDashboard("/hangfire", new Hangfire.DashboardOptions
+{
+    DashboardTitle = "LeadPilot AI · background jobs",
+    Authorization = [],
+    AsyncAuthorization = [new LeadPilot.Infrastructure.Discovery.Jobs.PlatformDashboardAuthorizationFilter()],
+    IsReadOnlyFunc = _ => false,
+}).RequireAuthorization();
 
 app.Run();
 

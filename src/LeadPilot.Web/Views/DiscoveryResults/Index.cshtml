@@ -1,0 +1,70 @@
+@model ResultsViewModel
+@using LeadPilot.Domain.Discovery
+@using LeadPilot.Application.Discovery
+@{
+    ViewData["Title"] = "Review results";
+    var q = Model.Query; var hasFilter = Model.QueryValues.Keys.Any(k => k != "status") || q.Status != ReviewStatus.Pending;
+    var returnQuery = Context.Request.QueryString.Value ?? "";
+    var bulk = Model.CanReview && q.Status == ReviewStatus.Pending;
+    string Level(ConfidenceLevel l) => l switch { ConfidenceLevel.High => "text-bg-success", ConfidenceLevel.Medium => "text-bg-warning", _ => "text-bg-secondary" };
+}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <div><h1 class="h3 mb-0">Review results</h1><p class="text-muted mb-0">Approve what belongs in your CRM. Discovered phone numbers and e-mail addresses are public business details, <strong>not consent</strong>.</p></div>
+    <a asp-controller="Discovery" asp-action="Index" class="btn btn-outline-secondary">Searches</a>
+</div>
+<form method="get" asp-action="Index" class="card card-body mb-3"><div class="row g-3 align-items-end">
+    <div class="col-12 col-md-6 col-xl-3"><label class="form-label" for="search">Search</label><input id="search" name="search" value="@q.Search" class="form-control" placeholder="Name, city, address" /></div>
+    <div class="col-6 col-xl-2"><label class="form-label" for="status">Status</label><select id="status" name="status" class="form-select">@foreach (var s in Enum.GetValues<ReviewStatus>()) { <option value="@s" selected="@(q.Status == s)">@s</option> }<option value="" selected="@(q.Status is null)">Any</option></select></div>
+    <div class="col-6 col-xl-3"><label class="form-label" for="jobId">Discovery run</label><select id="jobId" name="jobId" class="form-select"><option value="">All searches</option>@foreach (var j in Model.RecentJobs) { <option value="@j.Id" selected="@(q.JobId == j.Id)">@(j.CategoryName ?? j.Keywords ?? "Websites") · @(j.City ?? j.Country) · @j.CreatedAtUtc.ToString("MM-dd HH:mm")</option> }</select></div>
+    <div class="col-6 col-xl-2"><label class="form-label" for="minConfidence">Min confidence</label><input id="minConfidence" name="minConfidence" type="number" min="0" max="100" value="@q.MinConfidence" class="form-control" /></div>
+    <div class="col-6 col-xl-2"><label class="form-label" for="possibleDuplicate">Duplicates</label><select id="possibleDuplicate" name="possibleDuplicate" class="form-select"><option value="">Any</option><option value="true" selected="@(q.PossibleDuplicate == true)">Possible duplicates</option><option value="false" selected="@(q.PossibleDuplicate == false)">No match</option></select></div>
+    <div class="col-6 col-xl-2"><label class="form-label" for="hasWebsite">Website</label><select id="hasWebsite" name="hasWebsite" class="form-select"><option value="">Any</option><option value="true" selected="@(q.HasWebsite == true)">Has website</option><option value="false" selected="@(q.HasWebsite == false)">No website</option></select></div>
+    <div class="col-6 col-xl-2"><label class="form-label" for="hasPhone">Phone</label><select id="hasPhone" name="hasPhone" class="form-select"><option value="">Any</option><option value="true" selected="@(q.HasPhone == true)">Has phone</option><option value="false" selected="@(q.HasPhone == false)">No phone</option></select></div>
+    <div class="col-12 col-xl-3 d-flex gap-2"><button type="submit" class="btn btn-outline-primary">Apply</button>@if (hasFilter) { <a asp-action="Index" class="btn btn-link">Clear</a> }</div>
+</div></form>
+@if (Model.Result.Items.Count == 0)
+{
+    <div class="card"><partial name="_EmptyState" model='(hasFilter ? "No results match these filters" : "Nothing to review", hasFilter ? "Try fewer filters or clear them." : "Run a search from Discovery; its results appear here. Nothing here is sample data.")' /></div>
+}
+else
+{
+    <form method="post" asp-action="BulkApprove" id="bulk-form">
+        <input type="hidden" name="returnQuery" value="@returnQuery" />
+        @if (bulk)
+        {
+            <div class="card card-body mb-2 py-2"><div class="d-flex flex-wrap gap-2 align-items-center">
+                <span class="small text-muted"><span id="bulk-count">0</span> selected</span>
+                @if (Model.CanAssign) { <select name="ownerUserId" class="form-select form-select-sm w-auto" aria-label="Owner"><option value="">No owner</option>@foreach (var o in Model.Owners) { <option value="@o.UserId">@o.DisplayName</option> }</select> }
+                <select name="onDuplicate" class="form-select form-select-sm w-auto" aria-label="If a duplicate exists"><option value="Merge">If duplicate: merge into existing lead</option><option value="CreateNew">If duplicate: create a new lead</option></select>
+                <button type="submit" class="btn btn-sm btn-primary" formaction="@Url.Action("BulkApprove")" data-confirm="Approve the selected results into the CRM? Duplicates follow the option you chose. Contacts receive no consent." data-confirm-label="Approve">Approve selected</button>
+                <button type="submit" class="btn btn-sm btn-outline-danger" formaction="@Url.Action("BulkReject")" data-confirm="Reject the selected results? They will not be offered again." data-confirm-label="Reject">Reject selected</button>
+            </div></div>
+        }
+        <div class="card"><div class="table-responsive"><table class="table align-middle mb-0 table-hover">
+            <thead><tr>@if (bulk) { <th style="width:2rem"><input type="checkbox" class="form-check-input" id="select-all" aria-label="Select all results on this page" /></th> }
+                <th>Business</th><th>Contact (public)</th><th>Confidence</th><th>Source</th><th></th></tr></thead><tbody>
+            @foreach (var r in Model.Result.Items)
+            {
+                <tr>
+                    @if (bulk) { <td><input type="checkbox" class="form-check-input lead-check" name="ids" value="@r.Id" aria-label="Select @(r.Name ?? "result")" /></td> }
+                    <td><a asp-action="Details" asp-route-id="@r.Id" class="fw-semibold text-decoration-none">@(r.Name ?? "(content removed)")</a>
+                        @if (r.ReviewStatus != ReviewStatus.Pending) { <span class="badge text-bg-@(r.ReviewStatus == ReviewStatus.Approved ? "success" : "secondary")">@r.ReviewStatus</span> }
+                        @if (r.DuplicateLeadId is not null) { <span class="badge text-bg-warning" title="@r.DuplicateReasons">possible duplicate</span> }
+                        <div class="small text-muted">@(string.Join(" · ", new[] { r.CategoryLabel, r.City, r.Address }.Where(x => !string.IsNullOrWhiteSpace(x))))</div>
+                        @if (r.Website is not null) { <div class="small"><a href="@r.Website" target="_blank" rel="noopener noreferrer nofollow">@r.Website</a></div> }</td>
+                    <td class="small">@(r.PublicPhone ?? "—")<div class="text-muted">@(r.PublicEmail ?? "")</div>@if (r.PublicPhone is not null || r.PublicEmail is not null) { <div class="text-muted fst-italic">unverified · no consent</div> }</td>
+                    <td><span class="badge @Level(r.ConfidenceLevel)">@r.ConfidenceLevel · @r.Confidence</span></td>
+                    <td class="small">@r.SourceName<div class="text-muted">@r.RetrievedAtUtc.ToString("yyyy-MM-dd")</div>@if (!string.IsNullOrWhiteSpace(r.Attribution)) { <div class="text-muted">@r.Attribution</div> }</td>
+                    <td class="text-end text-nowrap">
+                        @if (Model.CanReview && r.ReviewStatus == ReviewStatus.Pending)
+                        {
+                            <button type="submit" class="btn btn-sm btn-primary" formaction="@Url.Action("Approve", new { id = r.Id })" formmethod="post" data-confirm="Approve '@r.Name' into the CRM?" data-confirm-label="Approve">Approve</button>
+                            <button type="submit" class="btn btn-sm btn-outline-danger" formaction="@Url.Action("Reject", new { id = r.Id, returnQuery })" formmethod="post" data-confirm="Reject '@r.Name'?" data-confirm-label="Reject">Reject</button>
+                        }
+                        else if (r.LeadId is { } lid) { <a asp-controller="Leads" asp-action="Details" asp-route-id="@lid" class="btn btn-sm btn-outline-secondary">Open lead</a> }
+                    </td>
+                </tr>
+            }</tbody></table></div></div>
+    </form>
+    <partial name="_Pager" model='new PagerModel(Model.Result.Page, Model.Result.TotalPages, Model.Result.TotalCount, "Index", Model.QueryValues)' />
+}

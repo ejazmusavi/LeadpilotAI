@@ -27,6 +27,7 @@ public class TenancyArchitectureTests
         "src/LeadPilot.Infrastructure/Services/Tenancy/TenantAdminService.cs",     // platform tenant lifecycle (member counts, provisioning)
         "src/LeadPilot.Infrastructure/Services/Tenancy/InvitationService.cs",      // token-keyed invitation preview/accept
         "src/LeadPilot.Infrastructure/Services/Tenancy/TenantSwitchService.cs",    // a user's memberships across tenants
+        "src/LeadPilot.Infrastructure/Messaging/Services/MessagingDirectory.cs",   // webhook key → tenant, tenants with due outbox rows / stuck messages (everything that must happen BEFORE a tenant scope exists)
     ];
 
     private static string RepoRoot()
@@ -113,7 +114,7 @@ public class TenancyArchitectureTests
     public void Tenant_controllers_authorize_every_action_explicitly()
     {
         string[] tenantControllers = ["TenantsController", "UsersController", "RolesController", "InvitationsController", "SettingsController", "AuditController",
-            "AuditLogsController", "PermissionsController", "WorkspaceController", "AuthController", .. CrmArchitectureTests.CrmControllers];
+            "AuditLogsController", "PermissionsController", "WorkspaceController", "AuthController", .. CrmArchitectureTests.CrmControllers, .. MessagingArchitectureTests.MessagingControllers];
         var unprotected = new List<string>();
         foreach (var asm in new[] { typeof(LeadPilot.Web.Models.ErrorViewModel).Assembly, typeof(LeadPilot.Api.Controllers.AuthController).Assembly })
             foreach (var c in Controllers(asm).Where(c => tenantControllers.Contains(c.Name)))
@@ -131,7 +132,7 @@ public class TenancyArchitectureTests
     [Fact]
     public void Administrative_controllers_require_a_permission_policy_that_exists_in_the_catalog()
     {
-        string[] administrative = ["TenantsController", "UsersController", "RolesController", "SettingsController", "AuditController", "AuditLogsController", "PermissionsController", .. CrmArchitectureTests.CrmControllers];
+        string[] administrative = ["TenantsController", "UsersController", "RolesController", "SettingsController", "AuditController", "AuditLogsController", "PermissionsController", .. CrmArchitectureTests.CrmControllers, .. MessagingArchitectureTests.AdministrativeMessagingControllers];
         foreach (var asm in new[] { typeof(LeadPilot.Web.Models.ErrorViewModel).Assembly, typeof(LeadPilot.Api.Controllers.AuthController).Assembly })
             foreach (var c in Controllers(asm).Where(c => administrative.Contains(c.Name)))
             {

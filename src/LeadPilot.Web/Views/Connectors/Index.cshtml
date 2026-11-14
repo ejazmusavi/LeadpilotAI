@@ -1,0 +1,44 @@
+@model ConnectorsViewModel
+@using LeadPilot.Application.Discovery
+@{ ViewData["Title"] = "Connectors & usage"; }
+<h1 class="h3 mb-1">Connectors &amp; usage</h1>
+<p class="text-muted">Where discovery gets its data. API keys are stored encrypted for this workspace only and are never shown again. Cost figures are <strong>estimates</strong> from the per-call cost you set, not billing data.</p>
+<div class="row g-3 mb-4">
+@foreach (var c in Model.All)
+{
+    <div class="col-12 col-xl-6"><div class="card h-100"><div class="card-header d-flex justify-content-between align-items-center"><span>@c.DisplayName@(c.IsTestOnly ? " (TEST ONLY)" : "")</span>
+        <span class="badge @(c.IsReady ? "text-bg-success" : c.Kind == ConnectorKind.ExtensionPoint ? "text-bg-secondary" : c.Kind == ConnectorKind.InApp ? "text-bg-info" : "text-bg-warning")">@c.StatusText</span></div>
+    <div class="card-body">
+        <p class="small text-muted">@c.Description</p>
+        @if (c.Kind == ConnectorKind.Search)
+        {
+            <form asp-action="Save" method="post" class="row g-2">
+                <input type="hidden" name="type" value="@c.Key" />
+                @if (c.RequiresCredentials)
+                {
+                    <div class="col-12"><label class="form-label" for="key-@c.Key">API key @if (c.HasCredential) { <span class="text-muted small">(saved: @c.KeyHint — enter a new one to replace it)</span> }</label>
+                        <input id="key-@c.Key" name="apiKey" type="password" autocomplete="off" class="form-control" placeholder="@(c.HasCredential ? "unchanged" : "paste your key")" maxlength="300" />
+                        @if (c.HasCredential) { <div class="form-check mt-1"><input class="form-check-input" type="checkbox" name="clearApiKey" value="true" id="clear-@c.Key" /><label class="form-check-label small" for="clear-@c.Key">Remove the saved key</label></div> }</div>
+                }
+                <div class="col-md-4"><label class="form-label" for="limit-@c.Key">Monthly call limit</label><input id="limit-@c.Key" name="monthlyCallLimit" type="number" min="0" value="@c.MonthlyCallLimit" placeholder="@c.EffectiveMonthlyCallLimit (default)" class="form-control" /></div>
+                <div class="col-md-4"><label class="form-label" for="budget-@c.Key">Monthly budget (USD)</label><input id="budget-@c.Key" name="monthlyBudgetUsd" type="number" min="0" step="0.01" value="@c.MonthlyBudgetUsd" placeholder="none" class="form-control" /></div>
+                <div class="col-md-4"><label class="form-label" for="cost-@c.Key">Est. cost / call (USD)</label><input id="cost-@c.Key" name="costPerCallUsd" type="number" min="0" step="0.001" value="@c.CostPerCallUsd" placeholder="@c.EffectiveCostPerCallUsd.ToString("0.000") (default)" class="form-control" /></div>
+                <div class="col-12 d-flex flex-wrap align-items-center gap-3"><div class="form-check"><input class="form-check-input" type="checkbox" name="enabled" value="true" id="en-@c.Key" checked="@c.IsEnabled" /><label class="form-check-label" for="en-@c.Key">Enabled</label></div>
+                    <button type="submit" class="btn btn-primary btn-sm">Save</button></div>
+            </form>
+            <hr /><div class="small"><strong>This month:</strong> @c.CallsThisMonth of @c.EffectiveMonthlyCallLimit calls · ≈ @c.CostThisMonth.ToString("0.00") USD@if (c.Attribution is not null) { <div class="text-muted">Attribution shown with results: @c.Attribution</div> }</div>
+        }
+        else if (c.Kind == ConnectorKind.InApp) { <a href="@c.InAppPath" class="btn btn-outline-primary btn-sm">Open</a> }
+        else { <div class="small">@c.NotConfiguredReason</div> }
+    </div></div></div>
+}
+</div>
+<h2 class="h5">Recent calls</h2>
+@if (Model.Usage.Recent.Items.Count == 0) { <div class="card"><partial name="_EmptyState" model='("No calls yet", "Calls are listed here as searches run.")' /></div> }
+else
+{
+    <div class="card"><div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th>When (UTC)</th><th>Connector</th><th>Operation</th><th>Calls</th><th>Est. cost</th><th>HTTP</th><th>Search</th></tr></thead><tbody>
+    @foreach (var u in Model.Usage.Recent.Items) { <tr><td class="small">@u.OccurredAtUtc.ToString("yyyy-MM-dd HH:mm:ss")</td><td>@u.ConnectorType</td><td>@u.Operation</td><td>@u.Calls</td><td>@u.EstimatedCostUsd.ToString("0.000")</td><td>@(u.HttpStatus?.ToString() ?? "—")</td><td>@if (u.JobId is { } j) { <a asp-controller="Discovery" asp-action="Details" asp-route-id="@j">open</a> }</td></tr> }
+    </tbody></table></div></div>
+    <partial name="_Pager" model='new PagerModel(Model.Usage.Recent.Page, Model.Usage.Recent.TotalPages, Model.Usage.Recent.TotalCount, "Index", new Dictionary<string, string?>())' />
+}

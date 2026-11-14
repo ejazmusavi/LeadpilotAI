@@ -26,7 +26,7 @@ builder.Services.AddIdentityCore<ApplicationUser>(IdentitySetup.Configure)
     .AddDefaultTokenProviders();
 builder.Services.AddTenancyServices(builder.Configuration, builder.Environment); // throws outside Development when Jwt:SigningKey is missing
 builder.Services.Configure<TenantResolutionOptions>(o =>
-    o.ExemptPathPrefixes = ["/api/v1/auth", "/api/v1/invitations/accept", "/health", "/swagger"]);
+    o.ExemptPathPrefixes = ["/api/v1/auth", "/api/v1/invitations/accept", "/api/v1/webhooks", "/health", "/swagger"]);
 
 builder.Services.AddControllers(o => o.Filters.AddService<RejectSpoofedTenantFilter>())
     .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
@@ -66,8 +66,12 @@ builder.Services.AddRateLimiter(o =>
     o.AddPolicy("auth", ctx => RateLimitPartition.GetFixedWindowLimiter(
         ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = builder.Configuration.GetValue("RateLimiting:AuthPermitLimit", 20), Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+    // webhooks are machine traffic from the gateway: they get their own per-(account key, IP) limit instead of the shared per-IP API limit
+    o.AddPolicy("webhook", ctx => RateLimitPartition.GetFixedWindowLimiter(
+        (ctx.Request.RouteValues["key"]?.ToString() ?? "-") + "|" + (ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = builder.Configuration.GetValue("RateLimiting:WebhookPermitLimit", 600), Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
     o.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>
-        RateLimitPartition.GetFixedWindowLimiter(ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        ctx.Request.Path.StartsWithSegments("/api/v1/webhooks") ? RateLimitPartition.GetNoLimiter("webhooks") : RateLimitPartition.GetFixedWindowLimiter(ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new FixedWindowRateLimiterOptions { PermitLimit = builder.Configuration.GetValue("RateLimiting:ApiPermitLimit", 300), Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 });
 builder.Services.Configure<ForwardedHeadersOptions>(o =>

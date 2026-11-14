@@ -4,11 +4,10 @@ using Microsoft.EntityFrameworkCore;
 namespace LeadPilot.Worker;
 
 /// <summary>
-/// Phase 1 host: verifies database connectivity at start and then idles.
-/// Hangfire, RabbitMQ consumers and job handlers are added in the phases that need them
-/// (discovery, messaging, campaigns) — no job logic exists yet by design.
+/// Verifies database connectivity at start and registers the recurring jobs. Job processing itself is done by the Hangfire server
+/// (discovery searches, retention). RabbitMQ consumers are added in the phases that need durable events (messaging).
 /// </summary>
-public sealed class Worker(IServiceScopeFactory scopes, ILogger<Worker> logger) : BackgroundService
+public sealed class Worker(IServiceScopeFactory scopes, Hangfire.IRecurringJobManager recurring, ILogger<Worker> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -19,6 +18,7 @@ public sealed class Worker(IServiceScopeFactory scopes, ILogger<Worker> logger) 
             if (ok) logger.LogInformation("Worker started; database connection OK");
             else logger.LogError("Worker started but the database is unreachable");
         }
+        LeadPilot.Infrastructure.Discovery.Jobs.HangfireSetup.ScheduleRecurring(recurring);
         await Task.Delay(Timeout.Infinite, stoppingToken).ContinueWith(_ => { });
     }
 }

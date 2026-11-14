@@ -15,6 +15,7 @@ public class CrmArchitectureTests
     [
         "LeadsController", "ContactsController", "AudienceController", "NotesController", "TagsController", "PipelinesController", "CatalogController", "CategoriesController",
         "ScoringController", "ImportsController", "SuppressionController", "OpportunitiesController",
+        "DiscoveryController", "DiscoveryResultsController", "DiscoverySetupController", "ConnectorsController", "DiscoveryJobsController", "DiscoveryConnectorsController", "DiscoveryCatalogController",
     ];
 
     private static IEnumerable<Type> Controllers(Assembly a) => a.GetTypes().Where(t => typeof(ControllerBase).IsAssignableFrom(t) && !t.IsAbstract && CrmControllers.Contains(t.Name));
@@ -71,7 +72,7 @@ public class CrmArchitectureTests
     public void Mutating_mvc_actions_only_answer_post()
     {
         string[] mutatingPrefixes = ["Archive", "Restore", "Delete", "Remove", "Bulk", "Assign", "ChangeStage", "SetTags", "AddNote", "AddContact", "RecordConsent", "Rescore", "Run", "Upload",
-            "ResolveDuplicate", "ToggleRule", "AddRule", "Rename", "SetDefault", "SetActive", "AddStage", "UpdateStage", "MoveStage", "DeleteStage", "CreateCategory", "CreateStatus", "UpdateStatus", "SetCategoryActive", "SetStatusActive", "Add"];
+            "ResolveDuplicate", "ToggleRule", "AddRule", "Rename", "SetDefault", "SetActive", "AddStage", "UpdateStage", "MoveStage", "DeleteStage", "CreateCategory", "CreateStatus", "UpdateStatus", "SetCategoryActive", "SetStatusActive", "Add", "Approve", "Reject", "Cancel", "Retry", "Rerun", "SaveMapping", "SetMappingActive", "InstallPack", "Save"];
         var problems = new List<string>();
         foreach (var c in Controllers(Web))
             foreach (var m in c.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))

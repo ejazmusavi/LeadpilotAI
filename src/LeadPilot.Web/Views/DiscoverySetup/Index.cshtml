@@ -1,0 +1,53 @@
+@model DiscoverySetupViewModel
+@{ ViewData["Title"] = "Categories & locations"; }
+<h1 class="h3 mb-1">Discovery categories &amp; locations</h1>
+<p class="text-muted">Tell discovery what to search for in each of your lead categories, and keep the places you search often. All of it is your data: edit, deactivate or add anything. Categories themselves are managed under <a asp-controller="Categories" asp-action="Index">Categories &amp; statuses</a>.</p>
+<div class="row g-3">
+    <div class="col-12 col-xl-7"><div class="card"><div class="card-header">Search phrases per category</div>
+        @if (Model.CanManage && Model.UnmappedCategories.Count > 0)
+        {
+            <div class="card-body border-bottom"><form asp-action="SaveMapping" method="post" class="row g-2 align-items-end">
+                <div class="col-md-4"><label class="form-label" for="new-cat">Category</label><select id="new-cat" name="categoryId" class="form-select" required>@foreach (var c in Model.UnmappedCategories) { <option value="@c.Id">@c.Name</option> }</select></div>
+                <div class="col-md-5"><label class="form-label" for="new-terms">Search phrases (one per line)</label><textarea id="new-terms" name="searchTerms" rows="2" class="form-control" required maxlength="600"></textarea></div>
+                <div class="col-md-3"><label class="form-label" for="new-type">Place type</label><input id="new-type" name="placeType" class="form-control" maxlength="60" placeholder="optional" /></div>
+                <div class="col-12"><button type="submit" class="btn btn-primary">Add</button></div></form></div>
+        }
+        @if (Model.Mappings.Count == 0) { <partial name="_EmptyState" model='("No search phrases yet", "Categories without phrases are searched by their name. Add phrases above, or install a starter pack.")' /> }
+        else
+        {
+            <ul class="list-group list-group-flush">@foreach (var m in Model.Mappings)
+            {
+                <li class="list-group-item @(m.IsActive ? "" : "text-muted")">
+                    @if (Model.CanManage)
+                    {
+                        <form asp-action="SaveMapping" method="post" class="row g-2 align-items-end"><input type="hidden" name="categoryId" value="@m.CategoryId" />
+                            <div class="col-md-4"><div class="fw-semibold">@m.CategoryName</div>@if (!m.IsActive) { <span class="badge text-bg-secondary">inactive</span> }</div>
+                            <div class="col-md-5"><textarea name="searchTerms" rows="2" class="form-control form-control-sm" aria-label="Search phrases for @m.CategoryName" maxlength="600">@string.Join("\n", m.SearchTerms)</textarea></div>
+                            <div class="col-md-3"><input name="placeType" value="@m.PlaceType" class="form-control form-control-sm mb-1" aria-label="Place type" maxlength="60" placeholder="place type" /><button type="submit" class="btn btn-sm btn-outline-secondary">Save</button>
+                                <button type="submit" class="btn btn-sm btn-outline-warning" formaction="@Url.Action("SetMappingActive", new { id = m.Id, active = !m.IsActive })">@(m.IsActive ? "Deactivate" : "Activate")</button></div></form>
+                    }
+                    else { <div class="fw-semibold">@m.CategoryName</div><div class="small">@string.Join(" · ", m.SearchTerms)</div> }
+                </li>
+            }</ul>
+        }
+    </div></div>
+    <div class="col-12 col-xl-5">
+        <div class="card mb-3"><div class="card-header">Starter packs</div><div class="card-body">
+            @foreach (var p in Model.Packs)
+            {
+                <div class="d-flex justify-content-between align-items-start gap-2"><div><div class="fw-semibold">@p.Name</div><div class="small text-muted">@p.Description (@p.Categories categories, @p.Locations locations)</div></div>
+                    @if (Model.CanManage) { <form asp-action="InstallPack" method="post"><input type="hidden" name="key" value="@p.Key" /><button type="submit" class="btn btn-sm btn-outline-primary" data-confirm="Add the categories, search phrases and locations of this pack? Anything you already have stays as it is." data-confirm-label="Install">@(p.Installed ? "Re-apply" : "Install")</button></form> }
+                    else if (p.Installed) { <span class="badge text-bg-success">installed</span> }</div>
+            }
+        </div></div>
+        <div class="card"><div class="card-header">Saved locations</div>
+            @if (Model.CanManage) { <div class="card-body border-bottom"><form asp-action="AddLocation" method="post" class="row g-2">
+                <div class="col-6"><input name="country" class="form-control" placeholder="Country" aria-label="Country" required maxlength="100" /></div><div class="col-6"><input name="province" class="form-control" placeholder="Province" aria-label="Province" maxlength="100" /></div>
+                <div class="col-4"><input name="city" class="form-control" placeholder="City" aria-label="City" maxlength="100" /></div><div class="col-4"><input name="district" class="form-control" placeholder="District" aria-label="District" maxlength="100" /></div><div class="col-4"><input name="area" class="form-control" placeholder="Area" aria-label="Area" maxlength="100" /></div>
+                <div class="col-12"><button type="submit" class="btn btn-primary btn-sm">Add location</button></div></form></div> }
+            @if (Model.Locations.Count == 0) { <partial name="_EmptyState" model='("No saved locations", "You can always type any location when starting a search.")' /> }
+            else { <ul class="list-group list-group-flush">@foreach (var l in Model.Locations) { <li class="list-group-item d-flex justify-content-between align-items-center"><span>@l.Label</span>
+                @if (Model.CanManage) { <form asp-action="DeleteLocation" method="post"><input type="hidden" name="id" value="@l.Id" /><button type="submit" class="btn btn-sm btn-outline-danger" data-confirm="Remove '@l.Label' from your saved locations?" data-confirm-label="Remove">Remove</button></form> }</li> }</ul> }
+        </div>
+    </div>
+</div>

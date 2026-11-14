@@ -1,0 +1,110 @@
+@model AccountDetailsViewModel
+@using LeadPilot.Domain.Messaging
+@{
+    var a = Model.Account; ViewData["Title"] = a.DisplayName + " · WhatsApp";
+    string Badge(ConnectionStatus s) => s switch { ConnectionStatus.Working => "text-bg-success", ConnectionStatus.ScanQrCode => "text-bg-warning", ConnectionStatus.Failed => "text-bg-danger", ConnectionStatus.Starting => "text-bg-info", _ => "text-bg-secondary" };
+    var webhookUrl = Model.Setup is null ? null : (string.IsNullOrWhiteSpace(Model.PublicWebhookBase) ? Model.Setup.WebhookPath : Model.PublicWebhookBase!.TrimEnd('/') + Model.Setup.WebhookPath);
+}
+<div class="d-flex flex-wrap justify-content-between align-items-start mb-3 gap-2">
+    <div><h1 class="h3 mb-1">@a.DisplayName <span class="badge @Badge(a.Status) fs-6" id="account-status">@a.Status</span> @if (a.IsPaused) { <span class="badge text-bg-warning fs-6">Paused</span> }</h1>
+        <div class="text-muted">@(a.PhoneE164 ?? "number not known yet")@(a.PushName is null ? "" : " · " + a.PushName) · session <code>@a.GatewayAccountId</code> · @a.BaseUrlHost@(a.Engine is null ? "" : " · engine " + a.Engine)</div></div>
+    <div class="d-flex flex-wrap gap-2">
+        <form asp-action="Refresh" asp-route-id="@a.Id" method="post"><button type="submit" class="btn btn-outline-secondary">Refresh status</button></form>
+        @if (Model.CanManage)
+        {
+            <form asp-action="Connect" asp-route-id="@a.Id" method="post"><button type="submit" class="btn btn-primary">Connect / sync with WAHA</button></form>
+            @if (a.IsPaused) { <form asp-action="Resume" asp-route-id="@a.Id" method="post"><button type="submit" class="btn btn-success">Resume sending</button></form> }
+            else { <form asp-action="Pause" asp-route-id="@a.Id" method="post"><button type="submit" class="btn btn-outline-warning" data-confirm="Pause sending from this account? Queued messages fail instead of being sent." data-confirm-label="Pause">Pause sending</button></form> }
+        }
+    </div>
+</div>
+<partial name="_WhatsAppRisk" />
+@if (a.IsPaused)
+{
+    <div class="alert alert-warning" role="alert"><strong>Sending is paused@(a.PausedAutomatically ? " automatically" : "").</strong> @a.PauseReason</div>
+}
+@if (a.NewContactBlockedUntilUtc is { } until)
+{
+    <div class="alert alert-danger" role="alert"><strong>WhatsApp restricts messages to new contacts until @until.ToString("yyyy-MM-dd HH:mm") UTC.</strong> Existing conversations still work. Do not restart, log out or re-link the session: it does not lift the restriction.</div>
+}
+@if (Model.Notifications.Any(n => n.AcknowledgedAtUtc is null))
+{
+    <div class="card border-danger mb-3"><div class="card-header d-flex justify-content-between"><span>Notices</span>
+        @if (Model.CanManage) { <form asp-action="Acknowledge" asp-route-id="@a.Id" method="post"><button type="submit" class="btn btn-sm btn-outline-secondary">Mark all as seen</button></form> }</div>
+        <ul class="list-group list-group-flush">@foreach (var n in Model.Notifications.Where(n => n.AcknowledgedAtUtc is null)) { <li class="list-group-item small"><span class="badge text-bg-danger me-2">@n.Kind</span>@n.Message <span class="text-muted">· @n.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm") UTC</span></li> }</ul></div>
+}
+<div class="row g-3">
+    <div class="col-12 col-lg-6">
+        @if (Model.CanManage && a.Status == ConnectionStatus.ScanQrCode)
+        {
+            <div class="card mb-3" id="qr-card"><div class="card-header">Scan with WhatsApp</div><div class="card-body text-center">
+                <p class="small text-muted">On the phone: WhatsApp → Settings → Linked devices → Link a device. The code refreshes about every 20 seconds.</p>
+                <img id="qr-img" alt="WhatsApp QR code" class="img-fluid" style="max-width:280px" hidden /><div id="qr-msg" class="text-muted">Loading the QR code…</div>
+            </div></div>
+        }
+        <div class="card mb-3"><div class="card-header">Usage and limits</div><div class="card-body">
+            <dl class="row small mb-3">
+                <dt class="col-6">Sent in the last hour</dt><dd class="col-6">@a.SentLastHour of @a.HourlyCap</dd>
+                <dt class="col-6">Sent in the last 24 h</dt><dd class="col-6">@a.SentLast24Hours of @a.DailyLimitToday allowed today</dd>
+                <dt class="col-6">Failed sends in a row</dt><dd class="col-6">@a.ConsecutiveFailures</dd>
+            </dl>
+            @if (Model.CanManage)
+            {
+                <form asp-action="Limits" asp-route-id="@a.Id" method="post" data-loading-form>
+                    <div class="row g-2">
+                        <div class="col-12"><label class="form-label" for="DisplayName">Account name</label><input id="DisplayName" name="DisplayName" value="@Model.Limits.DisplayName" class="form-control" required /></div>
+                        <div class="col-4"><label class="form-label" for="HourlyCap">Per hour</label><input id="HourlyCap" name="HourlyCap" type="number" min="1" max="120" value="@Model.Limits.HourlyCap" class="form-control" /></div>
+                        <div class="col-4"><label class="form-label" for="DailyCap">Per day</label><input id="DailyCap" name="DailyCap" type="number" min="1" max="1000" value="@Model.Limits.DailyCap" class="form-control" /></div>
+                        <div class="col-4"><label class="form-label" for="MinDelaySeconds">Gap (s)</label><input id="MinDelaySeconds" name="MinDelaySeconds" type="number" min="10" max="3600" value="@Model.Limits.MinDelaySeconds" class="form-control" /></div>
+                    </div>
+                    <button type="submit" class="btn btn-outline-primary mt-3"><span class="spinner-border spinner-border-sm d-none" aria-hidden="true"></span> Save</button>
+                </form>
+            }
+        </div></div>
+    </div>
+    <div class="col-12 col-lg-6">
+        @if (Model.Setup is { } setup)
+        {
+            <div class="card mb-3"><div class="card-header">Webhook</div><div class="card-body small">
+                <p>"Connect / sync" registers this address with WAHA automatically. Set it by hand only if you manage WAHA's session configuration yourself.</p>
+                <label class="form-label" for="webhook-url">Webhook URL</label>
+                <input id="webhook-url" class="form-control form-control-sm mb-2" readonly value="@webhookUrl" />
+                @if (string.IsNullOrWhiteSpace(Model.PublicWebhookBase)) { <div class="text-danger mb-2">The public address of the API is not configured (<code>Messaging:PublicWebhookBaseUrl</code>), so "Connect" cannot register the webhook yet.</div> }
+                <div>Events: @string.Join(", ", setup.Events.Select(e => e))</div>
+                <div class="text-muted mt-1">Signature: <code>X-Webhook-Hmac</code> (HMAC-SHA512 of the body). The address contains a secret key: treat it like a password.</div>
+                @if (setup.AckTrackingRequiresWebjsFlag) { <div class="text-muted mt-1">The WEBJS engine only reports delivery/read ticks with <code>webjs.tagsEventsOn</code>; "Connect" turns it on.</div> }
+            </div></div>
+            <div class="card mb-3"><div class="card-header">Gateway credentials</div><div class="card-body small">
+                <div>Server: <strong>@a.BaseUrlHost</strong> · API key <code>@a.KeyHint</code> (encrypted, never shown)</div>
+                <a asp-action="Credentials" asp-route-id="@a.Id" class="btn btn-sm btn-outline-secondary mt-2">Replace credentials</a>
+            </div></div>
+            <div class="card border-danger"><div class="card-header text-danger">Danger zone</div><div class="card-body d-flex flex-wrap gap-2">
+                <form asp-action="Disconnect" asp-route-id="@a.Id" method="post"><input type="hidden" name="logout" value="false" /><button type="submit" class="btn btn-outline-danger btn-sm" data-confirm="Stop the WhatsApp session? Nothing is sent until you connect it again." data-confirm-label="Stop session">Stop session</button></form>
+                <form asp-action="Disconnect" asp-route-id="@a.Id" method="post"><input type="hidden" name="logout" value="true" /><button type="submit" class="btn btn-outline-danger btn-sm" data-confirm="Unlink this phone from WhatsApp? You will have to scan a new QR code to use it again." data-confirm-label="Unlink phone">Unlink phone</button></form>
+                <form asp-action="Remove" asp-route-id="@a.Id" method="post"><button type="submit" class="btn btn-danger btn-sm" data-confirm="Remove this account from LeadPilot? Its webhook stops being accepted. The WAHA session itself is not touched." data-confirm-label="Remove account">Remove account</button></form>
+            </div></div>
+        }
+    </div>
+</div>
+@section Scripts {
+@if (Model.CanManage && a.Status == ConnectionStatus.ScanQrCode)
+{
+<script>
+(function () {
+  var img = document.getElementById('qr-img'), msg = document.getElementById('qr-msg');
+  function tick() {
+    fetch('@Url.Action("Qr", new { id = a.Id })', { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+      .then(function (d) {
+        if (d.status !== 'ScanQrCode') { window.location.reload(); return; }
+        if (d.png) { img.src = 'data:image/png;base64,' + d.png; img.hidden = false; msg.hidden = true; }
+        else if (d.raw) { msg.textContent = 'WAHA returned the raw QR value only: ' + d.raw; img.hidden = true; msg.hidden = false; }
+        setTimeout(tick, 5000);
+      })
+      .catch(function () { msg.textContent = 'Could not load the QR code. Retrying…'; msg.hidden = false; setTimeout(tick, 8000); });
+  }
+  tick();
+})();
+</script>
+}
+}

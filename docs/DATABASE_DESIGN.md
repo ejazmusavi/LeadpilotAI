@@ -54,11 +54,39 @@ Relationships: Lead 1—* Contact; Lead 1—* Opportunity; Contact 1—* Consent
 
 Default data per tenant (code, applied at tenant creation and by the idempotent seeder): pipeline "Sales pipeline" with the 14 stages (New, Researched, Contact Eligible, Contacted, Responded, Interested, Qualified, Demo Scheduled, Demo Completed, Trial, Negotiation, Won, Lost, Suppressed), statuses Open/Working/Nurturing/Disqualified, scoring rule set v1 (9 rules).
 
-## 3. Discovery (Phase 4)
-DiscoveryJob (T: Params JSON, Status, Progress, Attempts, RequestedBy, UsageCost) · DiscoveryResult (T: raw normalized payload, SourceId, Confidence, ReviewStatus Pending/Approved/Rejected, DuplicateOfLeadId?, RetrievedAtUtc, ExpiresAtUtc for provider caching limits) · DiscoveryConnectorConfig (T: provider, encrypted creds, quota) · UsageRecord shared with billing. Unique `(TenantId, ConnectorType, ExternalId)` makes retries idempotent.
+## 3. Discovery (Phase 4) — migration `Phase4Discovery`
+All tables are tenant-owned (global filter + SaveChanges guard + cross-tenant FK check). Hangfire's own tables (prefix `Hangfire`) are created by Hangfire at runtime, not by EF.
+| Table | Columns / constraints |
+|---|---|
+| `DiscoveryJobs` | ConnectorType(50), Status(Queued/Running/Completed/Failed/Cancelled), Country/Province/City/District/Area(100), CategoryId? FK→LeadCategories, Keywords(300), SeedUrls(4000, website connector), MaxResults, EnrichWebsites, RequestedByUserId, HangfireJobId(64), counters (PagesFetched, ResultsFound, ResultsNew, ResultsAlreadyKnown, DuplicatesFlagged, ApiCalls, EstimatedCostUsd decimal(18,6)), Attempts, **Checkpoint**(2000), CancelRequested, Warnings(1000), ErrorCode(50)/ErrorMessage(500)/ErrorRetryable, StartedAtUtc, CompletedAtUtc, Version. Indexes (TenantId, CreatedAtUtc), (TenantId, Status) |
+| `DiscoveryResults` | JobId FK, ConnectorType, **ExternalId(300)**, Name(300), CategoryId? FK, CategoryLabel, Country…Area, Address(500), Website(500), PublicPhone(40), PublicEmail(256), SocialLinks(JSON), SourceName/SourceUrl/Attribution, **RetrievedAtUtc, ExpiresAtUtc, ContentPurged**, LastVerifiedAtUtc, **Confidence 0–100 + ConfidenceLevel**, ResearchNotes(2000), **Provenance**(JSON field→ProviderReported/Unverified/Corroborated), Enrichment status, **ReviewStatus**(Pending/Approved/Rejected; concurrency token), ReviewedByUserId/At, ReviewNote, DuplicateLeadId? FK→Leads, DuplicateReasons, LeadId? FK→Leads, Approval(Created/Merged). **Unique (TenantId, ConnectorType, ExternalId)** = retry/repeat idempotency; indexes (TenantId, JobId, ReviewStatus), (TenantId, ReviewStatus, Confidence), (ExpiresAtUtc, ContentPurged) |
+| `DiscoveryConnectorConfigs` | ConnectorType(50), IsEnabled, **ProtectedApiKey**(2000, `enc:v1:` Data Protection ciphertext), KeyHint(last 4), MonthlyCallLimit?, MonthlyBudgetUsd?, CostPerCallUsd?. **Unique (TenantId, ConnectorType)** |
+| `DiscoveryUsageEntries` | *append-only ledger*. JobId?, ConnectorType, Operation(100), Calls, EstimatedCostUsd(18,6), HttpStatus?, PeriodKey (yyyymm), OccurredAtUtc. Index (TenantId, ConnectorType, PeriodKey). Monthly usage = sum per period |
+| `DiscoveryCategoryMappings` | CategoryId FK→LeadCategories (reuses the Phase 3 category), SearchTerms (≤5 phrases, newline separated), PlaceType?, IsActive. **Unique (TenantId, CategoryId)** |
+| `DiscoveryLocationPresets` | Country, Province?, City?, District?, Area?, Label. **Unique (TenantId, Label)** |
 
-## 4. Messaging (Phase 5)
-Channel (G catalog: WhatsApp…) · ChannelAccount (T: gateway account id **unique globally** for webhook→tenant resolution, Status) · ChannelCredential (T: encrypted) · Conversation (T: ContactId, ChannelAccountId, Status Open/Pending/Closed, AiMode Active/Paused/HumanControl, AssignedUserId, last message timestamps) · Message (T: ConversationId, Direction, ExternalMessageId, Body, Status, CorrelationId, IdempotencyKey; unique `(TenantId, ChannelAccountId, ExternalMessageId)` and unique outbound idempotency key) · MessageAttachment · MessageStatusEvent (Sent/Delivered/Read/Failed) · WebhookEvent (T: payload, `(ChannelAccountId, ExternalEventId)` unique, ProcessedAt) · MessageTemplate (T) · OutboxMessage (T) · ProcessedMessage (consumer idempotency) · ConversationAssignment (history), InternalNote.
+Defaults are data, not code paths: the "Education — Pakistan" starter pack (the school categories — Private, Primary, Secondary, Higher secondary schools, Colleges, Academies, Educational institutions — their search phrases, and 11 Pakistani cities) is installed automatically only for workspaces whose industry is *Education*, or on demand for any workspace; installing is idempotent and never overwrites edits. Existing `LeadSources` rows get `(Discovery, "<connector>:<externalId>")`, reusing the Phase 3 unique `(TenantId, Type, ExternalId)`.
+
+## 4. Messaging (Phase 5) — implemented, migration `Phase5Messaging`
+All 13 tables are tenant-owned (`TenantId` NOT NULL + FK to `Tenants` + query filter + SaveChanges guard incl. cross-tenant FK rejection). Enums are stored as strings.
+
+| Table | Purpose / key columns | Constraints and indexes |
+|---|---|---|
+| `Channels` | per-tenant catalog entry (WhatsApp via WAHA), created with the first account | unique `(TenantId, Type, Provider)` |
+| `ChannelAccounts` | one WAHA session: `DisplayName`, `GatewayAccountId` (session name), `WebhookKey` (random 24 bytes hex in the webhook URL), `ConnectionStatus`, `PhoneE164`, pause state (`IsPaused`, `PausedAutomatically`, `PauseReason`), `ConsecutiveFailures`, `NewContactBlockedUntilUtc`, `HourlyCap`/`DailyCap`/`MinDelaySeconds`, `WarmupStartedAtUtc`, `LastSendAtUtc`, soft delete | **unique `GatewayAccountId` across ALL tenants**, **unique `WebhookKey`**, FK → `Channels` |
+| `ChannelCredentials` | `ProtectedBaseUrl`, `ProtectedApiKey`, `ProtectedWebhookSecret` (Data Protection, ciphertext bound to tenant+account), `KeyHint` | unique `ChannelAccountId`; there is no plain-text column |
+| `Conversations` | `ExternalChatId`, `PeerPhoneE164`, `PeerName`, `ContactId?`, `Status`, `AiMode` (default Paused), `AssignedUserId?`, `LastMessageAtUtc`/`LastInboundAtUtc`/`LastOutboundAtUtc`, `LastMessagePreview`, `UnreadCount`, `OptedOutAtUtc?` | unique `(TenantId, ChannelAccountId, ExternalChatId)`, index `(TenantId, LastMessageAtUtc)`, `(TenantId, ContactId)`; FK → account, contact (RESTRICT) |
+| `ConversationAssignments` | append-only assignment history | index `(TenantId, ConversationId, AssignedAtUtc)` |
+| `Messages` | `Direction`, `Purpose` (Service/Marketing), `Status` (Queued, Sending, Unknown, Sent, Delivered, Read, Failed, Received), `ExternalMessageId`, `Body`, `CorrelationId`, `IdempotencyKey`, `SendAttempts`, `NextAttemptAtUtc`, `SendStartedAtUtc`, sent/delivered/read/failed timestamps, `FailureCode/Message`, `Version` (concurrency token) | **unique `(TenantId, ChannelAccountId, ExternalMessageId)`** (exactly-once storage; NULLs allowed), **unique `(TenantId, IdempotencyKey)`**, index `(Status, NextAttemptAtUtc)` (sweeper), `(TenantId, ChannelAccountId, SentAtUtc)` (rate counts), `(TenantId, ConversationId, OccurredAtUtc)` |
+| `MessageAttachments` | metadata only (`FileName`, `MimeType`, `SizeBytes`, `Status` NotDownloaded/Rejected, `StorageKey` stays empty until a later phase stores content through `ITenantFileStore`) | size ≤ 16 MB and a MIME allow-list are applied when the row is created |
+| `MessageStatusEvents` | **append-only** history of every status (`Source` queue/send/ack/reconcile, `GatewayAck`, `Applied`) | index `(TenantId, MessageId, RecordedAtUtc)` |
+| `WebhookEvents` | raw payload (`longtext`, purged after `ExpiresAtUtc` but the row stays), `ExternalEventId` (WAHA event id, or `sha256:<body hash>` when there is none), `EventType`, `Status`, `Note`, `CorrelationId`, `SourceIp` | **unique `(ChannelAccountId, ExternalEventId)`**, index `ExpiresAtUtc` |
+| `MessageTemplates` | tenant-managed text with `{{placeholders}}`, `Category`, `IsActive` | unique `(TenantId, Name)` |
+| `OutboxMessages` | transactional outbox: `Type` (= routing key), `PayloadJson`, `CorrelationId`, `CausationId`, `Status`, `Attempts`, `NextAttemptAtUtc` (also the dispatcher lease), `PublishedAtUtc`, `LastError` | index `(Status, NextAttemptAtUtc)` |
+| `ProcessedMessages` | consumer idempotency | **unique `(TenantId, ConsumerName, MessageId)`** |
+| `ChannelAccountNotifications` | auto-pause / disconnect / restriction notices shown on the account page | index `(TenantId, ChannelAccountId, CreatedAtUtc)` |
+
+Not created on purpose: `InternalNote` (Phase 8 hand-off UI needs it, nothing in Phase 5 does), Hangfire tables (Hangfire owns them), RabbitMQ topology (declared by the broker layer).
 
 ## 5. Campaigns (Phase 6)
 Campaign (T: Type, Status, ScheduleAtUtc, TemplateId, AudienceDefinition JSON, Limits) · CampaignRecipient (T: CampaignId, ContactId, Status, EligibilitySnapshot JSON, MessageId?; **unique `(CampaignId, ContactId)`** prevents duplicates) · CampaignExecutionLog (T) · CampaignStats read model (aggregations from events).
@@ -85,4 +113,4 @@ Plan (G, configurable, no hardcoded price) · PlanEntitlement · TenantSubscript
 - Time-series: `(TenantId, CreatedAtUtc)` on events/messages/activities for date-filtered reports.
 
 ## Open items for Phase 1
-Guid storage format; Pomelo provider version for .NET 10; Hangfire MySQL storage package; migrations workflow (design-time factory, applied by a one-shot migrator container, not at web startup in production).
+Guid storage format; Pomelo provider version for .NET 10; Hangfire MySQL storage package (decided in Phase 4: see ARCHITECTURE.md); migrations workflow (design-time factory, applied by a one-shot migrator container, not at web startup in production).

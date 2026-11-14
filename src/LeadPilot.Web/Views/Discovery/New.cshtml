@@ -1,0 +1,80 @@
+@model NewSearchViewModel
+@using LeadPilot.Application.Discovery
+@{
+    ViewData["Title"] = "New search";
+    var ready = Model.Connectors.Where(c => c.IsReady).ToList();
+}
+<h1 class="h3 mb-1">New discovery search</h1>
+<p class="text-muted">Choose where to look and what to look for. The search runs in the background and its results wait for your review. Finding a business is <strong>not</strong> consent to contact it.</p>
+@if (!ViewData.ModelState.IsValid) { <div class="alert alert-danger" role="alert">@foreach (var e in ViewData.ModelState.Values.SelectMany(v => v.Errors)) { <div>@e.ErrorMessage</div> }</div> }
+@if (ready.Count == 0)
+{
+    <div class="card"><partial name="_EmptyState" model='("No connector is ready", Model.CanSetupConnectors ? "Add your Google Places API key under Connectors & usage first." : "Ask a workspace administrator to add a connector (Connectors & usage).")' />
+        @if (Model.CanSetupConnectors) { <div class="text-center pb-3"><a asp-controller="Connectors" asp-action="Index" class="btn btn-primary">Open connectors</a></div> }</div>
+}
+else
+{
+<form method="post" asp-action="Create" data-loading-form>
+    <div class="row g-3">
+        <div class="col-12 col-xl-4"><div class="card h-100"><div class="card-header">1 · Source</div><div class="card-body">
+            <label class="form-label" for="ConnectorType">Connector</label>
+            <select id="ConnectorType" name="ConnectorType" class="form-select" required>
+                @foreach (var c in ready) { <option value="@c.Key" data-seed="@c.AcceptsSeedUrls.ToString().ToLowerInvariant()" selected="@(Model.ConnectorType == c.Key)">@c.DisplayName@(c.IsTestOnly ? " (TEST ONLY)" : "")</option> }
+            </select>
+            <div class="form-text" id="connector-help">@ready[0].Description</div>
+            @foreach (var c in Model.Connectors.Where(c => !c.IsReady)) { <div class="small text-muted mt-2">@c.DisplayName: @c.StatusText</div> }
+        </div></div></div>
+        <div class="col-12 col-xl-8" id="where-what"><div class="card h-100"><div class="card-header">2 · Where and what</div><div class="card-body"><div class="row g-3">
+            @if (Model.Presets.Count > 0)
+            {
+                <div class="col-12"><label class="form-label" for="preset">Saved location</label>
+                    <select id="preset" class="form-select"><option value="">Type a location below…</option>
+                        @foreach (var p in Model.Presets) { <option value="@p.Id" data-country="@p.Country" data-province="@p.Province" data-city="@p.City" data-district="@p.District" data-area="@p.Area">@p.Label</option> }
+                    </select></div>
+            }
+            <div class="col-md-6"><label class="form-label" for="Country">Country</label><input id="Country" name="Country" value="@Model.Country" class="form-control" maxlength="100" /></div>
+            <div class="col-md-6"><label class="form-label" for="Province">Province / state</label><input id="Province" name="Province" value="@Model.Province" class="form-control" maxlength="100" /></div>
+            <div class="col-md-4"><label class="form-label" for="City">City</label><input id="City" name="City" value="@Model.City" class="form-control" maxlength="100" /></div>
+            <div class="col-md-4"><label class="form-label" for="District">District</label><input id="District" name="District" value="@Model.District" class="form-control" maxlength="100" /></div>
+            <div class="col-md-4"><label class="form-label" for="Area">Area</label><input id="Area" name="Area" value="@Model.Area" class="form-control" maxlength="100" /></div>
+            <div class="col-md-6"><label class="form-label" for="CategoryId">Business category</label>
+                <select id="CategoryId" name="CategoryId" class="form-select"><option value="">— none (use keywords) —</option>
+                    @foreach (var c in Model.Categories) { var m = Model.Mappings.FirstOrDefault(x => x.CategoryId == c.Id && x.IsActive); <option value="@c.Id" selected="@(Model.CategoryId == c.Id)">@c.Name@(m is null ? "" : " — " + string.Join(" / ", m.SearchTerms))</option> }
+                </select>
+                <div class="form-text">Search phrases come from <a asp-controller="DiscoverySetup" asp-action="Index">Categories &amp; locations</a>. A category without phrases is searched by its name.</div></div>
+            <div class="col-md-6"><label class="form-label" for="Keywords">Extra keywords (optional)</label><input id="Keywords" name="Keywords" value="@Model.Keywords" class="form-control" maxlength="300" placeholder="e.g. girls, montessori" /></div>
+        </div></div></div></div>
+        <div class="col-12 d-none" id="seed-card"><div class="card"><div class="card-header">Website addresses</div><div class="card-body">
+            <label class="form-label" for="SeedUrls">Public website addresses (one per line)</label>
+            <textarea id="SeedUrls" name="SeedUrls" rows="5" class="form-control" maxlength="4000" placeholder="https://example-school.edu.pk">@Model.SeedUrls</textarea>
+            <div class="form-text">Only public pages allowed by each site's robots.txt are read. Login pages and private addresses are never fetched.</div>
+        </div></div></div>
+        <div class="col-12"><div class="card"><div class="card-header">3 · Options</div><div class="card-body"><div class="row g-3 align-items-end">
+            <div class="col-md-3"><label class="form-label" for="MaxResults">Maximum results</label><input id="MaxResults" name="MaxResults" type="number" min="1" max="@Model.MaxResultsCap" value="@Model.MaxResults" class="form-control" /></div>
+            <div class="col-md-6" id="enrich-box"><div class="form-check"><input class="form-check-input" type="checkbox" id="EnrichWebsites" name="EnrichWebsites" value="true" checked="@Model.EnrichWebsites" /><label class="form-check-label" for="EnrichWebsites">Also read each business's own public website (name, public phone/e-mail, social links)</label></div></div>
+            <div class="col-md-3 text-md-end"><button type="submit" class="btn btn-primary"><span class="spinner-border spinner-border-sm d-none" aria-hidden="true"></span> Start search</button> <a asp-action="Index" class="btn btn-link">Cancel</a></div>
+        </div><div class="form-text mt-2">Each page of results counts against the connector's monthly limit; see <em>Connectors &amp; usage</em>.</div></div></div></div>
+    </div>
+</form>
+}
+@section Scripts {
+<script>
+(function () {
+  var sel = document.getElementById('ConnectorType'); if (!sel) return;
+  var helps = { @Html.Raw(string.Join(",", ready.Select(c => $"\"{c.Key}\":{System.Text.Json.JsonSerializer.Serialize(c.Description)}"))) };
+  function apply() {
+    var seed = sel.selectedOptions[0].getAttribute('data-seed') === 'true';
+    document.getElementById('where-what').classList.toggle('d-none', seed);
+    document.getElementById('seed-card').classList.toggle('d-none', !seed);
+    document.getElementById('enrich-box').classList.toggle('d-none', seed);
+    document.getElementById('connector-help').textContent = helps[sel.value] || '';
+  }
+  sel.addEventListener('change', apply); apply();
+  var preset = document.getElementById('preset');
+  if (preset) preset.addEventListener('change', function () {
+    var o = preset.selectedOptions[0]; if (!o || !o.value) return;
+    ['country','province','city','district','area'].forEach(function (k) { document.getElementById(k.charAt(0).toUpperCase() + k.slice(1)).value = o.getAttribute('data-' + k) || ''; });
+  });
+})();
+</script>
+}

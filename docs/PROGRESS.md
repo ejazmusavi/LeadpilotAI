@@ -578,4 +578,47 @@ See SECURITY.md "Phase 11" and MULTI_TENANCY.md. The export is audited before an
 | Large datasets do not require loading all records into memory | **Passed** (grouped SQL only; measured on 200 k leads / 2.7 M message rows; export streamed with flat memory). Performance caveats of the slow paths are listed under 6 and are not hidden |
 
 ### Next
-Phase 12 (SaaS commercialization). Not started.
+Phase 12 (SaaS commercialization): see the Phase 12 report below.
+
+## Phase 12 — SaaS commercialization (reported)
+
+### 1. Implemented
+Public self-registration (default closed; honeypot, per-IP/per-domain DB rate limits, disposable-domain port, CAPTCHA port that fails closed, no account enumeration, e-mail verification lock on sensitive features); onboarding checklist from real data; platform-configurable plans (cycle monthly/quarterly/annual/custom, decimal(18,2) + currency, trial, active/archived, public/private) with nine usage limits and five feature gates; tenant overrides (reason, expiry, audit); ONE metering service (reads the source ledgers) and ONE entitlement service enforcing at the point of use (race-safe, typed 402/403 errors, 80/100 % notices); suspension for non-payment/abuse through the Phase 2 path with configurable grace; upgrade/downgrade with proration and a blocked-downgrade report; Hangfire renewal job (idempotent invoices, grace, suspension, rollover); immutable invoices with a gapless platform number, tax fields, printable HTML; manual payment verification (sibling of the Phase 10 rules, no provider); payment history, tenant billing pages, platform admin (subscriptions, plans, payment queue, invoices, settings, audit); API with Swagger.
+
+### 2. Files
+`Domain/Billing`; `Application/Billing/{Rules,Contracts}.cs`; `Infrastructure/Billing/{Entitlements,Invoicing,Subscriptions,PlatformAdmin,Registration,PlatformSettings,BillingSeed}.cs`; `Services/Tenancy/TenantSuspensionService.cs`; `Persistence/BillingModel.cs` + migration `Phase12Billing`; Web `BillingControllers.cs`, `BillingModels.cs`, views `Billing/ Onboarding/ Register/ Platform*/`; Api `BillingControllers.cs`; enforcement wired into lead, import, invitation, account, campaign, knowledge, message, workflow, AI, discovery and export services; tests `BillingTests/LifecycleTests/SecurityTests/MigrationTests/Kit`, `BillingRulesTests`, `BillingArchitectureTests`.
+
+### 3. Database
+17 new tables, no existing table changed (platform facts about a tenant live in `TenantBillingStates`). Verified on an empty database and on a Phase 11 database with data and two tenants (one suspended): both landed on the default plan and kept access (`BillingMigrationTests`).
+
+### 4. Tests (actually run, this machine, MySQL 8.0 + RabbitMQ local)
+| | |
+|---|---|
+| Build | succeeded, 0 warnings, 0 errors |
+| Unit | 1090 passed, 0 failed (18 new) |
+| Architecture | 124 passed, 0 failed (5 new) |
+| Integration | 536 passed, 0 failed, 1 skipped (the live-provider test, as before); 36 new |
+| Not executed | live WAHA, live Claude/Voyage, real Qdrant, Google Places live, any payment provider, Docker |
+Playwright (Chromium, 1280 px and 390 px): sign-up, billing, plans, invoices, onboarding and six platform pages render, no horizontal overflow, no JS errors (docs/screenshots/phase12).
+Earlier-phase test changes (intentional): `StubRunner` got the new interface method; the Phase 10 architecture test's `Payment.Create(` match ignores `BillingPayment.Create(`; `TenantBillingState` added to the TenantId-exemption list.
+
+### 5. Security and architecture review
+See SECURITY.md / MULTI_TENANCY.md / ARCHITECTURE.md Phase 12. A bug found by the tests and fixed: e-mail verification tokens were reusable (Identity does not burn them); now single-use.
+
+### 6. Outstanding / known limits
+1. Knowledge pages added by the website crawler are not blocked by the storage limit. 2. AI-token and discovery-call limits are tested at the service level against the real ledgers (holds, races), not through the live Claude adapter or a live search. 3. No e-mail for 80/100 % notices (shown in the app). 4. The platform tenant list shows users and leads usage only (full usage on the detail page). 5. No payment provider, PDF engine, CAPTCHA provider, per-line tax, MRR/ARR. 6. Existing per-feature throttles stay as stricter caps (decision 55). 7. Unit wording such as "1 accounts" on the usage bars. 8. A first full integration run hung after a worker restart and was re-run from scratch; the numbers above are from the clean re-run.
+
+### 7. Acceptance criteria
+| Criterion | Result |
+|---|---|
+| Plans configurable, no hardcoded prices | **Passed** (only zero-price SAMPLE plans seeded) |
+| Limits enforced; no exceeding without override/upgrade | **Passed** for leads, seats, storage, accounts, messages, campaigns, automation runs end to end; AI tokens and discovery calls at service level (6.2); every dimension blocks at zero |
+| Race-safe | **Passed** (leads, seats, AI and discovery holds, operators verifying one invoice, invoice numbers) |
+| Renewal only after verified payment | **Passed** (unverified, forged, wrong amount/currency, duplicate receipt, double verification) |
+| Suspension consistent | **Passed** (API, sign-in, jobs; payment reactivates NonPayment only) |
+| Upgrade/downgrade rules | **Passed** |
+| Tenant isolation; Platform.* closed to tenant roles | **Passed** |
+| Existing tenants backfilled | **Passed** |
+
+### Next
+Phase 13 (not started).

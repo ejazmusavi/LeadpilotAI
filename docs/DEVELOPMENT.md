@@ -235,3 +235,23 @@ Large-dataset benchmark (opt-in, scratch database, a few minutes):
 export LEADPILOT_TEST_CONNECTION="Server=localhost;Port=3306;User=leadpilot;Password=leadpilot_dev;"
 dotnet run --project tests/tools/LargeDatasetBenchmark -c Release -- --scale 1.0 --out docs/benchmarks/phase11-large-dataset.md   # --scale 0.02 for a smoke run, --keep to keep the database
 ```
+
+## Phase 12: billing, registration and platform administration
+| Key | Where | Meaning |
+|---|---|---|
+| Platform settings (Platform → Platform settings, or `PUT /api/v1/platform/settings`) | database | `registration.enabled` (default **off**), sign-up plan, default plan, grace days (7), renewal lead days (7), invoice due days (7), tax name/rate, invoice issuer and payment instructions, invoice prefix, sign-up limits, extra blocked domains, CAPTCHA required. There is no configuration-file key: the owner edits them in the UI. |
+| Hangfire queue `billing` | Worker | recurring job `billing-lifecycle` (hourly, minute 7). It issues renewal invoices, moves unpaid subscriptions to grace and then suspends the tenant, rolls over periods paid in advance, renews free plans, purges expired usage holds. |
+
+First run: start the Web host once (migrates, seeds four SAMPLE zero-price plans only if no plan exists, places every existing tenant on the default plan). Then: **Platform → Plans** to edit/replace the sample plans (prices, cycle, limits, features), **Platform → Platform settings** to set the default plan, the issuer/bank details and (when ready) open sign-up. Platform administrators (Platform Owner, SaaS Administrator) see the Platform menu; payments are verified under **Platform → Payment verification** (manual, with evidence).
+
+```bash
+# platform owner token, then:
+curl -s localhost:5100/api/v1/platform/plans -H "authorization: Bearer $TOKEN"
+curl -s -X POST localhost:5100/api/v1/platform/tenants/$TENANT/grant -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' -d '{"planId":"…","reason":"pilot"}'
+curl -s -X POST localhost:5100/api/v1/platform/tenants/$TENANT/invoices/$INVOICE/verify -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' -d '{"amount":50.00,"currency":"USD","method":"BankTransfer","evidenceReference":"TRX-123"}'
+# a workspace: usage vs limits, invoices, plan change
+curl -s localhost:5100/api/v1/billing -H "authorization: Bearer $WORKSPACE_TOKEN"
+```
+Limit refusals are `402` with `code` `plan_limit_exceeded` / `feature_not_in_plan`; unverified sign-ups get `403 email_not_verified` for sensitive features.
+
+Tests: `BillingKit.cs` (`BillingWorld`: a fresh workspace + the platform owner session; plans, grants, overrides and verification go through the real API; the test clock `app.Clock.Offset` moves time; `LifecycleAsync()` runs the job body for a tenant). Test-only: the clock offset and direct ledger rows (AI / discovery usage). Migration: `Phase12Billing` is the only new migration; `BillingMigrationTests` upgrades a Phase 11 database with data. Docker was never verified (no daemon).

@@ -222,6 +222,33 @@ public class BillingEntitlementTests(AppFixture app)
         Assert.Equal(HttpStatusCode.Created, (await CampaignWorld.CreateRawAsync(cw.Admin, Body())).StatusCode);   // the override beats the plan
     }
 
+    [RequiresMySqlFact]
+    public async Task Automation_runs_are_limited_per_period_and_a_refused_start_leaves_the_lead_untouched()
+    {
+        await using var ww = await WorkflowWorld.OpenAsync(app, freshTenant: true);
+        await using var w = new BillingWorldAdapter(app, ww.TenantId, ww.Admin);
+        await w.GrantAsync(await w.PlanAsync(limits: new() { ["MonthlyAutomationRuns"] = 2 }));
+        var wf = await ww.CreateActiveAsync(Wf.Definition([Wf.Trigger("lead.created")], [Wf.Step("tag", "AddTag", new { tag = "vip" })]));
+        for (var i = 0; i < 3; i++) await ww.ContactAsync();
+        await ww.PumpAsync();
+        Assert.Equal(2, (await ww.ExecutionsAsync(wf.Id)).Count);                         // the third start was refused by the plan
+        var usage = (await ApiSession.Json<BillingOverview>(await ww.Admin.Get("/api/v1/billing"))).Entitlements.Usage.Single(u => u.Dimension == UsageDimension.MonthlyAutomationRuns);
+        Assert.Equal((2L, 2L), (usage.Used, usage.Limit));
+        // a plan without the workflow feature starts nothing at all
+        await w.GrantAsync(await w.PlanAsync(features: [Features.Ai]));
+        await ww.ContactAsync(); await ww.PumpAsync();
+        Assert.Equal(2, (await ww.ExecutionsAsync(wf.Id)).Count);
+    }
+
+    [RequiresMySqlFact]
+    public async Task The_swagger_document_describes_the_billing_registration_and_platform_endpoints()
+    {
+        var json = await ApiSession.Anonymous(app).Http.GetStringAsync("/swagger/v1/swagger.json");
+        foreach (var path in new[] { "/api/v1/billing", "/api/v1/billing/invoices/{id}/payment-report", "/api/v1/billing/plan-changes", "/api/v1/registration", "/api/v1/platform/plans", "/api/v1/platform/tenants/{id}/grant", "/api/v1/platform/tenants/{id}/invoices/{invoiceId}/verify", "/api/v1/platform/settings", "/api/v1/platform/audit" })
+            Assert.Contains($"\"{path}\"", json);
+        Assert.Contains("NOT a payment", json);
+    }
+
     /// <summary>The same helpers as <see cref="BillingWorld"/> for a tenant that another kit created.</summary>
     private sealed class BillingWorldAdapter : IAsyncDisposable
     {

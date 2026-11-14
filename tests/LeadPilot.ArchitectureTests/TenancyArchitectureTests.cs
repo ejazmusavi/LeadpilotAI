@@ -111,7 +111,9 @@ public class TenancyArchitectureTests
     public void Entities_with_a_TenantId_column_must_implement_ITenantOwned_unless_explicitly_exempt()
     {
         // RefreshToken binds a session to a tenant but is a per-user credential record, deliberately not row-filtered.
-        var exempt = new[] { "RefreshToken" };
+        // TenantBillingState (Phase 12) is platform-level state ABOUT a tenant (self-registered, e-mail verified, suspension kind) keyed by the tenant id: operators and the sign-up flow read it across tenants, every
+        // query in the product names the tenant explicitly, and it is not reachable from any tenant-facing endpoint.
+        var exempt = new[] { "RefreshToken", "TenantBillingState" };
         var offenders = Model().GetEntityTypes()
             .Where(e => e.FindProperty("TenantId") is not null && !typeof(ITenantOwned).IsAssignableFrom(e.ClrType) && !exempt.Contains(e.ShortName()))
             .Select(e => e.ShortName()).ToList();

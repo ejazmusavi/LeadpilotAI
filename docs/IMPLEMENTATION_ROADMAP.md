@@ -64,3 +64,6 @@ Phase 10 (demos, trials, customer conversion, payment verification) is **built a
 
 ## Status after Phase 11
 Phase 11 (analytics and reporting) is **built and tested with real MySQL and RabbitMQ and measured on a generated 200 000-lead / 2.7 M message-row data set; never run against live WAHA, Claude, Voyage, Google Places, a real Qdrant or a payment provider** (their data is whatever the earlier phases recorded). Definitions: METRICS.md; measurements: benchmarks/phase11-large-dataset.md; limits and decisions: PROGRESS.md, OWNER_DECISIONS 41–50. Next: Phase 12 (SaaS commercialization). Not started.
+
+## Phase 12 — SaaS commercialization (built)
+Tenant self-registration, onboarding checklist, plans/limits/features, metering and enforcement, trials, renewal/grace/suspension, upgrade/downgrade, invoices and payment verification, platform administration. See PROGRESS.md "Phase 12" and OWNER_DECISIONS.md 51–62. Not built: any payment provider (none chosen), a PDF engine, MRR/ARR reporting (billing cycles now exist, so Phase 11's "no recurring revenue metrics" can be revisited), per-line tax.

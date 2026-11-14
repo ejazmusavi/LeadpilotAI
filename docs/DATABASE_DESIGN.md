@@ -151,3 +151,16 @@ New tenant-owned tables (all indexed `(TenantId, …)`, tenant FK, global query 
 | `FollowUps` | internal task (lead, due, note, status, created by user/AI); index `(TenantId, Status, DueAtUtc)` |
 Changed tables: `Conversations` + `EscalationReason`, `EscalatedAtUtc`, `AiModeChangedAtUtc`, **`AiEpoch`** (incremented on every change of AI mode: the AI remembers the value it started with, so a takeover/pause — even pause+resume — during a generation cancels the reply); `Messages` + `IsAiGenerated`, `AiInteractionId`, `AiEpoch`; `AiInteractions` + `AgentId`, `AutoSend` (NotAttempted/Sent/Blocked), `AutoSendNote`, `SentMessageId`; **`AiToolExecutions` is the ToolExecution record**: `InteractionId` became nullable (Phase 7 rows keep it) and it gained `TriggerMessageId`, `ConversationId`, `LeadId`, `AgentId`, `InputJson`, `OutputJson`, `ApprovalRequestId`, `ExecutedByUserId`, `DedupeKey` (**unique (TenantId, DedupeKey)**: a redelivered event replays the stored result), `DurationMs`; the outcome set grew (ApprovalRequired, NotAvailable, Invalid). Still append-only: an approved action is a new row pointing at the same approval.
 Applied and checked on an empty MySQL 8 database and on a database at the Phase 7 schema holding a tenant, roles, a lead, a contact and an old tool-log row (`AgentMigrationTests`).
+
+## Phase 9 (migration `Phase9Workflows`: 8 new tables, no change to existing tables)
+| Table | Notes |
+|---|---|
+| `Workflows` | name, status (Draft/Active/Inactive), `ActiveVersionId`, `LatestVersionNumber`, kill switch + reason, soft delete, `Version` concurrency token; index `(TenantId, IsDeleted, Status)` |
+| `WorkflowVersions` | **unique (TenantId, WorkflowId, Number)**; state Draft/Active/Retired; re-entry policy, cool-down hours, frequency cap |
+| `WorkflowTriggers` | event type, condition JSON, config JSON, `IsSealed`; **unique (WorkflowVersionId, EventType)**; index `(TenantId, EventType)` |
+| `WorkflowSteps` | key, position, type, config JSON, run-if JSON, failure policy, max retries, `IsSealed`; **unique (WorkflowVersionId, Key)** |
+| `WorkflowExecutions` | **unique (WorkflowVersionId, TriggerEventId, EntityId)** (idempotency); **unique (WorkflowId, EntityId, ActiveSlot)** (exclusive live run; NULL once ended); status, current step, state JSON, next run, lease, `Version` token; FK to the lead; index `(TenantId, Status, NextRunAtUtc)` |
+| `WorkflowExecutionLogs` | append-only per-step log (outcome, attempt, message, effect reference) |
+| `WorkflowTenantSettings` | **unique TenantId**; kill switch, max concurrent runs (20), monthly runs (5000), daily messages (200) |
+| `WorkflowNotifications` | **unique (WorkflowExecutionId, StepKey, UserId)** so a replayed step never notifies twice |
+Every table has a tenant FK (restrict), `TenantId` index and the global query filter. Applied and checked on an empty MySQL 8 database and on a database at the Phase 8 schema holding a tenant, roles and a lead (`WorkflowMigrationTests`).

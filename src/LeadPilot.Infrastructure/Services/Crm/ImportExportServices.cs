@@ -299,6 +299,7 @@ public sealed class LeadImportService(CrmContext crm, DuplicateDetector duplicat
         AddContact(lead.Id, d, primary: true);
         await AddTagsAsync(lead.Id, d, existing: [], st);
         db.LeadActivities.Add(LeadActivity.Create(tenantId, lead.Id, LeadActivityType.Imported, $"Imported from '{job.FileName}', row {row}.", null, crm.UserId, now));
+        Workflows.WorkflowEvents.Emit(crm, LeadPilot.Application.Workflows.WorkflowEventTypes.LeadCreated, lead.Id);
         return lead.Id;
     }
 

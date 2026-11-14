@@ -57,6 +57,7 @@ public static class MessagingServiceCollection
         services.AddScoped<IOutboxDispatcher, OutboxDispatcher>();
         services.AddScoped<OptOutProcessor>();
         services.AddScoped<IAiReplySender, AiReplySender>();
+        services.AddScoped<LeadPilot.Application.Workflows.IWorkflowMessageSender, WorkflowMessageSender>();
         services.AddScoped<IMessagingEventHandler, InboundMessageHandler>();
         services.AddScoped<IMessagingEventHandler, StatusEventHandler>();
 

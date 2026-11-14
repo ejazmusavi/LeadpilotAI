@@ -19,6 +19,7 @@ public static class MessagingTopology
         new($"{o.Prefix}.status", "messaging.status", [MessagingEventTypes.MessageStatusChanged, MessagingEventTypes.AccountStatusChanged]),
         new($"{o.Prefix}.campaigns", "campaigns.events", [CampaignEventTypes.RecipientChanged, CampaignEventTypes.StatusChanged]),
         new($"{o.Prefix}.ai", "ai.reply", [MessagingEventTypes.AiReplyRequested]),
+        new($"{o.Prefix}.workflows", "workflows.triggers", LeadPilot.Application.Workflows.TriggerCatalog.ConsumedEventTypes),
     ];
 
     /// <summary>

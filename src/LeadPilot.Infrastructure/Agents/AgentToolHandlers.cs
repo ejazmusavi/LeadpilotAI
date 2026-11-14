@@ -260,20 +260,10 @@ public sealed class AgentToolHandlers(CrmContext crm, IDemoScheduler demos, ITri
 
     private async Task<ToolOutput> TransferAsync(Conversation conv, ToolArgsResult a, ToolCallContext ctx, CancellationToken ct)
     {
-        var tenantId = crm.TenantId; var from = conv.AiMode.ToString(); var reason = PromptGuard.Neutralize(a.Str("reason"), 200, escapeAngles: false);
-        conv.Escalate(reason, crm.Now);
-        Guid? assigned = null;
-        if (conv.AssignedUserId is null)
-        {
-            var lead = await LeadAsync(conv, ct);
-            if (lead?.OwnerUserId is { } owner && await crm.IsActiveMemberAsync(owner, ct))
-            { conv.Assign(owner, crm.Now); crm.Db.ConversationAssignments.Add(ConversationAssignment.Create(tenantId, conv.Id, owner, null, crm.Now)); assigned = owner; }
-        }
-        crm.Db.HandoffEvents.Add(HandoffEvent.Create(tenantId, conv.Id, HandoffKind.Escalated, ActorKind.Ai, null, assigned, reason, from, AiMode.HumanControl.ToString(), crm.Now));
-        if (a.Str("summary") is { } summary) crm.Db.ConversationNotes.Add(ConversationNote.Create(tenantId, conv.Id, "[AI handover summary] " + PromptGuard.Neutralize(summary, 500, escapeAngles: false), null, ActorKind.Ai, crm.Now));
-        await crm.Db.SaveChangesAsync(ct);
-        await ConversationService.WithdrawQueuedAiMessagesAsync(crm, conv.Id, "ai_withdrawn", "The AI handed this conversation to a person before this reply was sent.", ct);
-        return ToolOutput.Ok(new { handedOver = true, assigned = assigned is not null, note = "A person will take over. You will not answer this conversation any more." });
+        var reason = PromptGuard.Neutralize(a.Str("reason"), 200, escapeAngles: false);
+        var summary = a.Str("summary") is { } sm ? PromptGuard.Neutralize(sm, 500, escapeAngles: false) : null;
+        var (assigned, _) = await HandoffActions.EscalateAsync(crm, conv, await LeadIdOfAsync(conv, ct), reason, summary, ActorKind.Ai, ct);
+        return ToolOutput.Ok(new { handedOver = true, assigned, note = "A person will take over. You will not answer this conversation any more." });
     }
 
     private async Task<ToolOutput> StopAsync(Conversation conv, ToolArgsResult a, ToolCallContext ctx, CancellationToken ct)

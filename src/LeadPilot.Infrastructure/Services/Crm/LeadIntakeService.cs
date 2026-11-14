@@ -76,6 +76,7 @@ public sealed class LeadIntakeService(CrmContext crm, DuplicateDetector duplicat
         if (!sourceKnown) db.LeadSources.Add(LeadSource.Create(tenantId, leadId, LeadSourceType.Discovery, r.ExternalId, r.SourceName, r.SourceUrl, r.Attribution, r.RetrievedAtUtc));
         crm.Activity(leadId, LeadActivityType.Merged, "Discovery result merged" + (changed.Count > 0 ? ": filled " + string.Join(", ", changed) : " (nothing new to add)") + ".");
         crm.Record("Lead.MergedFromDiscovery", "Lead", leadId, $"Discovery result '{r.Name}' merged into lead '{lead.Name}'.");
+        if (changed.Count > 0) Workflows.WorkflowEvents.Emit(crm, LeadPilot.Application.Workflows.WorkflowEventTypes.LeadEnriched, leadId, detail: string.Join(", ", changed));
         await db.SaveChangesAsync(ct);
         await scorer.RescoreAsync([leadId], ct);
         return new LeadIntakeResult(leadId, IntakeAction.Merged, changed);

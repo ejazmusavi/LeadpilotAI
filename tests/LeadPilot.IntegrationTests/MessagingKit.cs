@@ -84,15 +84,19 @@ public sealed class WorkerHarness : IAsyncDisposable
             if (Publisher.Published.IsEmpty) return;
             while (Publisher.Published.TryDequeue(out var env))
             {
-                var queue = MessagingTopology.Queues(rmq).FirstOrDefault(q => q.RoutingKeys.Contains(env.Type));
-                if (queue is null) { Unrouted.Add(env); continue; }
-                var attempt = 1;
-                while (true)
+                // a topic exchange delivers to EVERY queue bound to the routing key (e.g. message.received goes to the inbound consumer and to the workflow triggers)
+                var queues = MessagingTopology.Queues(rmq).Where(q => q.RoutingKeys.Contains(env.Type)).ToList();
+                if (queues.Count == 0) { Unrouted.Add(env); continue; }
+                foreach (var queue in queues)
                 {
-                    var outcome = await processor.ProcessAsync(queue, JsonSerializer.SerializeToUtf8Bytes(env), Headers(env, attempt), default);
-                    if (outcome.Action == DeliveryAction.Retry) { Retries++; attempt = outcome.NextAttempt; continue; }
-                    if (outcome.Action == DeliveryAction.DeadLetter) DeadLettered.Add((env, outcome.Reason ?? ""));
-                    break;
+                    var attempt = 1;
+                    while (true)
+                    {
+                        var outcome = await processor.ProcessAsync(queue, JsonSerializer.SerializeToUtf8Bytes(env), Headers(env, attempt), default);
+                        if (outcome.Action == DeliveryAction.Retry) { Retries++; attempt = outcome.NextAttempt; continue; }
+                        if (outcome.Action == DeliveryAction.DeadLetter) DeadLettered.Add((env, outcome.Reason ?? ""));
+                        break;
+                    }
                 }
             }
         }
@@ -147,8 +151,9 @@ public static class WahaEvents
 
 public static class MessagingKit
 {
-    public static void RegisterTestServices(IServiceCollection s, OffsetClock clock, RecordingMessagingScheduler scheduler, RecordingCampaignScheduler? campaigns = null, AiTestControls? ai = null)
+    public static void RegisterTestServices(IServiceCollection s, OffsetClock clock, RecordingMessagingScheduler scheduler, RecordingCampaignScheduler? campaigns = null, AiTestControls? ai = null, RecordingWorkflowScheduler? workflows = null)
     {
+        if (workflows is not null) { s.RemoveAll<LeadPilot.Application.Workflows.IWorkflowJobScheduler>(); s.AddSingleton<LeadPilot.Application.Workflows.IWorkflowJobScheduler>(workflows); }
         if (ai is not null) AiKit.Register(s, ai);
         s.RemoveAll<IClock>(); s.AddSingleton<IClock>(clock);
         s.RemoveAll<IMessagingJobScheduler>(); s.AddSingleton<IMessagingJobScheduler>(scheduler);
@@ -162,7 +167,7 @@ public static class MessagingKit
         if (extraConfig is not null) b.Configuration.AddInMemoryCollection(extraConfig);
         b.Services.AddApplication(); b.Services.AddInfrastructure(b.Configuration, b.Environment); b.Services.AddWorkerServices(b.Configuration);
         var publisher = new InMemoryPublisher();
-        RegisterTestServices(b.Services, app.Clock, app.Messaging, app.Campaigns, app.Ai);
+        RegisterTestServices(b.Services, app.Clock, app.Messaging, app.Campaigns, app.Ai, app.Workflows);
         configure?.Invoke(b.Services);
         if (!realBroker) { b.Services.RemoveAll<IEventPublisher>(); b.Services.AddSingleton<IEventPublisher>(publisher); }
         return new WorkerHarness { Host = b.Build(), Publisher = publisher };
@@ -288,7 +293,7 @@ public static class MessagingKit
         {
             var f = new ConnectionFactory { HostName = Environment.GetEnvironmentVariable(RequiresRabbitMqFactAttribute.EnvVar)!, UserName = "guest", Password = "guest" };
             await using var conn = await f.CreateConnectionAsync(); await using var ch = await conn.CreateChannelAsync();
-            foreach (var q in new[] { "inbound", "status", "campaigns" })
+            foreach (var q in new[] { "inbound", "status", "campaigns", "ai", "workflows" })
             {
                 foreach (var name in new[] { $"{prefix}.{q}", $"{prefix}.{q}.dlq" }.Concat(Enumerable.Range(1, 8).Select(i => $"{prefix}.{q}.retry.{i}")))
                     try { await ch.QueueDeleteAsync(name); } catch { /* not declared */ }

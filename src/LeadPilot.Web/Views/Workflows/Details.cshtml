@@ -1,0 +1,80 @@
+@model WorkflowDetailsViewModel
+@using LeadPilot.Domain.Workflows
+@using LeadPilot.Web.Infrastructure
+@{ var w = Model.Workflow; ViewData["Title"] = w.Name; }
+<div class="d-flex flex-wrap justify-content-between align-items-start mb-3 gap-2">
+    <div>
+        <h1 class="h3 mb-1">@w.Name <span class="badge @(w.Status == WorkflowStatus.Active ? "text-bg-success" : w.Status == WorkflowStatus.Draft ? "text-bg-light border" : "text-bg-secondary") fs-6 align-middle">@w.Status</span>@if (w.IsKilled) { <span class="badge text-bg-danger fs-6 align-middle ms-1">kill switch ON</span> }</h1>
+        @if (!string.IsNullOrWhiteSpace(w.Description)) { <p class="text-muted mb-0">@w.Description</p> }
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        @if (Model.CanExecute) { <a asp-action="Simulate" asp-route-id="@w.Id" class="btn btn-outline-primary">Simulate</a> }
+        @if (Model.CanUpdate && w.Draft is not null) { <a asp-action="Edit" asp-route-id="@w.Id" class="btn btn-primary">Edit draft v@(w.Draft.Number)</a> }
+        @if (Model.CanActivate && w.Status == WorkflowStatus.Active)
+        {
+            <form asp-action="Deactivate" asp-route-id="@w.Id" method="post" class="d-inline"><button type="submit" class="btn btn-outline-secondary" data-confirm="Deactivate this workflow? Nothing new will start. Runs in progress finish unless you cancel them." data-confirm-label="Deactivate">Deactivate</button></form>
+        }
+        @if (Model.CanDelete && w.Status != WorkflowStatus.Active)
+        {
+            <form asp-action="Delete" asp-route-id="@w.Id" method="post" class="d-inline"><button type="submit" class="btn btn-outline-danger" data-confirm="Delete this workflow? Its run history stays, but it can no longer be used." data-confirm-label="Delete">Delete</button></form>
+        }
+    </div>
+</div>
+@if (w.IsKilled) { <div class="alert alert-danger">Kill switch ON@(string.IsNullOrWhiteSpace(w.KillReason) ? "" : ": " + w.KillReason). Nothing starts and running runs stop before their next step.</div> }
+@if (w.Active is null && w.Draft is not null) { <div class="alert alert-info">This workflow has never been activated. Review the draft, run the simulation on a lead, then activate it.</div> }
+
+<div class="row g-3 mb-3">
+    <div class="col-12 col-lg-8">
+        <div class="card mb-3"><div class="card-header">Versions</div><div class="table-responsive"><table class="table align-middle mb-0">
+            <thead><tr><th>Version</th><th>State</th><th class="text-end">Steps</th><th class="text-end">Runs</th><th>Created</th><th></th></tr></thead><tbody>
+            @foreach (var v in w.Versions)
+            {
+                <tr>
+                    <td><a asp-action="Version" asp-route-id="@w.Id" asp-route-number="@v.Number" class="fw-semibold text-decoration-none">v@(v.Number)</a>@if (!string.IsNullOrWhiteSpace(v.Note)) { <div class="small text-muted">@v.Note</div> }</td>
+                    <td><span class="badge @(v.State == VersionState.Active ? "text-bg-success" : v.State == VersionState.Draft ? "text-bg-warning" : "text-bg-secondary")">@v.State</span></td>
+                    <td class="text-end">@v.Steps</td><td class="text-end">@v.Executions</td>
+                    <td class="small text-nowrap">@v.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm") UTC</td>
+                    <td class="text-end text-nowrap">
+                        @if (v.State == VersionState.Draft && Model.CanActivate)
+                        {
+                            <form asp-action="Activate" asp-route-id="@w.Id" asp-route-number="@v.Number" method="post" class="d-inline"><button type="submit" class="btn btn-sm btn-success" data-confirm="Activate version @v.Number? New events will start it. Runs in progress stay on their own version." data-confirm-label="Activate">Activate</button></form>
+                        }
+                        @if (v.State != VersionState.Draft && Model.CanUpdate && w.Draft is null)
+                        {
+                            <form asp-action="NewDraft" asp-route-id="@w.Id" asp-route-number="@v.Number" method="post" class="d-inline"><button type="submit" class="btn btn-sm btn-outline-primary">Edit as new draft</button></form>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody></table></div>
+            <div class="card-footer small text-muted">An active version never changes. Editing creates a new draft version; runs in progress finish on the version they started with.</div>
+        </div>
+    </div>
+    <div class="col-12 col-lg-4">
+        <div class="card mb-3"><div class="card-header">Kill switch</div><div class="card-body">
+            <p class="small text-muted">Stops this workflow at once: nothing starts and running runs stop before their next step.</p>
+            @if (Model.CanActivate)
+            {
+                <form asp-action="KillSwitch" asp-route-id="@w.Id" method="post" class="d-flex flex-column gap-2">
+                    <input type="hidden" name="on" value="@((!w.IsKilled).ToString().ToLowerInvariant())" />
+                    @if (!w.IsKilled) { <input name="reason" class="form-control" maxlength="300" placeholder="Reason (optional)" aria-label="Reason" /> }
+                    <button type="submit" class="btn @(w.IsKilled ? "btn-outline-success" : "btn-danger")" data-confirm="@(w.IsKilled ? "Turn the kill switch off? New runs can start again." : "Turn the kill switch on? Running runs of this workflow stop before their next step.")" data-confirm-label="@(w.IsKilled ? "Turn off" : "Turn on")">@(w.IsKilled ? "Turn kill switch off" : "Turn kill switch on")</button>
+                </form>
+            }
+            else { <span class="badge @(w.IsKilled ? "text-bg-danger" : "text-bg-light border")">@(w.IsKilled ? "ON" : "off")</span> }
+        </div></div>
+    </div>
+</div>
+
+<div class="card"><div class="card-header d-flex justify-content-between"><span>Recent runs</span><a asp-controller="WorkflowExecutions" asp-action="Index" asp-route-workflowId="@w.Id" class="small">All runs</a></div>
+@if (Model.Recent.Items.Count == 0) { <partial name="_EmptyState" model='("No runs yet", w.Status == WorkflowStatus.Active ? "Runs appear here as soon as an event matches the trigger." : "Activate the workflow to let events start it.")' /> }
+else
+{
+    <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Lead</th><th>Started by</th><th>Status</th><th>Created</th></tr></thead><tbody>
+    @foreach (var e in Model.Recent.Items)
+    {
+        <tr><td><a asp-controller="WorkflowExecutions" asp-action="Details" asp-route-id="@e.Id" class="text-decoration-none">@e.LeadName</a></td><td class="small">@e.TriggerKey</td><td><span class="badge @WorkflowDescribe.StatusClass(e.Status)">@e.Status</span></td><td class="small text-nowrap">@e.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm") UTC</td></tr>
+    }
+    </tbody></table></div>
+}
+</div>

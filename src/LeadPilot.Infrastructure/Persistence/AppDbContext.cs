@@ -8,6 +8,7 @@ using LeadPilot.Domain.Crm;
 using LeadPilot.Domain.Discovery;
 using LeadPilot.Domain.Messaging;
 using LeadPilot.Domain.Tenancy;
+using LeadPilot.Domain.Workflows;
 using LeadPilot.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -112,6 +113,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
     public DbSet<AgentTenantSettings> AgentTenantSettings => Set<AgentTenantSettings>();
     public DbSet<LeadQualification> LeadQualifications => Set<LeadQualification>();
     public DbSet<FollowUp> FollowUps => Set<FollowUp>();
+
+    // Workflows (Phase 9)
+    public DbSet<Workflow> Workflows => Set<Workflow>();
+    public DbSet<WorkflowVersion> WorkflowVersions => Set<WorkflowVersion>();
+    public DbSet<WorkflowTrigger> WorkflowTriggers => Set<WorkflowTrigger>();
+    public DbSet<WorkflowStep> WorkflowSteps => Set<WorkflowStep>();
+    public DbSet<WorkflowExecution> WorkflowExecutions => Set<WorkflowExecution>();
+    public DbSet<WorkflowExecutionLog> WorkflowExecutionLogs => Set<WorkflowExecutionLog>();
+    public DbSet<WorkflowTenantSettings> WorkflowTenantSettings => Set<WorkflowTenantSettings>();
+    public DbSet<WorkflowNotification> WorkflowNotifications => Set<WorkflowNotification>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -259,6 +270,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
         CampaignModel.Configure(builder);
         AiModel.Configure(builder);
         AgentsModel.Configure(builder);
+        WorkflowModel.Configure(builder);
 
         // Every tenant-owned entity: mandatory FK to Tenant (restrict), indexed TenantId and the global tenant filter.
         foreach (var type in builder.Model.GetEntityTypes().Select(e => e.ClrType).Where(t => typeof(ITenantOwned).IsAssignableFrom(t)).ToList())

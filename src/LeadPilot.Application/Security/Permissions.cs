@@ -48,6 +48,12 @@ public static class PermissionCodes
     public const string ChannelsManage = "Channels.Manage";
     public const string MessagesSend = "Messages.Send";
     public const string WebhooksView = "Webhooks.View";
+    public const string WorkflowsView = "Workflows.View";
+    public const string WorkflowsCreate = "Workflows.Create";
+    public const string WorkflowsUpdate = "Workflows.Update";
+    public const string WorkflowsActivate = "Workflows.Activate";
+    public const string WorkflowsExecute = "Workflows.Execute";
+    public const string WorkflowsDelete = "Workflows.Delete";
     // Platform (operator) permissions: grantable only by roles of the platform tenant.
     public const string TenantsManage = "Tenants.Manage";
     public const string PlatformSwitchTenant = "Platform.SwitchTenant";
@@ -106,6 +112,12 @@ public static class PermissionCatalog
         new(PermissionCodes.ChannelsManage, "Manage messaging channels", "Messaging", "Add, connect, pause and remove WhatsApp accounts, change sending limits and manage message templates."),
         new(PermissionCodes.MessagesSend, "Send messages", "Messaging", "Send WhatsApp messages to contacts (consent and suppression rules always apply)."),
         new(PermissionCodes.WebhooksView, "View webhook events", "Messaging", "See received gateway events and the messaging queue health of this workspace."),
+        new(PermissionCodes.WorkflowsView, "View workflows", "Workflows", "See workflows, their versions, runs and logs."),
+        new(PermissionCodes.WorkflowsCreate, "Create workflows", "Workflows", "Create workflows and their first draft."),
+        new(PermissionCodes.WorkflowsUpdate, "Edit workflows", "Workflows", "Edit drafts and create new versions (an active version never changes)."),
+        new(PermissionCodes.WorkflowsActivate, "Activate workflows", "Workflows", "Activate or deactivate workflows, use the workflow kill switch and set the workspace workflow limits."),
+        new(PermissionCodes.WorkflowsExecute, "Run workflows", "Workflows", "Run a workflow for a lead, retry failed runs, cancel running ones and simulate a workflow against a lead."),
+        new(PermissionCodes.WorkflowsDelete, "Delete workflows", "Workflows", "Delete inactive workflows (their run history stays)."),
         new(PermissionCodes.TenantsManage, "Manage tenants", "Platform", "Create, edit, suspend and activate tenants.", IsPlatform: true),
         new(PermissionCodes.PlatformSwitchTenant, "Switch into tenants", "Platform", "Operate inside any active tenant (audited).", IsPlatform: true),
     ];
@@ -145,7 +157,7 @@ public static class SystemRoles
         [
             PermissionCodes.LeadsView, PermissionCodes.LeadsCreate, PermissionCodes.LeadsUpdate, PermissionCodes.CampaignsView,
             PermissionCodes.ConversationsView, PermissionCodes.ConversationsReply, PermissionCodes.ReportsView, PermissionCodes.DiscoveryView, PermissionCodes.ChannelsView,
-            PermissionCodes.KnowledgeView, PermissionCodes.CatalogView
+            PermissionCodes.KnowledgeView, PermissionCodes.CatalogView, PermissionCodes.WorkflowsView
         ]),
         new(SalesManager, "Manages the sales team, leads and conversations.", false,
         [
@@ -156,12 +168,13 @@ public static class SystemRoles
             PermissionCodes.DiscoveryView, PermissionCodes.DiscoveryRun, PermissionCodes.DiscoveryReview, PermissionCodes.DiscoveryManage,
             PermissionCodes.ChannelsView, PermissionCodes.MessagesSend, PermissionCodes.CampaignsApprove, PermissionCodes.AudiencesPreview,
             PermissionCodes.KnowledgeView, PermissionCodes.KnowledgeManage, PermissionCodes.AiView, PermissionCodes.AiTest,
-            PermissionCodes.AgentsView, PermissionCodes.CatalogView, PermissionCodes.CatalogManage, PermissionCodes.ApprovalsView, PermissionCodes.ApprovalsDecide
+            PermissionCodes.AgentsView, PermissionCodes.CatalogView, PermissionCodes.CatalogManage, PermissionCodes.ApprovalsView, PermissionCodes.ApprovalsDecide,
+            PermissionCodes.WorkflowsView, PermissionCodes.WorkflowsCreate, PermissionCodes.WorkflowsUpdate, PermissionCodes.WorkflowsActivate, PermissionCodes.WorkflowsExecute
         ]),
         new(SalesAgent, "Works leads and conversations.", false,
         [
             PermissionCodes.LeadsView, PermissionCodes.LeadsCreate, PermissionCodes.LeadsUpdate, PermissionCodes.ConversationsView, PermissionCodes.ConversationsReply,
-            PermissionCodes.DiscoveryView, PermissionCodes.ChannelsView, PermissionCodes.KnowledgeView, PermissionCodes.CatalogView, PermissionCodes.ApprovalsView
+            PermissionCodes.DiscoveryView, PermissionCodes.ChannelsView, PermissionCodes.KnowledgeView, PermissionCodes.CatalogView, PermissionCodes.ApprovalsView, PermissionCodes.WorkflowsView
         ]),
         new(MarketingManager, "Plans and runs campaigns.", false,
         [
@@ -169,11 +182,12 @@ public static class SystemRoles
             PermissionCodes.CampaignsCancel, PermissionCodes.CampaignsDelete, PermissionCodes.AudiencesPreview,
             PermissionCodes.ConversationsView, PermissionCodes.ReportsView,
             PermissionCodes.LeadsExport, PermissionCodes.ConsentManage, PermissionCodes.SuppressionManage, PermissionCodes.DiscoveryView, PermissionCodes.DiscoveryRun,
-            PermissionCodes.ChannelsView, PermissionCodes.MessagesSend, PermissionCodes.KnowledgeView, PermissionCodes.AiTest, PermissionCodes.CatalogView
+            PermissionCodes.ChannelsView, PermissionCodes.MessagesSend, PermissionCodes.KnowledgeView, PermissionCodes.AiTest, PermissionCodes.CatalogView,
+            PermissionCodes.WorkflowsView, PermissionCodes.WorkflowsCreate, PermissionCodes.WorkflowsUpdate, PermissionCodes.WorkflowsExecute
         ]),
         new(ReadOnly, "Can view everything operational but change nothing.", false,
         [
-            PermissionCodes.LeadsView, PermissionCodes.CampaignsView, PermissionCodes.ConversationsView, PermissionCodes.ReportsView, PermissionCodes.KnowledgeView, PermissionCodes.CatalogView
+            PermissionCodes.LeadsView, PermissionCodes.CampaignsView, PermissionCodes.ConversationsView, PermissionCodes.ReportsView, PermissionCodes.KnowledgeView, PermissionCodes.CatalogView, PermissionCodes.WorkflowsView
         ]),
     ];
 

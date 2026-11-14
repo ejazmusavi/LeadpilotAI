@@ -55,3 +55,6 @@ Phase 7 (AI engine and knowledge base) is **built and tested with scripted/fake 
 
 ## Status after Phase 8
 Phase 8 (AI sales agent, controlled tools, human handoff) is **built and tested with a scripted model, real MySQL and RabbitMQ; the live Claude service was never exercised**. Demo, trial and payment tools are wired to ports whose default implementation answers "not connected" (Phase 10 registers the real ones). Automatic AI replies exist but are OFF by default (two switches). Next: Phase 9 (automation workflow engine) — not started.
+
+## Status after Phase 9
+Phase 9 (automation workflow engine) is **built and tested with real MySQL and RabbitMQ and the fake WAHA (test-only); never run against a live WAHA, live Claude or a real Qdrant**. Triggers for demo/trial/payment are declared and unavailable until Phase 10. Details and limits: PROGRESS.md. Next: Phase 10 (demo, trial and customer conversion) — not started.

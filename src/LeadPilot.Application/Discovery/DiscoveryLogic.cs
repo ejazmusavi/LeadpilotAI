@@ -51,7 +51,7 @@ public static class DiscoveryQueryBuilder
     public static string LocationText(SearchLocation l) =>
         string.Join(", ", new[] { l.Area, l.District, l.City, l.Province, l.Country }.Select(x => x?.Trim()).Where(x => !string.IsNullOrEmpty(x)));
 
-    /// <summary>One query per category phrase (or one keyword-only query). The text is e.g. "private school in Gulberg, Lahore, Punjab, Pakistan".</summary>
+    /// <summary>One query per category phrase (or one keyword-only query). The text is e.g. "<phrase> in <area>, <city>, <province>, <country>".</summary>
     public static IReadOnlyList<ProviderQuery> Build(SearchLocation location, IReadOnlyList<string> categoryTerms, string? placeType, string? keywords)
     {
         var where = LocationText(location);
@@ -216,17 +216,21 @@ public static class DiscoveryMatching
 {
     private static readonly HashSet<string> Generic = new(StringComparer.OrdinalIgnoreCase)
     {
-        "school", "schools", "college", "academy", "the", "and", "for", "home", "welcome", "official", "website", "site", "public", "private", "high", "system", "institute", "education", "educational",
+        "the", "and", "for", "home", "welcome", "official", "website", "site", "public", "private", "high", "system", "institute",
         "campus", "branch", "page", "main", "online", "www", "com",
     };
 
-    private static IEnumerable<string> Tokens(string? s) =>
-        Normalizer.Name(s).Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(t => t.Length >= 3 && !Generic.Contains(t));
+    private static IEnumerable<string> Tokens(string? s, IReadOnlySet<string>? industryWords) =>
+        Normalizer.Name(s).Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(t => t.Length >= 3 && !Generic.Contains(t) && (industryWords is null || !industryWords.Contains(t)));
 
-    /// <summary>True when two names share at least one distinctive word (e.g. "Beaconhouse School Gulberg" vs "Beaconhouse – Home").</summary>
-    public static bool SharesDistinctiveWord(string? a, string? b)
+    /// <summary>The words that describe the searched industry itself (taken from the tenant's own category name and search phrases), so they never make two different businesses look alike.</summary>
+    public static IReadOnlySet<string> IndustryWords(IEnumerable<string?> phrases) =>
+        phrases.SelectMany(p => Normalizer.Name(p).Split(' ', StringSplitOptions.RemoveEmptyEntries)).Where(t => t.Length >= 3).ToHashSet(StringComparer.Ordinal);
+
+    /// <summary>True when two names share at least one distinctive word (e.g. "Sunrise Hotel Downtown" vs "Sunrise – Home"). Words listed in <paramref name="industryWords"/> and generic filler words do not count.</summary>
+    public static bool SharesDistinctiveWord(string? a, string? b, IReadOnlySet<string>? industryWords = null)
     {
-        var set = Tokens(a).ToHashSet(); return set.Count > 0 && Tokens(b).Any(set.Contains);
+        var set = Tokens(a, industryWords).ToHashSet(); return set.Count > 0 && Tokens(b, industryWords).Any(set.Contains);
     }
 
     /// <summary>The candidate belongs to the searched category: the provider type equals the mapping's place type, or a search phrase appears in the name or in the provider's types.</summary>

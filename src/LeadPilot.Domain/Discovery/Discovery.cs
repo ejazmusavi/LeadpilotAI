@@ -260,13 +260,13 @@ public class DiscoveryUsageEntry : Entity, ITenantOwned, IAppendOnly
         new() { TenantId = tenantId, JobId = jobId, ConnectorType = connectorType, Operation = operation.Length > 100 ? operation[..100] : operation, Calls = calls, EstimatedCostUsd = cost, HttpStatus = httpStatus, PeriodKey = PeriodOf(nowUtc), OccurredAtUtc = nowUtc };
 }
 
-/// <summary>Maps a tenant's lead category to provider search terms. Entirely tenant data: nothing about schools (or any vertical) is hard-coded.</summary>
+/// <summary>Maps a tenant's lead category to provider search terms. Entirely tenant data: nothing about any vertical is hard-coded (industry packs supply starter mappings).</summary>
 public class DiscoveryCategoryMapping : AuditableEntity, ITenantOwned
 {
     private DiscoveryCategoryMapping() { }
     public Guid TenantId { get; private set; }
     public Guid CategoryId { get; private set; }
-    /// <summary>Search phrases, one per line (e.g. "private school").</summary>
+    /// <summary>Search phrases, one per line (e.g. "boutique hotel").</summary>
     public string SearchTerms { get; private set; } = string.Empty;
     /// <summary>Optional provider place type (Google "Table A" type such as primary_school).</summary>
     public string? PlaceType { get; private set; }

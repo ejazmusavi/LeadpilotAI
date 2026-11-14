@@ -198,7 +198,7 @@ public class DiscoverySetupController(IDiscoveryCatalogService catalog, ILeadSer
         var mapped = mappings.Select(m => m.CategoryId).ToHashSet();
         return View(new DiscoverySetupViewModel
         {
-            Mappings = mappings, Locations = await catalog.ListLocationsAsync(ct), Packs = await catalog.ListPacksAsync(ct), CanManage = await permissions.HasAsync(PermissionCodes.DiscoveryManage, ct),
+            Mappings = mappings, Locations = await catalog.ListLocationsAsync(ct), CanManage = await permissions.HasAsync(PermissionCodes.DiscoveryManage, ct),
             UnmappedCategories = (await leads.LookupsAsync(ct)).Categories.Where(c => !mapped.Contains(c.Id)).ToList(),
         });
     }
@@ -236,37 +236,6 @@ public class DiscoverySetupController(IDiscoveryCatalogService catalog, ILeadSer
         var r = await catalog.DeleteLocationAsync(id, ct);
         if (Reject(r) is { } rej) return rej;
         Success("Location removed.");
-        return RedirectToAction(nameof(Index));
-    }
-
-    [HttpPost, Authorize(Policy = PermissionCodes.DiscoveryManage)]
-    public async Task<IActionResult> InstallPack(string key, CancellationToken ct)
-    {
-        var r = await catalog.InstallPackAsync(key, ct);
-        if (Reject(r) is { } rej) return rej;
-        if (r.IsFailure) Failure(r.Error.Message);
-        else Success($"Starter pack installed: {r.Value.CategoriesCreated} categor{(r.Value.CategoriesCreated == 1 ? "y" : "ies")}, {r.Value.MappingsCreated} search setting(s), {r.Value.LocationsCreated} location(s) added. Existing items were left unchanged.");
-        return RedirectToAction(nameof(Index));
-    }
-}
-
-[Authorize(Policy = PermissionCodes.IntegrationsManage)]
-public class ConnectorsController(IDiscoveryConnectorService connectors) : AppController
-{
-    [HttpGet]
-    public async Task<IActionResult> Index(int page = 1, CancellationToken ct = default)
-    {
-        Crumbs(("Discovery", Url.Action("Index", "Discovery")), ("Connectors & usage", null));
-        var usage = await connectors.UsageAsync(page, 15, ct);
-        return View(new ConnectorsViewModel { Usage = usage, All = await connectors.ListAsync(ct), Page = page });
-    }
-
-    [HttpPost]
-    public async Task<IActionResult> Save(string type, string? apiKey, bool clearApiKey, bool enabled, int? monthlyCallLimit, decimal? monthlyBudgetUsd, decimal? costPerCallUsd, CancellationToken ct)
-    {
-        var r = await connectors.SaveSettingsAsync(type, new SaveConnectorSettingsRequest(string.IsNullOrWhiteSpace(apiKey) ? null : apiKey, clearApiKey, enabled, monthlyCallLimit, monthlyBudgetUsd, costPerCallUsd, UpdateLimits: true), ct);
-        if (Reject(r) is { } rej) return rej;
-        if (r.IsFailure) Failure(r.Error.Message); else Success("Connector settings saved.");
         return RedirectToAction(nameof(Index));
     }
 }

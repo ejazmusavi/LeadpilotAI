@@ -68,7 +68,6 @@ public sealed class DiscoverySetupViewModel
     public IReadOnlyList<CategoryMappingDto> Mappings { get; set; } = [];
     public IReadOnlyList<LookupItem> UnmappedCategories { get; set; } = [];
     public IReadOnlyList<LocationPresetDto> Locations { get; set; } = [];
-    public IReadOnlyList<StarterPackDto> Packs { get; set; } = [];
     public bool CanManage { get; set; }
 }
 

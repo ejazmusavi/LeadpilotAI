@@ -1,7 +1,7 @@
 @model CategoriesViewModel
 @{ ViewData["Title"] = "Categories & statuses"; }
 <h1 class="h3 mb-1">Categories &amp; statuses</h1>
-<p class="text-muted">Categories describe what kind of organization a lead is (school, clinic, restaurant, …) and are entirely yours to define. Statuses describe the lifecycle of the lead record and are separate from the pipeline stage.</p>
+<p class="text-muted">Categories describe what kind of organization a lead is (hotel, clinic, retailer, …) and are entirely yours to define; they can be nested (for example Accommodation › Hotels). An <a asp-controller="Packs" asp-action="Index">industry template</a> can create a starter set for you. Statuses describe the lifecycle of the lead record and are separate from the pipeline stage.</p>
 <div class="row g-3">
     <div class="col-12 col-xl-6">
         <div class="card"><div class="card-header">Categories</div>

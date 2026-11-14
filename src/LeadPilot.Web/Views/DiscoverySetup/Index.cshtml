@@ -32,14 +32,7 @@
         }
     </div></div>
     <div class="col-12 col-xl-5">
-        <div class="card mb-3"><div class="card-header">Starter packs</div><div class="card-body">
-            @foreach (var p in Model.Packs)
-            {
-                <div class="d-flex justify-content-between align-items-start gap-2"><div><div class="fw-semibold">@p.Name</div><div class="small text-muted">@p.Description (@p.Categories categories, @p.Locations locations)</div></div>
-                    @if (Model.CanManage) { <form asp-action="InstallPack" method="post"><input type="hidden" name="key" value="@p.Key" /><button type="submit" class="btn btn-sm btn-outline-primary" data-confirm="Add the categories, search phrases and locations of this pack? Anything you already have stays as it is." data-confirm-label="Install">@(p.Installed ? "Re-apply" : "Install")</button></form> }
-                    else if (p.Installed) { <span class="badge text-bg-success">installed</span> }</div>
-            }
-        </div></div>
+        <div class="card mb-3"><div class="card-header">Starter categories</div><div class="card-body small text-muted">Search phrases and locations for your industry can be added from an <a asp-controller="Packs" asp-action="Index">industry template</a>. You can also add your own below; everything stays editable.</div></div>
         <div class="card"><div class="card-header">Saved locations</div>
             @if (Model.CanManage) { <div class="card-body border-bottom"><form asp-action="AddLocation" method="post" class="row g-2">
                 <div class="col-6"><input name="country" class="form-control" placeholder="Country" aria-label="Country" required maxlength="100" /></div><div class="col-6"><input name="province" class="form-control" placeholder="Province" aria-label="Province" maxlength="100" /></div>

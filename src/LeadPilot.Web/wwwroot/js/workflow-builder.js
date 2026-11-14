@@ -4,7 +4,7 @@
   var catalog = JSON.parse(document.getElementById('wf-catalog').textContent);
   var initial = JSON.parse(document.getElementById('wf-initial').textContent);
   var form = document.getElementById('wf-form'), out = document.getElementById('wf-definition');
-  var SAMPLE = { name: 'Green Valley School', first_name: 'Sara', business_name: 'Green Valley School', phone: '+923001234567', city: 'Lahore', country: 'Pakistan' };
+  var SAMPLE = { name: 'Example Business', first_name: 'Alex', business_name: 'Example Business', phone: '+15550100', city: 'Sample City', country: 'Sample Country' };
   var DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
   function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML.replace(/"/g, '&quot;'); }

@@ -12,10 +12,10 @@
 {
     <div class="card mb-3"><div class="card-body text-center py-5">
         <h2 class="h5">No sales agent yet</h2>
-        <p class="text-muted mb-3">Until you create one, the AI only suggests replies from your knowledge base (Phase 7 behaviour). You can start from a sample School ERP configuration: it contains <strong>placeholders only</strong> (no features, prices or demo steps are invented), so the AI says it does not know until you fill in and confirm your real product information.</p>
+        <p class="text-muted mb-3">Until you create one, the AI only suggests replies from your knowledge base (Phase 7 behaviour). You can start from an industry template pack: its sample agents contain <strong>placeholders only</strong> (no features, prices or demo steps are invented), so the AI says it does not know until you fill in and confirm your real product information.</p>
         @if (Model.CanManage)
         {
-            <form asp-action="CreateSample" method="post" class="d-inline"><button type="submit" class="btn btn-primary">Create the sample School ERP agent</button></form>
+            <a asp-controller="Packs" asp-action="Index" class="btn btn-primary">Start from an industry template</a>
             <a asp-action="Edit" class="btn btn-outline-secondary ms-2">Create an empty agent</a>
         }
     </div></div>

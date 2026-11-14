@@ -36,10 +36,6 @@ public class AgentsController(IAgentService agents) : ApiControllerBase
     [HttpPost, Authorize(Policy = PermissionCodes.AgentsManage)]
     public async Task<IActionResult> Create(SaveAgentRequest request, CancellationToken ct) { var r = await agents.CreateAsync(request, ct); return r.IsSuccess ? CreatedAtAction(nameof(Get), new { id = r.Value.Id }, r.Value) : Fail(r); }
 
-    /// <summary>Creates the clearly-marked SAMPLE School ERP agent and placeholder catalog (nothing is confirmed, so the AI says it does not know until the catalog is filled in).</summary>
-    [HttpPost("sample"), Authorize(Policy = PermissionCodes.AgentsManage)]
-    public async Task<IActionResult> CreateSample(CancellationToken ct) { var r = await agents.CreateSampleAsync(ct); return r.IsSuccess ? CreatedAtAction(nameof(Get), new { id = r.Value.Id }, r.Value) : Fail(r); }
-
     [HttpPut("{id:guid}"), Authorize(Policy = PermissionCodes.AgentsManage)]
     public async Task<IActionResult> Update(Guid id, SaveAgentRequest request, CancellationToken ct) => Respond(await agents.UpdateAsync(id, request, ct));
 

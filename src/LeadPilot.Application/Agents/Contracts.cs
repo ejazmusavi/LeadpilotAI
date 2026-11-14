@@ -93,7 +93,6 @@ public interface IAgentService
     /// <summary>The explicit opt-in. Enabling needs the tenant switch too and is audited.</summary>
     Task<Result<AgentDto>> SetAutoSendAsync(Guid id, bool enabled, CancellationToken ct = default);
     /// <summary>Creates the clearly-marked SAMPLE agent and catalog (placeholders, no invented facts, nothing confirmed). Refuses when one already exists.</summary>
-    Task<Result<AgentDto>> CreateSampleAsync(CancellationToken ct = default);
     Task<AgentSettingsDto> GetSettingsAsync(CancellationToken ct = default);
     Task<Result<AgentSettingsDto>> UpdateSettingsAsync(SaveAgentSettingsRequest request, CancellationToken ct = default);
     IReadOnlyList<ToolInfoDto> Tools();

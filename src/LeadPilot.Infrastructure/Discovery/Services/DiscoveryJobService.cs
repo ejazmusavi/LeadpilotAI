@@ -14,7 +14,7 @@ using Microsoft.Extensions.Options;
 namespace LeadPilot.Infrastructure.Discovery.Services;
 
 public sealed class DiscoveryJobService(
-    IEntitlementService entitlements, CrmContext crm, IDiscoveryConnectorRegistry registry, DiscoveryUsage usage, DiscoveryCatalogService catalog, IDiscoveryJobScheduler scheduler, IOptions<DiscoveryOptions> options,
+    IEntitlementService entitlements, CrmContext crm, IDiscoveryConnectorRegistry registry, DiscoveryUsage usage, IDiscoveryJobScheduler scheduler, IOptions<DiscoveryOptions> options,
     ILogger<DiscoveryJobService> logger) : IDiscoveryJobService
 {
     public const string UsageLimitCode = "usage_limit_reached";
@@ -61,7 +61,6 @@ public sealed class DiscoveryJobService(
         CrmFlow.GuardAsync(async () =>
         {
             await crm.EnsureDefaultsAsync(ct);
-            await catalog.EnsureAutoPackAsync(ct);
             var d = options.Value; var tenantId = crm.TenantId;
             var connector = registry.Find(r.ConnectorType ?? "");
             if (connector is null) return Result.Failure<DiscoveryJobDto>(Error.Validation("Unknown connector."));

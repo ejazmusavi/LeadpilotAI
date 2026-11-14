@@ -18,7 +18,12 @@ public static partial class WebsiteExtractor
     private static readonly string[] SocialHosts = ["facebook.com", "instagram.com", "linkedin.com", "twitter.com", "x.com", "youtube.com", "tiktok.com"];
     private static readonly string[] ShareMarkers = ["/sharer", "/share", "/intent/", "/dialog/", "/plugins/", "/tr?", "/embed", "/watch?"];
     private static readonly string[] AssetSuffixes = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".css", ".js", ".woff", ".ico"];
-    private static readonly string[] BusinessTypes = ["school", "educationalorganization", "collegeoruniversity", "localbusiness", "organization", "preschool", "elementaryschool", "middleschool", "highschool", "childcare", "library", "store"];
+    /// <summary>schema.org types that describe the page or its parts rather than the organization; every other typed node that has a name and a phone, e-mail or address is read as the business.</summary>
+    private static readonly HashSet<string> NotABusiness = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "webpage", "website", "breadcrumblist", "listitem", "itemlist", "article", "newsarticle", "blogposting", "imageobject", "videoobject", "person", "searchaction", "contactpoint", "postaladdress",
+        "offer", "product", "event", "faqpage", "question", "answer", "webpageelement", "sitenavigationelement", "wpheader", "wpfooter", "review", "rating", "aggregaterating", "geocoordinates",
+    };
 
     [GeneratedRegex(@"[A-Za-z0-9._%+\-]+@[A-Za-z0-9\-]+(?:\.[A-Za-z0-9\-]+)*\.[A-Za-z]{2,}")] private static partial Regex EmailPattern();
 
@@ -80,7 +85,8 @@ public static partial class WebsiteExtractor
                 var isBusiness = false;
                 if (el.TryGetProperty("@type", out var t))
                     isBusiness = (t.ValueKind == JsonValueKind.String ? [t.GetString()] : t.ValueKind == JsonValueKind.Array ? t.EnumerateArray().Select(x => x.GetString()).ToArray() : [])
-                        .Any(x => x is not null && BusinessTypes.Contains(x.Split('/', '#').Last().ToLowerInvariant()));
+                        .Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x!.Split('/', '#').Last()).ToList() is { Count: > 0 } types && types.All(x => !NotABusiness.Contains(x))
+                        && el.TryGetProperty("name", out _) && (el.TryGetProperty("telephone", out _) || el.TryGetProperty("email", out _) || el.TryGetProperty("address", out _));
                 if (!isBusiness) break;
                 if (name is null && el.TryGetProperty("name", out var n) && n.ValueKind == JsonValueKind.String) name = n.GetString();
                 if (el.TryGetProperty("telephone", out var tel) && tel.ValueKind == JsonValueKind.String) AddPhone(phones, tel.GetString());

@@ -95,8 +95,11 @@ public class AgentMigrationTests(AppFixture app)
             {
                 var agents = sp.GetRequiredService<IAgentService>();
                 var s = await agents.GetSettingsAsync(ct); Assert.False(s.AiRepliesAllowed);                    // opt-in: off for upgraded tenants
-                var sample = await agents.CreateSampleAsync(ct); Assert.True(sample.IsSuccess, sample.IsFailure ? sample.Error.Message : "");
-                Assert.False(sample.Value.AutoReplyEnabled); Assert.True(sample.Value.IsSample);
+                var packs = sp.GetRequiredService<LeadPilot.Application.Config.IPackService>();
+                var edu = (await packs.ListAsync(ct)).Single(x => x.Key == "education");
+                var applied = await packs.ApplyAsync(edu.Id, new LeadPilot.Application.Config.ApplyPackOptions(), ct); Assert.True(applied.IsSuccess, applied.IsFailure ? applied.Error.Message : "");
+                var sample = (await agents.ListAsync(ct)).Single();
+                Assert.False(sample.AutoReplyEnabled); Assert.True(sample.IsSample);
             });
             Assert.Equal(1L, await Scalar(cs, "SELECT COUNT(*) FROM SalesAgents")); Assert.Equal(5L, await Scalar(cs, "SELECT COUNT(*) FROM AgentQualificationQuestions"));
             Assert.True(await WithDb(d => d.Leads.IgnoreQueryFilters().AnyAsync(l => l.Id == leadId)));

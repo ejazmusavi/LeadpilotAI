@@ -242,7 +242,7 @@ public sealed class DiscoveryJobRunner(
             if (e.Outcome == WebsiteFetchOutcome.Fetched && e.Info is { } info)
             {
                 enrichment = EnrichmentStatus.Done;
-                websiteConfirmed = DiscoveryMatching.SharesDistinctiveWord(n.Name, info.BusinessName ?? info.Title);
+                websiteConfirmed = DiscoveryMatching.SharesDistinctiveWord(n.Name, info.BusinessName ?? info.Title, DiscoveryMatching.IndustryWords((mapping?.Terms ?? []).Append(category?.Name)));
                 notes.Add(websiteConfirmed ? "The website's name matches the provider's name." : "The website's title/name does not clearly match the provider's name; check it before approving.");
                 if (info.Title is not null) notes.Add($"Website title: {info.Title}");
                 var sitePhone = info.Phones.FirstOrDefault();

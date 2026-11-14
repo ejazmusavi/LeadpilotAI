@@ -267,7 +267,7 @@ public static class PackParser
         foreach (var f in Enum.GetValues<CustomEntityType>())
             if (fields.Count(x => x.Entity == f.ToString()) > CustomFieldDefinition.MaxFieldsPerEntityType) problems.Add(new("customFields", $"At most {CustomFieldDefinition.MaxFieldsPerEntityType} fields per record type."));
 
-        var byKey = cats.ToDictionary(c => c.Key, StringComparer.OrdinalIgnoreCase);
+        var byKey = cats.GroupBy(c => c.Key, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
         foreach (var c in cats)
         {
             if (c.Parent is null) continue;

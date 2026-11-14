@@ -100,14 +100,6 @@ public class AgentsController(IAgentService agents, IToolExecutionService log, I
         return RedirectToAction(nameof(Edit), new { id });
     }
 
-    [HttpPost, Authorize(Policy = PermissionCodes.AgentsManage)]
-    public async Task<IActionResult> CreateSample(CancellationToken ct)
-    {
-        var r = await agents.CreateSampleAsync(ct);
-        if (r.IsSuccess) { Success("Sample School ERP agent created. It contains placeholders only: fill in and confirm the product catalog before relying on it."); return RedirectToAction(nameof(Edit), new { id = r.Value.Id }); }
-        Failure(r.Error.Message);
-        return RedirectToAction(nameof(Index));
-    }
 
     [HttpPost, Authorize(Policy = PermissionCodes.AgentsManage)]
     public async Task<IActionResult> SaveSettings(AgentSettingsFormModel m, CancellationToken ct)

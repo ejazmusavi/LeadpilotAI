@@ -89,26 +89,6 @@ public sealed class AgentService(CrmContext crm, ILogger<AgentService> logger) :
         return await Mutate(id, a => { a.SetAutoReply(enabled, crm.Now, crm.Actor); crm.Record("Agent.AutoReply", "SalesAgent", id, $"Automatic AI replies of '{a.Name}' switched {(enabled ? "ON" : "off")}."); }, ct);
     }
 
-    public Task<Result<AgentDto>> CreateSampleAsync(CancellationToken ct = default) =>
-        CrmFlow.GuardAsync(async () =>
-        {
-            var tenantId = crm.TenantId; var now = crm.Now;
-            if (await crm.Db.SalesAgents.AnyAsync(a => a.TenantId == tenantId, ct)) return Result.Failure<AgentDto>(Error.Conflict("This workspace already has an agent."));
-            var agent = SalesAgent.Create(tenantId, "School ERP sales assistant (SAMPLE)", SampleData.Instructions, true, true, now, crm.Actor);
-            agent.Update(agent.Name, "SAMPLE configuration: placeholders only. Replace the instructions and fill in the catalog before relying on it.", SampleData.Instructions, null, null,
-                [AgentTools.GetProductInformation, AgentTools.GetPricingPlans, AgentTools.GetLeadProfile, AgentTools.QualifyLead, AgentTools.UpdateLeadStatus, AgentTools.CheckDemoAvailability, AgentTools.BookDemo, AgentTools.ScheduleFollowUp, AgentTools.AddLeadNote],
-                agent.OffTopicReply, now, crm.Actor, keepSampleFlag: true);
-            crm.Db.SalesAgents.Add(agent);
-            var order = 0;
-            foreach (var q in SampleData.Questions) crm.Db.AgentQualificationQuestions.Add(AgentQualificationQuestion.Create(tenantId, agent.Id, q.Key, q.Question, q.Type, q.Choices, q.Required, ++order));
-            var product = CatalogProduct.Create(tenantId, "School ERP (SAMPLE - not confirmed)", "[PLACEHOLDER] Describe the product here.", SampleData.FeatureLines, "[PLACEHOLDER] Describe how a demo is arranged.", "[PLACEHOLDER] Describe how a trial works.", false, true, now, crm.Actor);
-            crm.Db.CatalogProducts.Add(product);
-            crm.Db.PricingPlans.Add(PricingPlan.Create(tenantId, product.Id, "[PLACEHOLDER] Plan name", null, "USD", null, "[PLACEHOLDER] Price, billing period and what is included.", null, false, true, now, crm.Actor));
-            crm.Record("Agent.SampleCreated", "SalesAgent", agent.Id, "Sample School ERP agent and placeholder catalog created.");
-            await crm.Db.SaveChangesAsync(ct);
-            return Result.Success(await MapAsync(agent, ct));
-        }, logger);
-
     public async Task<AgentSettingsDto> GetSettingsAsync(CancellationToken ct = default)
     {
         var tenantId = crm.TenantId;
@@ -164,33 +144,6 @@ public sealed class AgentService(CrmContext crm, ILogger<AgentService> logger) :
         return new AgentDto(a.Id, a.Name, a.Description, a.Instructions, a.IsActive, a.IsDefault, a.IsSample, a.ChatModel, a.MinConfidence, a.EnabledTools, a.AutoReplyEnabled, a.OffTopicReply,
             questions.Select(q => new QuestionDto(q.Id, q.Key, q.Question, q.AnswerType, q.Choices, q.Required, q.SortOrder)).ToList(), a.Version, allowed);
     }
-}
-
-/// <summary>The sample School ERP configuration. It contains NO product facts: every fact field is a placeholder and everything is unconfirmed, so the AI answers "I don't know" until the owner fills it in.</summary>
-internal static class SampleData
-{
-    public const string Instructions = """
-        You are the sales assistant of a business that sells school management software (School ERP). You talk to school owners, principals and administrators on WhatsApp.
-        Goals: welcome the person, understand their school and their problems, answer product questions, qualify them with the qualification questions (one or two per message, never an interrogation),
-        explain relevant benefits, answer objections politely, and arrange a demo or a follow-up with the team.
-        You know nothing about the product except what the tools return. Always call GetProductInformation or GetPricingPlans before you state a feature or a price. If a tool says the information is
-        unknown or not confirmed, tell the person honestly that you do not have it and that a colleague will follow up. Never invent features, prices, discounts, dates or integrations.
-        Areas the person may ask about: student admission, fee management, attendance, examinations and results, timetable, parent communication, school administration, pricing and plans, the demo process and the trial process.
-        Hand the conversation to a colleague when the person asks for one, is upset, or raises money or legal questions.
-        """;
-
-    public const string FeatureLines = "[PLACEHOLDER] Student admission\n[PLACEHOLDER] Fee management\n[PLACEHOLDER] Attendance\n[PLACEHOLDER] Examination and results\n[PLACEHOLDER] Timetable\n[PLACEHOLDER] Parent communication\n[PLACEHOLDER] School administration";
-
-    public sealed record Q(string Key, string Question, AnswerType Type, string[]? Choices, bool Required);
-
-    public static readonly Q[] Questions =
-    [
-        new("role", "What is your role at the school?", AnswerType.Text, null, false),
-        new("student_count", "Roughly how many students does your school have?", AnswerType.Number, null, true),
-        new("current_system", "How do you manage admissions, fees and attendance today?", AnswerType.Text, null, true),
-        new("main_problem", "Which area causes you the most trouble at the moment?", AnswerType.Text, null, false),
-        new("timeline", "When would you like to start using a new system?", AnswerType.Choice, ["this month", "in 1-3 months", "later", "just exploring"], false),
-    ];
 }
 
 public sealed class CatalogService(CrmContext crm, ILogger<CatalogService> logger) : ICatalogService

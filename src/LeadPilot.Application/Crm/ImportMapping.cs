@@ -29,7 +29,7 @@ public static class ImportRowMapper
 
     private static readonly Dictionary<ImportField, string[]> Aliases = new()
     {
-        [ImportField.Name] = ["name", "leadname", "organization", "organisation", "company", "companyname", "school", "schoolname", "business", "businessname", "account", "accountname"],
+        [ImportField.Name] = ["name", "leadname", "organization", "organisation", "company", "companyname", "business", "businessname", "account", "accountname"],
         [ImportField.Category] = ["category", "type", "businesstype", "industry", "segment"],
         [ImportField.Country] = ["country"],
         [ImportField.Province] = ["province", "state", "region"],

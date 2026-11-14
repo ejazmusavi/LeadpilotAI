@@ -115,11 +115,4 @@ public class DiscoveryCatalogController(IDiscoveryCatalogService catalog) : ApiC
 
     [HttpDelete("locations/{id:guid}"), Authorize(Policy = PermissionCodes.DiscoveryManage)]
     public async Task<IActionResult> DeleteLocation(Guid id, CancellationToken ct) => Respond(await catalog.DeleteLocationAsync(id, ct));
-
-    [HttpGet("starter-packs"), Authorize(Policy = PermissionCodes.DiscoveryView)]
-    public async Task<IReadOnlyList<StarterPackDto>> Packs(CancellationToken ct) => await catalog.ListPacksAsync(ct);
-
-    /// <summary>Adds the pack's categories, search phrases and locations. Idempotent; never overwrites your edits.</summary>
-    [HttpPost("starter-packs/{key}/install"), Authorize(Policy = PermissionCodes.DiscoveryManage)]
-    public async Task<IActionResult> InstallPack(string key, CancellationToken ct) => Respond(await catalog.InstallPackAsync(key, ct));
 }

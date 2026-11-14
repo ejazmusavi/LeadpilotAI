@@ -104,8 +104,6 @@ public sealed record CategoryMappingDto(Guid Id, Guid CategoryId, string Categor
 public sealed record SaveCategoryMappingRequest(Guid CategoryId, string SearchTerms, string? PlaceType = null) : TenantScopedRequest;
 public sealed record LocationPresetDto(Guid Id, string Label, string Country, string? Province, string? City, string? District, string? Area);
 public sealed record SaveLocationPresetRequest(string Country, string? Province = null, string? City = null, string? District = null, string? Area = null) : TenantScopedRequest;
-public sealed record StarterPackDto(string Key, string Name, string Description, int Categories, int Locations, bool Installed);
-public sealed record InstallPackResult(int CategoriesCreated, int MappingsCreated, int LocationsCreated);
 
 // ---------- ports ----------
 public interface IDiscoveryJobService
@@ -146,8 +144,6 @@ public interface IDiscoveryCatalogService
     Task<IReadOnlyList<LocationPresetDto>> ListLocationsAsync(CancellationToken ct = default);
     Task<Result<LocationPresetDto>> AddLocationAsync(SaveLocationPresetRequest request, CancellationToken ct = default);
     Task<Result> DeleteLocationAsync(Guid id, CancellationToken ct = default);
-    Task<IReadOnlyList<StarterPackDto>> ListPacksAsync(CancellationToken ct = default);
-    Task<Result<InstallPackResult>> InstallPackAsync(string key, CancellationToken ct = default);
 }
 
 /// <summary>Queues the background execution of a discovery job (Hangfire in production).</summary>
@@ -167,39 +163,4 @@ public interface IDiscoveryJobRunner
 public interface IDiscoveryRetention
 {
     Task<int> PurgeExpiredAsync(CancellationToken ct);
-}
-
-// ---------- starter packs (default data, not code paths) ----------
-public sealed record StarterCategory(string Name, string[] Terms, string? PlaceType);
-public sealed record StarterLocation(string Country, string? Province, string? City);
-public sealed record StarterPack(string Key, string Name, string Description, IReadOnlyList<StarterCategory> Categories, IReadOnlyList<StarterLocation> Locations);
-
-public static class DiscoveryStarterPacks
-{
-    public const string EducationPakistan = "education-pakistan";
-
-    public static readonly IReadOnlyList<StarterPack> All =
-    [
-        new(EducationPakistan, "Education — Pakistan", "School and college categories with Pakistani cities. Everything installed here can be edited or deactivated.",
-        [
-            new("Private schools", ["private school"], "school"),
-            new("Primary schools", ["primary school"], "primary_school"),
-            new("Secondary schools", ["secondary school", "high school"], "secondary_school"),
-            new("Higher secondary schools", ["higher secondary school", "intermediate college"], null),
-            new("Colleges", ["college"], null),
-            new("Academies", ["academy", "coaching academy"], null),
-            new("Educational institutions", ["educational institute", "education center"], null),
-        ],
-        [
-            new("Pakistan", "Sindh", "Karachi"), new("Pakistan", "Punjab", "Lahore"), new("Pakistan", "Islamabad Capital Territory", "Islamabad"), new("Pakistan", "Punjab", "Rawalpindi"),
-            new("Pakistan", "Punjab", "Faisalabad"), new("Pakistan", "Punjab", "Multan"), new("Pakistan", "Khyber Pakhtunkhwa", "Peshawar"), new("Pakistan", "Balochistan", "Quetta"),
-            new("Pakistan", "Sindh", "Hyderabad"), new("Pakistan", "Punjab", "Sialkot"), new("Pakistan", "Punjab", "Gujranwala"),
-        ]),
-    ];
-
-    public static StarterPack? Find(string key) => All.FirstOrDefault(p => p.Key == key);
-
-    /// <summary>Tenants whose industry is "Education" receive this pack automatically the first time discovery is opened.</summary>
-    public static string? AutoPackForIndustry(string? industry) =>
-        string.Equals(industry?.Trim(), "Education", StringComparison.OrdinalIgnoreCase) ? EducationPakistan : null;
 }

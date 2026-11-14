@@ -2,7 +2,7 @@ using LeadPilot.Domain.Common;
 
 namespace LeadPilot.Domain.Crm;
 
-/// <summary>Tenant-configurable business category (school, clinic, restaurant, …). The platform never hard-codes a vertical.</summary>
+/// <summary>Tenant-configurable business category (hotel, clinic, retailer, …). The platform never hard-codes a vertical.</summary>
 public class LeadCategory : AuditableEntity, ITenantOwned
 {
     private LeadCategory() { }

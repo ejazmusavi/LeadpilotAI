@@ -1,3 +1,4 @@
+using LeadPilot.Infrastructure.Campaigns;
 using LeadPilot.Application.Abstractions;
 using LeadPilot.Application.Contracts;
 using LeadPilot.Application.Discovery;
@@ -64,6 +65,7 @@ public static class DiscoveryServiceCollection
         services.AddDiscovery(config);
         services.AddDiscoveryHangfire(config, server: true);
         services.AddMessaging(config);
+        services.AddCampaigns(config);
         services.AddMessagingConsumers();
         return services;
     }

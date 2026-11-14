@@ -162,3 +162,27 @@ OUTBOUND  Web/Api: validate (tenant, eligibility, suppression, account, limits) 
           runner: re-validate → pace → claim Queued→Sending (atomic) → seen/typing → sendText → Sent + gateway id | Unknown → reconcile | Failed
           WAHA ──message.ack──▶ webhook ──▶ outbox ──▶ status consumer ──▶ monotonic Sent/Delivered/Read
 ```
+
+## Phase 6 decisions (campaigns)
+| Decision | Reason |
+|---|---|
+| **No second send pipeline, scheduler, eligibility check or rate limiter.** Campaign sends call `OutboundQueueService` (Phase 5) with a forced Marketing purpose, a campaign idempotency key and the campaign/recipient ids; `OutboundSendRunner` calls two small ports (`ICampaignSendGuard` before the gateway call, `ICampaignEvents` after the outcome). An architecture test fails if anything else calls `IWhatsAppGateway.Send*`. | README Rule: one outbound path. |
+| **Hangfire is the only scheduler**: `CampaignJob.StartAsync/TickAsync` (queue `campaigns`, bounded automatic retry because both are idempotent), `CampaignSweepJob` every minute. An architecture test forbids timers/threads/other schedulers in the module. | README §8. |
+| **One tick = one batch**, protected by a DB lease (`LeaseUntilUtc`); the next tick is scheduled after a random pause between the campaign's bounds. The recipient table is the checkpoint: a restart continues from recipient statuses; the idempotency key `cmp:{campaign}:{recipient}[:round]` makes a repeated hand-over return the existing message. A pause sends withdrawn recipients back to Pending with `Round+1` (new key); the old message is already Failed. | Recoverable, no duplicates. |
+| **Marketing permission is checked at selection, before queueing and immediately before the gateway call** (guard stores the send-time decision next to the selection-time one). | README Phase 6 critical rule. |
+| **Status changes use one state machine**; the runner changes status with guarded SQL (`WHERE Status = …`) that also bumps `Version`, API actions use the entity and the concurrency token. | A pause racing a tick wins or conflicts, never silently loses. |
+| **Rollup is recomputed, never incremented.** Recipient rows are updated from real message states (hooks, consumer, and a repair pass in each tick); `campaign.recipient` / `campaign.status` outbox events feed the `campaigns.events` consumer (new queue `…campaigns`, DLQ/retry like the others) which recomputes the rollup idempotently. | Stats can only equal the raw data. |
+| **Audience = one SQL query + streamed paging**; eligibility through `IContactEligibilityService.CheckManyAsync` (bulk loader, same `EligibilityRules`); preview and snapshot builder share one scanner. | Never load everything; no second gate. |
+| **Settings live in a dedicated typed row (`CampaignTenantSettings`)**, not generic tenant settings. | Anyone with `Settings.Manage` could otherwise flip the kill switch or the approval policy; here only `Campaigns.Settings` can. |
+| Cross-tenant sweep uses `CampaignDirectory` (the only new `IgnoreQueryFilters`, allow-listed): it returns tenant ids only; all work runs in `ITenantScopeRunner`. | Same rule as `MessagingDirectory`. |
+| `TemplateRenderer` extended in place (fallback syntax, `city`/`country`, brace validation, `Sanitize`) rather than a second renderer. | One renderer for replies and campaigns. |
+
+### Campaign flow
+```
+Web/Api: Draft → submit (freeze text + footer) → [PendingApproval → approve] → Scheduled (+ Hangfire start job at the UTC time)
+Hangfire start → atomic Scheduled→Running → tick job
+tick: lease → account/kill-switch/limit checks → snapshot (resumable) → repair recipients from messages → complete? → batch allowance (account caps, warm-up, campaign daily, monthly)
+      → per recipient: fresh status check → eligibility → cool-down/duplicate/content → OutboundQueueService (Phase 5) → recipient Queued → next tick after a random pause
+Phase 5 send runner: guard (campaign running? kill switch? recipient still waiting? eligibility again) → pacing → atomic claim → gateway
+acks / replies / stage changes → recipient + conversions + outbox events → campaigns.events consumer → rollup
+```

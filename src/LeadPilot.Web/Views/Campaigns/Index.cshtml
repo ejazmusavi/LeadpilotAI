@@ -1,0 +1,40 @@
+@model CampaignListViewModel
+@using LeadPilot.Domain.Campaigns
+@{ ViewData["Title"] = "Campaigns"; var q = Model.Query; }
+<div class="d-flex flex-wrap justify-content-between align-items-start mb-3 gap-2">
+    <div><h1 class="h3 mb-1">Campaigns</h1><p class="text-muted mb-0">Marketing messages to people who agreed to receive them. Consent and the suppression list are checked again before every single message.</p></div>
+    <div class="d-flex gap-2">
+        <a asp-controller="CampaignSettings" asp-action="Index" class="btn btn-outline-secondary">Settings</a>
+        @if (Model.CanCreate) { <a asp-action="New" class="btn btn-primary">New campaign</a> }
+    </div>
+</div>
+@if (Model.Settings.KillSwitch) { <div class="alert alert-danger" role="alert"><strong>Kill switch is ON.</strong> No campaign message is being sent. Turn it off under Settings, then resume paused campaigns by hand.</div> }
+<form method="get" asp-action="Index" class="card card-body mb-3"><div class="row g-3 align-items-end">
+    <div class="col-12 col-md-4"><label class="form-label" for="search">Search</label><input id="search" name="search" value="@q.Search" class="form-control" placeholder="Campaign name" /></div>
+    <div class="col-6 col-md-3"><label class="form-label" for="status">Status</label><select id="status" name="status" class="form-select"><option value="">All</option>@foreach (var s in Enum.GetValues<CampaignStatus>()) { <option value="@s" selected="@(q.Status == s)">@s</option> }</select></div>
+    <div class="col-6 col-md-3"><label class="form-label" for="type">Type</label><select id="type" name="type" class="form-select"><option value="">All</option>@foreach (var s in Enum.GetValues<CampaignType>()) { <option value="@s" selected="@(q.Type == s)">@s</option> }</select></div>
+    <div class="col-12 col-md-2"><button type="submit" class="btn btn-outline-primary">Filter</button> <a asp-action="Index" class="btn btn-link">Clear</a></div>
+</div></form>
+@if (Model.Result.Items.Count == 0)
+{
+    <div class="card"><partial name="_EmptyState" model='("No campaigns", Model.CanCreate ? "Create a campaign: choose a marketing template, define the audience and see exactly who would be messaged before anything is sent." : "No campaigns match.")' /></div>
+}
+else
+{
+    <div class="card"><div class="table-responsive"><table class="table align-middle mb-0">
+        <thead><tr><th>Name</th><th>Type</th><th>Status</th><th class="text-end">Recipients</th><th class="text-end">Sent</th><th class="text-end">Delivered</th><th class="text-end">Replied</th><th class="text-end">Failed</th><th>Schedule</th></tr></thead><tbody>
+        @foreach (var c in Model.Result.Items)
+        {
+            var cumDelivered = c.Counts.Delivered + c.Counts.Read + c.Counts.Replied;
+            <tr>
+                <td><a asp-action="Details" asp-route-id="@c.Id" class="fw-semibold text-decoration-none">@c.Name</a><div class="small text-muted">@c.CreatedByName · @c.CreatedAtUtc.ToString("yyyy-MM-dd")</div></td>
+                <td>@c.Type</td>
+                <td><partial name="_CampaignStatus" model="c.Status" />@if (c.PausedAutomatically) { <div class="small text-warning" title="@c.PauseReason">paused automatically</div> }</td>
+                <td class="text-end">@(c.Counts.Total - c.Counts.Skipped)<div class="small text-muted">@c.Counts.Skipped skipped</div></td>
+                <td class="text-end">@c.Counts.Messaged</td><td class="text-end">@cumDelivered</td><td class="text-end">@c.Counts.Replied</td><td class="text-end">@c.Counts.Failed</td>
+                <td class="small text-nowrap">@(c.ScheduledAtUtc?.ToString("yyyy-MM-dd HH:mm") + (c.ScheduledAtUtc is null ? "–" : " UTC"))</td>
+            </tr>
+        }
+        </tbody></table></div></div>
+    <partial name="_Pager" model='new PagerModel(Model.Result.Page, Model.Result.TotalPages, Model.Result.TotalCount, "Index", Model.QueryValues)' />
+}

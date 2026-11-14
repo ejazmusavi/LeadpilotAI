@@ -1,0 +1,14 @@
+@model CampaignStatsViewModel
+@{ var c = Model.Campaign; var s = Model.Stats; ViewData["Title"] = "Statistics"; }
+<h1 class="h3 mb-1">Statistics: @c.Name <partial name="_CampaignStatus" model="c.Status" /></h1>
+<p class="text-muted">Computed from the recipients' real message states (sent, acknowledged by WhatsApp, answered). Rates are relative to messages that reached the gateway; a reply implies delivered and read.</p>
+<div class="row g-3 mb-3">
+    @foreach (var (label, value) in new[] { ("Messaged", s.Messaged.ToString()), ("Delivered", s.DeliveryRatePercent + "%"), ("Read", s.ReadRatePercent + "%"), ("Replied", s.ReplyRatePercent + "%"), ("Failed", s.FailureRatePercent + "%"), ("Conversions", (s.ReplyConversions + s.StageChangeConversions).ToString()) })
+    { <div class="col-6 col-md-2"><div class="card card-body text-center"><div class="fs-3">@value</div><div class="small text-muted">@label</div></div></div> }
+</div>
+<div class="row g-3">
+    <div class="col-12 col-lg-6"><div class="card"><div class="card-header">Skipped (@s.Counts.Skipped)</div>@if (s.SkipReasons.Count == 0) { <div class="card-body small text-muted">Nothing skipped.</div> } else { <ul class="list-group list-group-flush">@foreach (var r in s.SkipReasons) { <li class="list-group-item d-flex justify-content-between small"><span>@r.Explanation</span><span class="badge text-bg-secondary">@r.Count</span></li> }</ul> }</div></div>
+    <div class="col-12 col-lg-6"><div class="card"><div class="card-header">Failures (@s.Counts.Failed)</div>@if (s.FailureReasons.Count == 0) { <div class="card-body small text-muted">No failures.</div> } else { <ul class="list-group list-group-flush">@foreach (var r in s.FailureReasons) { <li class="list-group-item d-flex justify-content-between small"><span>@r.Reason</span><span class="badge text-bg-danger">@r.Count</span></li> }</ul> }</div></div>
+</div>
+<p class="small text-muted mt-3">Conversions inside @s.AttributionWindowDays day(s): @s.ReplyConversions repl@(s.ReplyConversions == 1 ? "y" : "ies"), @s.StageChangeConversions lead stage change(s). Summary read model @(s.RollupUpdatedAtUtc is null ? "not computed yet" : s.RollupMatchesLive ? "matches the live counts" : "is catching up with the live counts") @(s.RollupUpdatedAtUtc is null ? "" : "(updated " + s.RollupUpdatedAtUtc.Value.ToString("yyyy-MM-dd HH:mm") + " UTC)").</p>
+<a asp-action="Details" asp-route-id="@c.Id" class="btn btn-link">Back to the campaign</a>

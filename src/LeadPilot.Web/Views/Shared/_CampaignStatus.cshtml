@@ -1,0 +1,4 @@
+@model LeadPilot.Domain.Campaigns.CampaignStatus
+@{ var cls = Model switch { LeadPilot.Domain.Campaigns.CampaignStatus.Running => "text-bg-primary", LeadPilot.Domain.Campaigns.CampaignStatus.Scheduled => "text-bg-info", LeadPilot.Domain.Campaigns.CampaignStatus.Completed => "text-bg-success",
+    LeadPilot.Domain.Campaigns.CampaignStatus.Paused or LeadPilot.Domain.Campaigns.CampaignStatus.PendingApproval => "text-bg-warning", LeadPilot.Domain.Campaigns.CampaignStatus.Failed => "text-bg-danger", LeadPilot.Domain.Campaigns.CampaignStatus.Cancelled => "text-bg-dark", _ => "text-bg-secondary" }; }
+<span class="badge @cls">@(Model == LeadPilot.Domain.Campaigns.CampaignStatus.PendingApproval ? "Pending approval" : Model.ToString())</span>

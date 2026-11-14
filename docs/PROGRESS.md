@@ -298,4 +298,52 @@ See SECURITY.md, MULTI_TENANCY.md and ARCHITECTURE.md (Phase 5 sections): two-se
 | Ban risk documented with conservative defaults and UI warning | **Passed** |
 
 ### Next
-Phase 6 — campaigns (consent-gated, uses the outbound pipeline). Do not start before the owner approves Phase 5.
+Phase 6 — campaigns: done, see below.
+
+## Phase 6 — Campaign management and marketing automation
+**Verified against the fake WAHA only.** No live WAHA instance and no live Google Places key were available; no real message was sent. Docker was never verified (no daemon).
+
+### What was built
+- **Campaign types**: Manual (started by hand), Scheduled (UTC start, tenant zone recorded), FollowUp and ReEngagement (audience derived from a parent campaign's outcomes, or from inactivity filters). `ICampaignChannel` is the channel abstraction; **WhatsApp is the only implementation** (no placeholder e-mail channel).
+- **Entities** (all tenant-owned, indexed `(TenantId, …)`): `Campaign` (state machine Draft → PendingApproval → Scheduled → Running ⇄ Paused → Completed/Cancelled/Failed, validated in `CampaignStateMachine`), `CampaignAudienceSnapshot`, `CampaignRecipient` (unique `(CampaignId, ContactId)`; eligibility decision at selection **and** at send time as JSON; `Round` for the idempotency key), `CampaignExecutionLog` (append-only), `CampaignStatsRollup` (read model, always recomputed), `CampaignConversion`, `CampaignUsageEntry` (append-only monthly ledger), `CampaignTenantSettings` (cool-down, approval policy, attribution window, failure threshold, opt-out text, monthly limit, test numbers, kill switch). Migration `Phase6Campaigns` (new; earlier migrations untouched). `Message` gained `CampaignId` / `CampaignRecipientId`.
+- **One send pipeline**: the campaign runner hands each recipient to the Phase 5 `OutboundQueueService` (forced `Marketing` purpose, even inside a service window) with the idempotency key `cmp:{campaign}:{recipient}[:round]`; the Phase 5 `OutboundSendRunner` still does pacing, caps, warm-up, the atomic claim, reconcile. Added hooks only: `ICampaignSendGuard` before the gateway call, `ICampaignEvents` after sent/failed/ack/inbound/stage change/account trouble.
+- **Marketing permission is re-validated three times**: audience selection, immediately before each recipient is queued (runner), and immediately before the gateway call (guard + the existing Phase 5 check). Tests prove it for consent revoked, suppression added, lead archived, contact edited, contact removed, and an opt-out arriving through the Phase 5 inbound flow mid-run.
+- **Execution**: Hangfire only (`CampaignJob` start/tick on queue `campaigns`, `CampaignSweepJob` every minute for crash recovery and parent-completion timers). One tick = one batch, lease-protected, followed by a random pause between the campaign's bounds (ban-risk mitigation, not evasion). RabbitMQ/outbox: `campaign.recipient` / `campaign.status` events are consumed by `campaigns.events` (new queue) which recomputes the rollup idempotently.
+- **Controls**: approval workflow (`Campaigns.Approve`, optional four-eyes), pause/resume/cancel (queued messages withdrawn atomically, a message already `Sending` finishes), auto-pause on account auto-pause/disconnect/removal, failure-rate threshold, monthly usage limit, per-campaign daily limit, kill switch, test-send to an allow-listed number (labelled, through the normal pipeline, not part of statistics), dry run.
+- **Audience**: versioned JSON definition (status, stage, category, location, tags in/out, score range, source, owner, last contacted, never contacted, has reply, explicit contacts, one-per-lead, follow-up rule); translated to one SQL query and streamed in pages of 200 (scan limit 20 000); eligibility through the Phase 3 gate (`IContactEligibilityService.CheckManyAsync`, same `EligibilityRules`); exclusion breakdown with one primary reason per contact.
+- **Content**: shared `TemplateRenderer` extended (fallback `{{first_name|there}}`, `city`, `country`, brace validation, `Sanitize`); missing-variable policy: inline fallback or the recipient is skipped (`missing_variable`); values stripped of braces, formatting marks, control/bidi characters, 100-char limit; opt-out text per tenant, required to contain a word the opt-out detector understands.
+- **UI + API**: Campaigns list/wizard/details (recipients, log, conversions)/stats/dry-run, Campaign settings with kill switch; `/api/v1/campaigns/*` with XML docs and ProblemDetails. Permissions added: `Campaigns.Update/Approve/Cancel/Delete/Settings`, `Audiences.Preview` (existing tenants receive them when Web starts).
+
+### Tests (actual results, MySQL 8.0.46 + RabbitMQ 3.12.1, `dotnet test`, clean build 0 warnings 0 errors)
+| Suite | Result |
+|---|---|
+| Unit | **795 passed** (was 685): state machine (every allowed and every refused transition), recipient sync rules, audience definition (normalise, version, hostile JSON, validation), exclusion precedence, content building incl. hostile values, pacing/batch/cap math, failure-rate, attribution window, follow-up rules, idempotency keys |
+| Architecture | **53 passed** (was 41): entities tenant-owned, only the Phase 5 runner calls `IWhatsAppGateway.Send*`, campaign code never touches the gateway/WAHA/`HttpClient`, no timers/threads/other schedulers, Hangfire jobs declare queue + bounded retry, one channel implementation and no fakes shipped, permission + verb on every action, mutations POST-only, new permissions in catalog/roles |
+| Integration | **308 passed** (was 244), 0 skipped: lifecycle with approval/four-eyes/scheduling; send-time re-validation (7 cases + opt-out mid-run); no duplicates (repeat ticks, repeat send jobs, crash after queueing, restart with a new worker, gateway "sent but errored" + reconcile); pause/resume/cancel; caps, warm-up (20 on day one), campaign daily limit; account auto-pause, FAILED session, manual account pause; failure threshold; kill switch (and isolation between tenants); monthly usage limit; follow-up/re-engagement/delayed follow-up; cool-down; filters; test-send; dry run; settings; stats == raw rows == rollup (with late/out-of-order acks); 401/403/404 matrix for 5 roles × 24 endpoints; tenant isolation (API, MVC, jobs, consumer header, DB guard on all 8 new entities, spoofed `tenantId`); MVC pages incl. XSS encoding and antiforgery; **real Hangfire server** running a campaign end to end; **real RabbitMQ** campaign events repairing the rollup; migration on a clean DB and on a Phase 5 DB with data |
+| Failed / skipped | none / none |
+| Not executed | Docker build/compose; live WAHA; live Google Places; load/concurrency tests beyond the duplicate-prevention tests; cross-browser/accessibility audits |
+
+### Playwright render check (Chromium, scratch database)
+Pages checked at 1366 px and 390 px: campaign list, new-campaign wizard (live preview worked in the browser), details with the recipient/log/conversion tabs, statistics, settings. All answered 200, **no horizontal overflow at either width**, status badges, progress bar, breadcrumbs and confirm buttons rendered; on the phone the wide tables scroll inside their card and the audience preview sits below the form. The details/stats pages were populated with **throwaway rows written by SQL into a scratch database** (a campaign cannot really run without a WAHA); nothing like that exists in the product.
+
+### Acceptance criteria
+| Criterion | Result |
+|---|---|
+| Campaign scheduling works | **Passed** (Hangfire start job at the UTC time; real Hangfire server run; delayed follow-ups via the sweep) — gateway part: fake WAHA only |
+| Campaign execution is recoverable | **Passed** (lease expiry + sweep, restart with a new worker, interrupted snapshot, crash between queue and link) — fake WAHA only |
+| Suppressed contacts are never sent marketing messages | **Passed** (asserted on the fake WAHA's received requests, at selection and at send time) |
+| Campaign status and statistics are accurate | **Passed** (stats, rollup and raw rows reconcile) |
+| Retries do not create duplicate messages | **Passed** (one message per recipient and round; fake WAHA request counts) |
+
+### Outstanding / known limits (not hidden)
+1. **Live WAHA never exercised** (ack timing, `@lid` ids, real send errors). Run the owner runbook in DEVELOPMENT.md before trusting campaigns with real numbers.
+2. The audience snapshot is taken when the campaign **starts**, not when it is approved; the approver sees the definition and a preview, not a frozen list. Re-validation at send time covers the drift.
+3. "Replied but no demo" is modelled as "replied and not in the stages you mark as advanced" (there is no Demo entity before Phase 10).
+4. A stage change counts as a conversion only for non-Lost/non-Suppressed stages, last touch inside the window; opt-outs are never counted as replies.
+5. Message `CampaignRecipientId` has no database FK (it would make Messages ↔ CampaignRecipients circular); `CampaignId` has one. Only server code writes it.
+6. Monthly usage counts messages that left (ledger written on the first Sent), minus nothing for withdrawn ones; in-flight queued campaign messages are subtracted from the remaining allowance.
+7. Scan offsets page by `OFFSET`, adequate to the 20 000 limit; a huge audience would need keyset paging.
+8. Unknown outcomes (`Unknown` messages) are never re-sent: the recipient stays Queued until reconcile decides (Sent or Failed), as in Phase 5.
+
+### Next
+Phase 7 — AI agent (Claude API). Not started. Merge order: PRs #1–#5 first, then this one.

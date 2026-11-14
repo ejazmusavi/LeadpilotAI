@@ -254,6 +254,38 @@ public sealed class ContactEligibilityService(CrmContext crm) : IContactEligibil
         return EligibilityRules.Evaluate(new EligibilityFacts(true, contact.IsDeleted, lead?.IsArchived ?? true, lead?.Excluded ?? false, raw, normalized, suppressed, latest));
     }
 
+    public async Task<IReadOnlyDictionary<Guid, EligibilityDecision>> CheckManyAsync(IReadOnlyCollection<Guid> contactIds, ConsentChannel channel, ConsentPurpose purpose, CancellationToken ct = default)
+    {
+        var db = crm.Db; var tenantId = crm.TenantId;
+        var ids = contactIds.Distinct().ToList();
+        var result = new Dictionary<Guid, EligibilityDecision>(ids.Count);
+        if (ids.Count == 0) return result;
+        var contacts = await db.Contacts.AsNoTracking().Where(c => c.TenantId == tenantId && ids.Contains(c.Id)).ToListAsync(ct);
+        var leadIds = contacts.Select(c => c.LeadId).Distinct().ToList();
+        var leads = await (from l in db.Leads.AsNoTracking()
+                           where l.TenantId == tenantId && leadIds.Contains(l.Id)
+                           select new { l.Id, l.IsArchived, Excluded = db.PipelineStages.Any(s => s.Id == l.PipelineStageId && s.Kind == StageKind.Suppressed) }).ToDictionaryAsync(l => l.Id, ct);
+        var country = await crm.DefaultCountryCodeAsync(ct);
+        var normalized = contacts.ToDictionary(c => c.Id, c => EligibilityRules.NormalizeFor(channel, c.ValueFor(channel), country));
+        var values = normalized.Values.Where(v => v is not null).Select(v => v!).Distinct().ToList();
+        var sup = ConsentService.ToSuppression(channel);
+        var suppressedValues = values.Count == 0 ? [] : (await db.SuppressionEntries.AsNoTracking()
+            .Where(s => s.TenantId == tenantId && values.Contains(s.ValueNormalized) && (s.Channel == SuppressionChannel.Any || s.Channel == sup)).Select(s => s.ValueNormalized).ToListAsync(ct)).ToHashSet();
+        var consent = (await db.ConsentRecords.AsNoTracking().Where(r => r.TenantId == tenantId && ids.Contains(r.ContactId) && r.Channel == channel && r.Purpose == purpose)
+                .Select(r => new { r.ContactId, r.Status, r.OccurredAtUtc, r.IsRevocation }).ToListAsync(ct))
+            .GroupBy(r => r.ContactId).ToDictionary(g => g.Key, g => (ConsentStatus?)g.OrderByDescending(r => r.OccurredAtUtc).ThenByDescending(r => r.IsRevocation).First().Status);
+        foreach (var id in ids)
+        {
+            var contact = contacts.FirstOrDefault(c => c.Id == id);
+            if (contact is null) { result[id] = EligibilityDecision.NotFound; continue; }
+            leads.TryGetValue(contact.LeadId, out var lead);
+            var norm = normalized[id];
+            result[id] = EligibilityRules.Evaluate(new EligibilityFacts(true, contact.IsDeleted, lead?.IsArchived ?? true, lead?.Excluded ?? false, contact.ValueFor(channel), norm,
+                norm is not null && suppressedValues.Contains(norm), consent.GetValueOrDefault(id)));
+        }
+        return result;
+    }
+
     public async Task<PagedResult<EligibleContactDto>> QueryAudienceAsync(AudienceQuery q, CancellationToken ct = default)
     {
         var db = crm.Db; var tenantId = crm.TenantId; var (page, size) = CrmFlow.Page(q.Page, q.PageSize);

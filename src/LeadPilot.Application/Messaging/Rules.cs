@@ -161,15 +161,54 @@ public sealed class TemplateRenderException(string message) : Exception(message)
 /// <summary>Renders <c>{{variable}}</c> placeholders locally (the gateway has no template feature).</summary>
 public static partial class TemplateRenderer
 {
-    public static readonly IReadOnlyList<string> KnownVariables = ["name", "first_name", "business_name", "phone"];
+    public static readonly IReadOnlyList<string> KnownVariables = ["name", "first_name", "business_name", "phone", "city", "country"];
+    public const int MaxValueLength = 100;
+    public const int MaxFallbackLength = 50;
 
-    [GeneratedRegex(@"\{\{\s*([A-Za-z_][A-Za-z0-9_]{0,30})\s*\}\}")]
+    // {{name}} or {{name|fallback}}: the fallback is literal text (no braces, pipes or line breaks) used only when the value is missing.
+    [GeneratedRegex(@"\{\{\s*([A-Za-z_][A-Za-z0-9_]{0,30})\s*(?:\|([^{}|\r\n]{0,50}))?\}\}")]
     private static partial Regex Placeholder();
 
     public static IReadOnlyList<string> VariablesIn(string body) => Placeholder().Matches(body).Select(m => m.Groups[1].Value.ToLowerInvariant()).Distinct().ToList();
 
     /// <summary>Unknown variable names are rejected when the template is saved, so a typo can never reach a customer as literal "{{nmae}}".</summary>
     public static IReadOnlyList<string> UnknownVariables(string body) => VariablesIn(body).Where(v => !KnownVariables.Contains(v)).ToList();
+
+    /// <summary>Everything wrong with a template body: unknown placeholders and braces that are not part of a valid placeholder ("{{ name }" would otherwise be sent literally).</summary>
+    public static IReadOnlyList<string> Problems(string body)
+    {
+        var problems = new List<string>();
+        var unknown = UnknownVariables(body);
+        if (unknown.Count > 0) problems.Add("Unknown placeholder(s): " + string.Join(", ", unknown.Select(u => "{{" + u + "}}")) + ". Allowed: " + string.Join(", ", KnownVariables.Select(v => "{{" + v + "}}")) + ".");
+        var rest = Placeholder().Replace(body, string.Empty);
+        if (rest.Contains("{{", StringComparison.Ordinal) || rest.Contains("}}", StringComparison.Ordinal) || rest.Contains('{') || rest.Contains('}'))
+            problems.Add("The text has a '{' or '}' that is not part of a valid placeholder such as {{first_name}} or {{first_name|there}}.");
+        return problems;
+    }
+
+    /// <summary>Makes a data value safe to place in a message: control, zero-width and bidirectional-override characters removed, line breaks folded to spaces, braces and WhatsApp formatting marks (*, _, ~, `) removed, bounded length.</summary>
+    public static string Sanitize(string? value, bool keepNewlines = false, int maxLength = MaxValueLength)
+    {
+        if (string.IsNullOrEmpty(value)) return string.Empty;
+        var sb = new StringBuilder(Math.Min(value.Length, maxLength + 8));
+        foreach (var ch in value)
+        {
+            if (ch is '\n' or '\r') { sb.Append(keepNewlines ? '\n' : ' '); continue; }
+            if (ch == '\t') { sb.Append(' '); continue; }
+            if (char.IsControl(ch) || ch is '\u200B' or '\u200C' or '\u200D' or '\u200E' or '\u200F' or '\uFEFF' or '\u2028' or '\u2029' || (ch >= '\u202A' && ch <= '\u202E') || (ch >= '\u2066' && ch <= '\u2069')) continue;
+            if (ch is '{' or '}' or '*' or '_' or '~' or '`') continue;
+            sb.Append(ch);
+        }
+        var t = Regex.Replace(sb.ToString(), keepNewlines ? @"[ ]{2,}" : @"\s{2,}", " ").Trim();
+        return t.Length > maxLength ? t[..maxLength].TrimEnd() : t;
+    }
+
+    /// <summary>Names of placeholders that have neither a (non-blank) value nor an inline fallback.</summary>
+    public static IReadOnlyList<string> MissingFor(string body, IReadOnlyDictionary<string, string> values) =>
+        Placeholder().Matches(body).Where(m => !HasValue(values, m.Groups[1].Value) && string.IsNullOrWhiteSpace(m.Groups[2].Value)).Select(m => m.Groups[1].Value.ToLowerInvariant()).Distinct().ToList();
+
+    private static bool HasValue(IReadOnlyDictionary<string, string> values, string key) =>
+        values.TryGetValue(key, out var v) || values.TryGetValue(key.ToLowerInvariant(), out v) ? !string.IsNullOrWhiteSpace(v) : false;
 
     public static string Render(string body, IReadOnlyDictionary<string, string> values)
     {
@@ -178,6 +217,8 @@ public static partial class TemplateRenderer
         {
             var key = m.Groups[1].Value.ToLowerInvariant();
             if (values.TryGetValue(key, out var v) && !string.IsNullOrWhiteSpace(v)) return v.Trim();
+            var fallback = m.Groups[2].Success ? m.Groups[2].Value.Trim() : string.Empty;
+            if (fallback.Length > 0) return fallback;
             missing.Add(key);
             return m.Value;
         });

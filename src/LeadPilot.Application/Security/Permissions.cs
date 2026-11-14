@@ -16,6 +16,12 @@ public static class PermissionCodes
     public const string CampaignsView = "Campaigns.View";
     public const string CampaignsCreate = "Campaigns.Create";
     public const string CampaignsExecute = "Campaigns.Execute";
+    public const string CampaignsUpdate = "Campaigns.Update";
+    public const string CampaignsApprove = "Campaigns.Approve";
+    public const string CampaignsCancel = "Campaigns.Cancel";
+    public const string CampaignsDelete = "Campaigns.Delete";
+    public const string CampaignsSettings = "Campaigns.Settings";
+    public const string AudiencesPreview = "Audiences.Preview";
     public const string ConversationsView = "Conversations.View";
     public const string ConversationsReply = "Conversations.Reply";
     public const string AgentsManage = "Agents.Manage";
@@ -56,8 +62,14 @@ public static class PermissionCatalog
         new(PermissionCodes.PipelinesManage, "Manage pipelines and categories", "CRM setup", "Configure pipelines, stages, lead categories and statuses."),
         new(PermissionCodes.ScoringManage, "Manage lead scoring", "CRM setup", "Edit scoring rules and recalculate scores."),
         new(PermissionCodes.CampaignsView, "View campaigns", "Campaigns", "See campaigns and their results."),
-        new(PermissionCodes.CampaignsCreate, "Create campaigns", "Campaigns", "Create and edit campaigns."),
-        new(PermissionCodes.CampaignsExecute, "Run campaigns", "Campaigns", "Start, pause and stop campaigns."),
+        new(PermissionCodes.CampaignsCreate, "Create campaigns", "Campaigns", "Create and clone campaigns."),
+        new(PermissionCodes.CampaignsUpdate, "Edit campaigns", "Campaigns", "Edit draft campaigns, submit them for approval or schedule them."),
+        new(PermissionCodes.CampaignsExecute, "Run campaigns", "Campaigns", "Start, pause and resume campaigns and send test messages to approved internal numbers."),
+        new(PermissionCodes.CampaignsApprove, "Approve campaigns", "Campaigns", "Approve or return campaigns waiting for approval (the creator may be barred by workspace policy)."),
+        new(PermissionCodes.CampaignsCancel, "Cancel campaigns", "Campaigns", "Cancel scheduled, running or paused campaigns (queued messages are withdrawn)."),
+        new(PermissionCodes.CampaignsDelete, "Delete campaigns", "Campaigns", "Delete draft campaigns."),
+        new(PermissionCodes.CampaignsSettings, "Manage campaign settings", "Campaigns", "Cool-down, approval policy, attribution window, failure threshold, opt-out text, test numbers and the workspace kill switch."),
+        new(PermissionCodes.AudiencesPreview, "Preview audiences", "Campaigns", "See how many contacts an audience contains and why others are excluded."),
         new(PermissionCodes.ConversationsView, "View conversations", "Conversations", "Read conversations."),
         new(PermissionCodes.ConversationsReply, "Reply to conversations", "Conversations", "Send replies and take over from the AI agent."),
         new(PermissionCodes.AgentsManage, "Manage AI agents", "AI", "Configure AI agents and knowledge."),
@@ -121,7 +133,7 @@ public static class SystemRoles
             PermissionCodes.LeadsImport, PermissionCodes.LeadsExport, PermissionCodes.LeadsAssign, PermissionCodes.ConsentManage,
             PermissionCodes.SuppressionManage, PermissionCodes.PipelinesManage, PermissionCodes.ScoringManage,
             PermissionCodes.DiscoveryView, PermissionCodes.DiscoveryRun, PermissionCodes.DiscoveryReview, PermissionCodes.DiscoveryManage,
-            PermissionCodes.ChannelsView, PermissionCodes.MessagesSend
+            PermissionCodes.ChannelsView, PermissionCodes.MessagesSend, PermissionCodes.CampaignsApprove, PermissionCodes.AudiencesPreview
         ]),
         new(SalesAgent, "Works leads and conversations.", false,
         [
@@ -130,7 +142,8 @@ public static class SystemRoles
         ]),
         new(MarketingManager, "Plans and runs campaigns.", false,
         [
-            PermissionCodes.LeadsView, PermissionCodes.CampaignsView, PermissionCodes.CampaignsCreate, PermissionCodes.CampaignsExecute,
+            PermissionCodes.LeadsView, PermissionCodes.CampaignsView, PermissionCodes.CampaignsCreate, PermissionCodes.CampaignsUpdate, PermissionCodes.CampaignsExecute,
+            PermissionCodes.CampaignsCancel, PermissionCodes.CampaignsDelete, PermissionCodes.AudiencesPreview,
             PermissionCodes.ConversationsView, PermissionCodes.ReportsView,
             PermissionCodes.LeadsExport, PermissionCodes.ConsentManage, PermissionCodes.SuppressionManage, PermissionCodes.DiscoveryView, PermissionCodes.DiscoveryRun,
             PermissionCodes.ChannelsView, PermissionCodes.MessagesSend

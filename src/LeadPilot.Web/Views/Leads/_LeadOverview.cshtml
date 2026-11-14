@@ -1,0 +1,60 @@
+@model LeadDetailsViewModel
+@using LeadPilot.Domain.Crm
+@{ var l = Model.Lead; var can = Model.Can; var frozen = l.IsArchived; }
+<div class="row g-3">
+    <div class="col-12 col-xl-8">
+        <div class="card mb-3"><div class="card-header">Profile</div><div class="card-body"><dl class="row mb-0">
+            <dt class="col-sm-4">Category</dt><dd class="col-sm-8">@(l.CategoryName ?? "—")</dd>
+            <dt class="col-sm-4">Location</dt><dd class="col-sm-8">@(string.Join(", ", new[] { l.Area, l.District, l.City, l.Province, l.Country }.Where(x => !string.IsNullOrWhiteSpace(x))) is { Length: > 0 } loc ? loc : "—")</dd>
+            <dt class="col-sm-4">Address</dt><dd class="col-sm-8">@(l.Address ?? "—")</dd>
+            <dt class="col-sm-4">Website</dt><dd class="col-sm-8">@if (l.Website is not null) { <span>@l.Website</span> <span class="text-muted small">(@l.WebsiteDomain)</span> } else { <span>—</span> }</dd>
+            <dt class="col-sm-4">Pipeline</dt><dd class="col-sm-8">@l.PipelineName</dd>
+            <dt class="col-sm-4">Owner</dt><dd class="col-sm-8">@(l.OwnerName ?? "Unassigned")</dd>
+            <dt class="col-sm-4">Data confidence</dt><dd class="col-sm-8">@l.Confidence / 100</dd>
+            <dt class="col-sm-4">Created</dt><dd class="col-sm-8">@l.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm") UTC@(l.CreatedBy is null ? "" : " by " + l.CreatedBy)</dd>
+        </dl></div></div>
+
+        <div class="card mb-3"><div class="card-header">Score <partial name="_ScoreBadge" model="l.Score" /> <span class="text-muted small">rule version @(l.ScoreRuleVersion?.ToString() ?? "—")</span></div>
+            @if (l.ScoreBreakdown.Count == 0) { <div class="card-body text-muted small">No scoring rule matched this lead yet.</div> }
+            else { <ul class="list-group list-group-flush">@foreach (var m in l.ScoreBreakdown) { <li class="list-group-item d-flex justify-content-between"><span>@(m.Description ?? $"{m.Dimension}: {m.Target}")</span><span class="fw-semibold">@(m.Points > 0 ? "+" : "")@m.Points</span></li> }</ul> }
+            <div class="card-footer small text-muted">The score ranks sales potential only. Whether a person may be contacted depends on consent, the suppression list and contact validity.</div></div>
+
+        <div class="card"><div class="card-header">Sources</div>
+            @if (l.Sources.Count == 0) { <div class="card-body text-muted small">No source recorded.</div> }
+            else { <ul class="list-group list-group-flush">@foreach (var s in l.Sources) { <li class="list-group-item small"><strong>@s.Type</strong> @s.Name <span class="text-muted">· @s.RetrievedAtUtc.ToString("yyyy-MM-dd")</span></li> }</ul> }</div>
+    </div>
+    <div class="col-12 col-xl-4">
+        <div class="card mb-3"><div class="card-header">Pipeline stage</div><div class="card-body">
+            @if (can.Update && !frozen)
+            {
+                <form asp-action="ChangeStage" asp-route-id="@l.Id" method="post" class="d-flex gap-2" data-loading-form>
+                    <select name="stageId" class="form-select" aria-label="Stage">@foreach (var s in Model.Stages) { <option value="@s.Id" selected="@(s.Id == l.StageId)">@s.Name</option> }</select>
+                    <button type="submit" class="btn btn-primary"><span class="spinner-border spinner-border-sm d-none" aria-hidden="true"></span> Move</button>
+                </form>
+            }
+            else { <span class="badge text-bg-info">@l.StageName</span> }
+        </div></div>
+        @if (can.Assign && !frozen)
+        {
+            <div class="card mb-3"><div class="card-header">Owner</div><div class="card-body">
+                <form asp-action="Assign" asp-route-id="@l.Id" method="post" class="d-flex gap-2" data-loading-form>
+                    <select name="ownerUserId" class="form-select" aria-label="Owner"><option value="">Unassigned</option>@foreach (var o in Model.Lookups.Owners) { <option value="@o.UserId" selected="@(o.UserId == l.OwnerUserId)">@o.DisplayName</option> }</select>
+                    <button type="submit" class="btn btn-outline-primary"><span class="spinner-border spinner-border-sm d-none" aria-hidden="true"></span> Assign</button>
+                </form></div></div>
+        }
+        <div class="card"><div class="card-header">Tags</div><div class="card-body">
+            @if (can.Update && !frozen && Model.Lookups.Tags.Count > 0)
+            {
+                <form asp-action="SetTags" asp-route-id="@l.Id" method="post" data-loading-form>
+                    @foreach (var t in Model.Lookups.Tags)
+                    {
+                        <div class="form-check"><input class="form-check-input" type="checkbox" name="tagIds" value="@t.Id" id="tag-@t.Id" checked="@l.Tags.Any(x => x.Id == t.Id)" /><label class="form-check-label" for="tag-@t.Id">@t.Name</label></div>
+                    }
+                    <button type="submit" class="btn btn-sm btn-outline-primary mt-2"><span class="spinner-border spinner-border-sm d-none" aria-hidden="true"></span> Save tags</button>
+                </form>
+            }
+            else if (l.Tags.Count > 0) { foreach (var t in l.Tags) { <span class="badge text-bg-light border me-1">@t.Name</span> } }
+            else { <span class="text-muted small">No tags.@(can.Update ? " Create tags on the Tags page." : "")</span> }
+        </div></div>
+    </div>
+</div>

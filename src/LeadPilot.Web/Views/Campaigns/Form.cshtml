@@ -1,0 +1,67 @@
+@model CampaignFormViewModel
+@using LeadPilot.Domain.Campaigns
+@using LeadPilot.Domain.Crm
+@{ var f = Model.Form; var L = Model.Lookups; ViewData["Title"] = f.Id is null ? "New campaign" : "Edit campaign"; }
+<h1 class="h3 mb-3">@ViewData["Title"]</h1>
+<div class="alert alert-warning small" role="alert"><strong>Ban risk.</strong> WhatsApp via WAHA is unofficial. Numbers that send unwanted or bulk messages can be restricted or banned. LeadPilot only messages contacts with recorded marketing consent, enforces conservative caps and warm-up, and cannot send unrestricted bulk messages. Use a number you can afford to lose.</div>
+<form asp-action="@(f.Id is null ? "Create" : "Update")" asp-route-id="@f.Id" method="post" id="campaign-form" data-loading-form novalidate data-preview-url="@Url.Action("PreviewAudience")" data-can-preview="@Model.CanPreview.ToString().ToLowerInvariant()">
+    <input type="hidden" asp-for="Form.Id" />
+    <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+    <div class="row g-3">
+    <div class="col-12 col-xl-7">
+        <div class="card mb-3"><div class="card-header">1 · Basics</div><div class="card-body row g-3">
+            <div class="col-12 col-md-8"><label asp-for="Form.Name" class="form-label">Name</label><input asp-for="Form.Name" class="form-control" required /><span asp-validation-for="Form.Name" class="text-danger"></span></div>
+            <div class="col-12 col-md-4"><label asp-for="Form.Type" class="form-label">Type</label><select asp-for="Form.Type" class="form-select" id="campaign-type"><option value="Manual">Manual (start by hand)</option><option value="Scheduled">Scheduled (start at a time)</option><option value="FollowUp">Follow-up (of a parent campaign)</option><option value="ReEngagement">Re-engagement</option></select></div>
+            <div class="col-12"><label asp-for="Form.Description" class="form-label">Description (optional)</label><input asp-for="Form.Description" class="form-control" /></div>
+        </div></div>
+        <div class="card mb-3"><div class="card-header">2 · Message</div><div class="card-body row g-3">
+            <div class="col-12 col-md-6"><label asp-for="Form.TemplateId" class="form-label">Marketing template</label>
+                <select asp-for="Form.TemplateId" class="form-select" id="template-select"><option value="">Choose…</option>@foreach (var t in L.Templates) { <option value="@t.Id" data-body="@t.Body">@t.Name</option> }</select>
+                @if (L.Templates.Count == 0) { <div class="form-text text-danger">No active template of the Marketing category yet. <a asp-controller="Templates" asp-action="New">Create one</a>.</div> }</div>
+            <div class="col-12 col-md-6"><label asp-for="Form.ChannelAccountId" class="form-label">Send from</label><select asp-for="Form.ChannelAccountId" class="form-select"><option value="">Choose…</option>@foreach (var a in L.Accounts) { <option value="@a.Id">@a.DisplayName (@a.Status@(a.IsPaused ? ", paused" : ""))</option> }</select></div>
+            <div class="col-12"><div class="small text-muted">Preview of the template text (placeholders such as {{first_name}} or {{first_name|there}} are filled per contact):</div><pre id="template-preview" class="border rounded p-2 small bg-body-tertiary mb-1" style="white-space:pre-wrap;min-height:3rem"></pre></div>
+            <div class="col-12"><div class="form-check"><input type="checkbox" class="form-check-input" id="footer" asp-for="Form.IncludeOptOutFooter" /><label class="form-check-label" for="footer">Append the opt-out text: <em>@Model.Settings.OptOutFooter</em></label></div><div class="form-text">Every marketing message must tell people how to opt out. Turning this off is only accepted when the message text itself contains an opt-out word such as STOP.</div></div>
+        </div></div>
+        <div class="card mb-3"><div class="card-header">3 · Audience</div><div class="card-body row g-3">
+            <div class="col-12" id="follow-up-box"><div class="row g-3">
+                <div class="col-12 col-md-6"><label asp-for="Form.ParentCampaignId" class="form-label">Parent campaign</label><select asp-for="Form.ParentCampaignId" class="form-select"><option value="">Choose…</option>@foreach (var p in L.ParentCandidates) { <option value="@p.Id">@p.Name (@p.Status)</option> }</select></div>
+                <div class="col-8 col-md-4"><label asp-for="Form.FollowUpRule" class="form-label">Of its recipients who were…</label><select asp-for="Form.FollowUpRule" class="form-select"><option value="SentNotReplied">sent, no reply</option><option value="DeliveredNotReplied">delivered, no reply</option><option value="ReadNotReplied">read, no reply</option><option value="RepliedNotAdvanced">replied but not advanced</option></select></div>
+                <div class="col-4 col-md-2"><label asp-for="Form.FollowUpAfterDays" class="form-label">after days</label><input asp-for="Form.FollowUpAfterDays" type="number" min="0" max="365" class="form-control" /></div>
+                <div class="col-12"><label class="form-label">Stages that count as advanced (for “replied but not advanced”, e.g. Demo booked)</label><select name="Form.AdvancedStageIds" multiple class="form-select" size="4">@foreach (var s in L.Stages) { <option value="@s.Id" selected="@f.AdvancedStageIds.Contains(s.Id)">@s.Name</option> }</select></div>
+            </div></div>
+            <div class="col-12 col-md-6"><label class="form-label">Pipeline stage</label><select name="Form.StageIds" multiple class="form-select" size="4">@foreach (var s in L.Stages) { <option value="@s.Id" selected="@f.StageIds.Contains(s.Id)">@s.Name</option> }</select></div>
+            <div class="col-12 col-md-6"><label class="form-label">Lead status</label><select name="Form.StatusIds" multiple class="form-select" size="4">@foreach (var s in L.Statuses) { <option value="@s.Id" selected="@f.StatusIds.Contains(s.Id)">@s.Name</option> }</select></div>
+            <div class="col-12 col-md-6"><label class="form-label">Category</label><select name="Form.CategoryIds" multiple class="form-select" size="4">@foreach (var s in L.Categories) { <option value="@s.Id" selected="@f.CategoryIds.Contains(s.Id)">@s.Name</option> }</select></div>
+            <div class="col-12 col-md-6"><label class="form-label">Owner</label><select name="Form.OwnerUserIds" multiple class="form-select" size="4">@foreach (var u in L.Users) { <option value="@u.UserId" selected="@f.OwnerUserIds.Contains(u.UserId)">@u.DisplayName</option> }</select><div class="form-check mt-1"><input type="checkbox" class="form-check-input" id="unassigned" asp-for="Form.Unassigned" /><label class="form-check-label" for="unassigned">Unassigned leads only</label></div></div>
+            <div class="col-12 col-md-6"><label class="form-label">Has any of these tags</label><select name="Form.TagIds" multiple class="form-select" size="4">@foreach (var s in L.Tags) { <option value="@s.Id" selected="@f.TagIds.Contains(s.Id)">@s.Name</option> }</select></div>
+            <div class="col-12 col-md-6"><label class="form-label">Has none of these tags</label><select name="Form.ExcludeTagIds" multiple class="form-select" size="4">@foreach (var s in L.Tags) { <option value="@s.Id" selected="@f.ExcludeTagIds.Contains(s.Id)">@s.Name</option> }</select></div>
+            <div class="col-12 col-md-4"><label asp-for="Form.Countries" class="form-label">Countries</label><input asp-for="Form.Countries" class="form-control" placeholder="Pakistan, UAE" /></div>
+            <div class="col-12 col-md-4"><label asp-for="Form.Provinces" class="form-label">Provinces</label><input asp-for="Form.Provinces" class="form-control" /></div>
+            <div class="col-12 col-md-4"><label asp-for="Form.Cities" class="form-label">Cities</label><input asp-for="Form.Cities" class="form-control" placeholder="Lahore, Karachi" /></div>
+            <div class="col-6 col-md-3"><label asp-for="Form.MinScore" class="form-label">Score from</label><input asp-for="Form.MinScore" type="number" min="0" max="100" class="form-control" /></div>
+            <div class="col-6 col-md-3"><label asp-for="Form.MaxScore" class="form-label">to</label><input asp-for="Form.MaxScore" type="number" min="0" max="100" class="form-control" /></div>
+            <div class="col-12 col-md-6"><label class="form-label">Source</label><select name="Form.SourceTypes" multiple class="form-select" size="3">@foreach (var s in Enum.GetValues<LeadSourceType>()) { <option value="@s" selected="@f.SourceTypes.Contains(s)">@s</option> }</select></div>
+            <div class="col-12 col-md-4"><label asp-for="Form.LastContactedBeforeDays" class="form-label">Last contacted more than (days) ago</label><input asp-for="Form.LastContactedBeforeDays" type="number" min="0" class="form-control" /></div>
+            <div class="col-12 col-md-4"><label asp-for="Form.HasReply" class="form-label">Has written to us</label><select asp-for="Form.HasReply" class="form-select"><option value="">Either</option><option value="yes">Yes</option><option value="no">Never</option></select></div>
+            <div class="col-12 col-md-4 pt-md-4"><div class="form-check"><input type="checkbox" class="form-check-input" id="never" asp-for="Form.NeverContacted" /><label class="form-check-label" for="never">Never contacted</label></div><div class="form-check"><input type="checkbox" class="form-check-input" id="oneperlead" asp-for="Form.OnePerLead" /><label class="form-check-label" for="oneperlead">One message per lead</label></div></div>
+            <div class="col-12"><div class="form-text">Suppressed, invalid, blocked, excluded and no-consent contacts are always left out, whatever the filters or lead score say.</div></div>
+        </div></div>
+        <div class="card mb-3"><div class="card-header">4 · Schedule and limits</div><div class="card-body row g-3">
+            <div class="col-12 col-md-6"><label asp-for="Form.ScheduledLocal" class="form-label">Start at (@Model.TimeZone)</label><input asp-for="Form.ScheduledLocal" type="datetime-local" class="form-control" /><span asp-validation-for="Form.ScheduledLocal" class="text-danger"></span><div class="form-text">Leave empty to start by hand. Stored and executed as UTC.</div></div>
+            <div class="col-12 col-md-6" id="delay-box"><label asp-for="Form.FollowUpDelayDays" class="form-label">Or: days after the parent completes</label><input asp-for="Form.FollowUpDelayDays" type="number" min="0" max="365" class="form-control" /></div>
+            <div class="col-6 col-md-3"><label asp-for="Form.BatchSize" class="form-label">Batch size</label><input asp-for="Form.BatchSize" type="number" class="form-control" /></div>
+            <div class="col-6 col-md-3"><label asp-for="Form.MinIntervalSeconds" class="form-label">Pause between batches, min (s)</label><input asp-for="Form.MinIntervalSeconds" type="number" class="form-control" /></div>
+            <div class="col-6 col-md-3"><label asp-for="Form.MaxIntervalSeconds" class="form-label">max (s)</label><input asp-for="Form.MaxIntervalSeconds" type="number" class="form-control" /></div>
+            <div class="col-6 col-md-3"><label asp-for="Form.MaxRecipients" class="form-label">Max recipients</label><input asp-for="Form.MaxRecipients" type="number" class="form-control" /></div>
+            <div class="col-6 col-md-4"><label asp-for="Form.DailyLimit" class="form-label">Daily limit (optional)</label><input asp-for="Form.DailyLimit" type="number" class="form-control" /></div>
+            <div class="col-6 col-md-4"><label asp-for="Form.FailureThresholdPercent" class="form-label">Pause at failure % (optional)</label><input asp-for="Form.FailureThresholdPercent" type="number" class="form-control" /></div>
+            <div class="col-6 col-md-4"><label asp-for="Form.CooldownDays" class="form-label">Cool-down days (optional)</label><input asp-for="Form.CooldownDays" type="number" class="form-control" /></div>
+            <div class="col-12 form-text">The pause between batches is random between the two bounds (a risk reduction for an unofficial gateway, not a way around any rule). The account's own caps, minimum gap and warm-up always apply on top.</div>
+        </div></div>
+        <div class="d-flex gap-2 mb-4"><button type="submit" class="btn btn-primary"><span class="spinner-border spinner-border-sm d-none" aria-hidden="true"></span> Save draft</button><a asp-action="Index" class="btn btn-link">Cancel</a></div>
+    </div>
+    <div class="col-12 col-xl-5"><div class="card position-sticky" style="top:1rem"><div class="card-header d-flex justify-content-between"><span>Audience preview</span><button type="button" class="btn btn-sm btn-outline-primary" id="preview-btn" @(Model.CanPreview ? "" : "disabled")>Refresh</button></div>
+        <div class="card-body" id="preview-box"><div class="text-muted small">@(Model.CanPreview ? "Press Refresh to see how many contacts match, who would be messaged and why others are excluded." : "You do not have permission to preview audiences.")</div></div></div></div>
+    </div>
+</form>
+@section Scripts { <script src="~/js/campaigns.js" asp-append-version="true"></script> }

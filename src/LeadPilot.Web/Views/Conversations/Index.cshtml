@@ -1,0 +1,41 @@
+@model ConversationsViewModel
+@using LeadPilot.Domain.Messaging
+@{ ViewData["Title"] = "Conversations"; var q = Model.Query; }
+<h1 class="h3 mb-1">Conversations</h1>
+<p class="text-muted">WhatsApp chats with leads and customers. Incoming messages appear here once the background worker has processed them.</p>
+<form method="get" asp-action="Index" class="card card-body mb-3"><div class="row g-3 align-items-end">
+    <div class="col-12 col-md-6 col-xl-3"><label class="form-label" for="search">Search</label><input id="search" name="search" value="@q.Search" class="form-control" placeholder="Name, number or text" /></div>
+    @if (Model.Accounts.Count > 1)
+    {
+        <div class="col-12 col-md-6 col-xl-2"><label class="form-label" for="accountId">Account</label><select id="accountId" name="accountId" class="form-select"><option value="">All</option>@foreach (var a in Model.Accounts) { <option value="@a.Id" selected="@(q.AccountId == a.Id)">@a.DisplayName</option> }</select></div>
+    }
+    <div class="col-6 col-md-3 col-xl-2"><label class="form-label" for="status">Status</label><select id="status" name="status" class="form-select"><option value="">All</option>@foreach (var s in Enum.GetValues<ConversationStatus>()) { <option value="@s" selected="@(q.Status == s)">@s</option> }</select></div>
+    <div class="col-6 col-md-3 col-xl-2">
+        <div class="form-check"><input class="form-check-input" type="checkbox" id="unreadOnly" name="unreadOnly" value="true" checked="@q.UnreadOnly" /><label class="form-check-label" for="unreadOnly">Unread only</label></div>
+        <div class="form-check"><input class="form-check-input" type="checkbox" id="unlinkedOnly" name="unlinkedOnly" value="true" checked="@q.UnlinkedOnly" /><label class="form-check-label" for="unlinkedOnly">Not linked to a contact</label></div>
+    </div>
+    <div class="col-12 col-xl-3"><button type="submit" class="btn btn-outline-primary">Filter</button> <a asp-action="Index" class="btn btn-link">Clear</a></div>
+</div></form>
+@if (Model.Result.Items.Count == 0)
+{
+    <div class="card"><partial name="_EmptyState" model='("No conversations", "Nothing matches, or no WhatsApp messages have arrived yet. Connect an account under WhatsApp accounts, then messages show up here.")' /></div>
+}
+else
+{
+    <div class="card"><div class="list-group list-group-flush">
+    @foreach (var c in Model.Result.Items)
+    {
+        <a asp-action="Details" asp-route-id="@c.Id" class="list-group-item list-group-item-action">
+            <div class="d-flex justify-content-between gap-2">
+                <div class="min-w-0">
+                    <div class="fw-semibold">@(c.ContactName ?? c.PeerName ?? c.PeerPhoneE164 ?? "Unknown sender") @if (c.UnreadCount > 0) { <span class="badge text-bg-primary">@c.UnreadCount new</span> } @if (c.Status == ConversationStatus.Closed) { <span class="badge text-bg-secondary">Closed</span> }</div>
+                    <div class="small text-muted">@c.PeerPhoneE164 · @c.AccountName@(c.LeadName is null ? "" : " · lead: " + c.LeadName)@(c.AssignedUserName is null ? "" : " · " + c.AssignedUserName)</div>
+                    <div class="text-truncate small">@c.LastMessagePreview</div>
+                </div>
+                <div class="small text-muted text-nowrap">@c.LastMessageAtUtc?.ToString("yyyy-MM-dd HH:mm")</div>
+            </div>
+        </a>
+    }
+    </div></div>
+    <partial name="_Pager" model='new PagerModel(Model.Result.Page, Model.Result.TotalPages, Model.Result.TotalCount, "Index", Model.QueryValues)' />
+}

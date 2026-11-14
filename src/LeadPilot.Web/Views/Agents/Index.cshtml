@@ -1,0 +1,62 @@
+@model AgentsIndexViewModel
+@{ ViewData["Title"] = "Sales agent"; var s = Model.Settings; }
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+    <div><h1 class="h3 mb-1">Sales agent</h1>
+        <p class="text-muted mb-0">The AI sales agent follows the instructions, tools and product catalog you configure here. It can only act through controlled tools, never touches your database directly, and sensitive actions wait for a person.</p></div>
+    <div class="d-flex flex-wrap gap-2">
+        <a asp-action="Executions" class="btn btn-outline-secondary">Tool log</a>
+        @if (Model.CanManage) { <a asp-action="Edit" class="btn btn-primary">New agent</a> }
+    </div>
+</div>
+@if (Model.Agents.Count == 0)
+{
+    <div class="card mb-3"><div class="card-body text-center py-5">
+        <h2 class="h5">No sales agent yet</h2>
+        <p class="text-muted mb-3">Until you create one, the AI only suggests replies from your knowledge base (Phase 7 behaviour). You can start from a sample School ERP configuration: it contains <strong>placeholders only</strong> (no features, prices or demo steps are invented), so the AI says it does not know until you fill in and confirm your real product information.</p>
+        @if (Model.CanManage)
+        {
+            <form asp-action="CreateSample" method="post" class="d-inline"><button type="submit" class="btn btn-primary">Create the sample School ERP agent</button></form>
+            <a asp-action="Edit" class="btn btn-outline-secondary ms-2">Create an empty agent</a>
+        }
+    </div></div>
+}
+else
+{
+    <div class="card mb-3"><div class="table-responsive"><table class="table align-middle mb-0">
+        <thead><tr><th>Agent</th><th>Status</th><th>Tools</th><th>Automatic replies</th><th></th></tr></thead><tbody>
+        @foreach (var a in Model.Agents)
+        {
+            <tr><td><a asp-action="Edit" asp-route-id="@a.Id" class="fw-semibold text-decoration-none">@a.Name</a>
+                    @if (a.IsDefault) { <span class="badge text-bg-primary ms-1">answers conversations</span> }
+                    @if (a.IsSample) { <span class="badge text-bg-warning ms-1">SAMPLE</span> }</td>
+                <td><span class="badge @(a.IsActive ? "text-bg-success" : "text-bg-secondary")">@(a.IsActive ? "On" : "Off")</span></td>
+                <td>@a.ToolCount enabled</td>
+                <td><span class="badge @(a.AutoReplyEnabled ? "text-bg-danger" : "text-bg-light border")">@(a.AutoReplyEnabled ? "ON" : "off")</span></td>
+                <td class="text-end">
+                    @if (Model.CanManage)
+                    {
+                        @if (a.IsActive && !a.IsDefault) { <form asp-action="SetDefault" asp-route-id="@a.Id" method="post" class="d-inline"><button class="btn btn-outline-primary btn-sm" type="submit" data-confirm="Make this agent the one that answers conversations in AI mode?" data-confirm-label="Make default">Make default</button></form> }
+                        <form asp-action="SetActive" asp-route-id="@a.Id" method="post" class="d-inline"><input type="hidden" name="active" value="@((!a.IsActive).ToString().ToLowerInvariant())" /><button class="btn btn-outline-secondary btn-sm" type="submit" data-confirm="@(a.IsActive ? "Switch this agent off? It stops being the default and automatic replies are turned off." : "Switch this agent on?")" data-confirm-label="@(a.IsActive ? "Switch off" : "Switch on")">@(a.IsActive ? "Switch off" : "Switch on")</button></form>
+                    }
+                </td></tr>
+        }
+        </tbody></table></div></div>
+}
+<div class="card"><div class="card-header">Workspace settings for the sales agents</div><div class="card-body">
+    <div class="alert @(s.AiRepliesAllowed ? "alert-warning" : "alert-secondary")" role="alert">
+        <strong>Automatic AI replies are @(s.AiRepliesAllowed ? "allowed" : "NOT allowed") for this workspace.</strong>
+        Even when allowed, each agent has its own switch. An automatic reply goes through the normal sending pipeline (opt-outs, suppression, limits), is sent only as an answer inside a conversation the customer started, and never while a person has taken over or the AI is paused.
+        WhatsApp through WAHA is unofficial: automatic replies increase message volume, so keep the limits low.
+    </div>
+    @if (Model.CanManage)
+    {
+        <form asp-action="SaveSettings" method="post" class="row g-3" novalidate>
+            <div class="col-12"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="allowed" name="AiRepliesAllowed" value="true" @(s.AiRepliesAllowed ? "checked" : "") /><input type="hidden" name="AiRepliesAllowed" value="false" /><label class="form-check-label" for="allowed">Allow automatic AI replies in this workspace</label></div></div>
+            <div class="col-6 col-md-3"><label class="form-label" for="mr">Automatic replies per conversation per day</label><input id="mr" name="MaxAutoRepliesPerConversationPerDay" type="number" min="1" max="100" class="form-control" value="@s.MaxAutoRepliesPerConversationPerDay" /></div>
+            <div class="col-6 col-md-3"><label class="form-label" for="mt">Trials per lead without approval</label><input id="mt" name="MaxTrialsPerLead" type="number" min="0" max="10" class="form-control" value="@s.MaxTrialsPerLead" /></div>
+            <div class="col-6 col-md-3"><label class="form-label" for="ah">Approval lifetime (hours)</label><input id="ah" name="ApprovalLifetimeHours" type="number" min="1" max="720" class="form-control" value="@s.ApprovalLifetimeHours" /></div>
+            <div class="col-6 col-md-3"><label class="form-label" for="mf">Open follow-ups per lead</label><input id="mf" name="MaxOpenFollowUpsPerLead" type="number" min="1" max="20" class="form-control" value="@s.MaxOpenFollowUpsPerLead" /></div>
+            <div class="col-12"><button class="btn btn-primary" type="submit">Save settings</button></div>
+        </form>
+    }
+</div></div>

@@ -1,0 +1,3 @@
+@model int
+@{ var cls = Model >= 70 ? "text-bg-success" : Model >= 40 ? "text-bg-primary" : Model >= 1 ? "text-bg-secondary" : "text-bg-light border"; }
+<span class="badge @cls" title="Lead score (sales potential). It never grants permission to contact anyone.">@Model</span>

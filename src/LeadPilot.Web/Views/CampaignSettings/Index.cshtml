@@ -1,0 +1,29 @@
+@model CampaignSettingsViewModel
+@{ ViewData["Title"] = "Campaign settings"; var s = Model.Settings; var f = Model.Form; }
+<h1 class="h3 mb-1">Campaign settings</h1>
+<p class="text-muted">Workspace policy for marketing campaigns.</p>
+<div class="card mb-3 @(s.KillSwitch ? "border-danger" : "")"><div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <div><div class="fw-semibold">Kill switch: @(s.KillSwitch ? "ON" : "off")</div><div class="small text-muted">@(s.KillSwitch ? "Every running campaign was paused and no campaign message is sent. Turning it off does not resume anything by itself." : "Stops all campaigns of this workspace immediately: running campaigns are paused and queued messages withdrawn.")</div></div>
+    @if (Model.CanManage)
+    {
+        <form asp-action="KillSwitch" method="post" class="d-flex gap-2"><input type="hidden" name="enabled" value="@((!s.KillSwitch).ToString().ToLowerInvariant())" /><input name="reason" class="form-control" placeholder="Reason (optional)" maxlength="200" />
+            <button type="submit" class="btn @(s.KillSwitch ? "btn-outline-success" : "btn-danger")" data-confirm="@(s.KillSwitch ? "Turn the kill switch off? Paused campaigns stay paused." : "Stop ALL campaigns of this workspace now?")" data-confirm-label="@(s.KillSwitch ? "Turn off" : "Stop everything")">@(s.KillSwitch ? "Turn off" : "Stop all campaigns")</button></form>
+    }
+</div></div>
+<form asp-action="Save" method="post" data-loading-form novalidate class="card card-body mb-3">
+    <fieldset @(Model.CanManage ? "" : "disabled")>
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+    <div class="row g-3">
+        <div class="col-6 col-md-3"><label asp-for="Form.CooldownDays" class="form-label">Cool-down (days)</label><input asp-for="Form.CooldownDays" type="number" min="0" class="form-control" /><div class="form-text">A contact messaged by another campaign inside this period is skipped.</div></div>
+        <div class="col-6 col-md-3"><label asp-for="Form.AttributionWindowDays" class="form-label">Attribution window (days)</label><input asp-for="Form.AttributionWindowDays" type="number" min="1" max="90" class="form-control" /><div class="form-text">Replies and stage changes within this time after a message are credited to the campaign.</div></div>
+        <div class="col-6 col-md-3"><label asp-for="Form.FailureThresholdPercent" class="form-label">Pause at failure rate (%)</label><input asp-for="Form.FailureThresholdPercent" type="number" min="1" max="100" class="form-control" /></div>
+        <div class="col-6 col-md-3"><label asp-for="Form.FailureMinSample" class="form-label">…after at least (messages)</label><input asp-for="Form.FailureMinSample" type="number" min="1" class="form-control" /></div>
+        <div class="col-12 col-md-6"><div class="form-check"><input type="checkbox" class="form-check-input" id="ap" asp-for="Form.ApprovalRequired" /><label class="form-check-label" for="ap">Campaigns need approval before they can be scheduled</label></div><div class="form-check"><input type="checkbox" class="form-check-input" id="cc" asp-for="Form.CreatorCannotApprove" /><label class="form-check-label" for="cc">The person who created or submitted a campaign cannot approve it</label></div></div>
+        <div class="col-12 col-md-6"><label asp-for="Form.MonthlyMessageLimit" class="form-label">Monthly campaign messages (empty = platform default @s.EffectiveMonthlyLimit)</label><input asp-for="Form.MonthlyMessageLimit" type="number" min="1" class="form-control" /><div class="form-text">Used this month: @s.UsedThisMonth.</div></div>
+        <div class="col-12"><label asp-for="Form.OptOutFooter" class="form-label">Opt-out text added to every campaign message</label><input asp-for="Form.OptOutFooter" class="form-control" /><span asp-validation-for="Form.OptOutFooter" class="text-danger"></span><div class="form-text">Must contain a word the opt-out detector understands (for example STOP): incoming opt-outs are suppressed automatically.</div></div>
+        <div class="col-12"><label asp-for="Form.TestNumbers" class="form-label">Test numbers (the team's own phones, comma separated, international format)</label><input asp-for="Form.TestNumbers" class="form-control" placeholder="+923001234567, +971501234567" /><div class="form-text">Test messages can only be sent to these numbers. Maximum 10.</div></div>
+    </div>
+    @if (Model.CanManage) { <div class="mt-3"><button class="btn btn-primary" type="submit"><span class="spinner-border spinner-border-sm d-none" aria-hidden="true"></span> Save settings</button></div> }
+    </fieldset>
+</form>
+<partial name="_WhatsAppRisk" />

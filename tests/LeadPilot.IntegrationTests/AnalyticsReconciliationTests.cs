@@ -16,7 +16,7 @@ public class AnalyticsReconciliationTests(AppFixture app)
         (StreamKeys.LeadsContacted, "SELECT COUNT(*) FROM (SELECT c.LeadId, MIN(m.SentAtUtc) first FROM Messages m JOIN Contacts c ON c.Id=m.ContactId WHERE m.TenantId=@t AND m.Direction='Outbound' AND m.SentAtUtc IS NOT NULL GROUP BY c.LeadId) x WHERE x.first>=@f AND x.first<@e"),
         (StreamKeys.Responses, "SELECT COUNT(*) FROM Messages WHERE TenantId=@t AND Direction='Inbound' AND ContactId IS NOT NULL AND OccurredAtUtc>=@f AND OccurredAtUtc<@e"),
         (StreamKeys.MessagesSent, "SELECT COUNT(*) FROM Messages WHERE TenantId=@t AND Direction='Outbound' AND SentAtUtc>=@f AND SentAtUtc<@e"),
-        (StreamKeys.MessagesDelivered, "SELECT COUNT(*) FROM Messages WHERE TenantId=@t AND Direction='Outbound' AND SentAtUtc>=@f AND SentAtUtc<@e AND (DeliveredAtUtc IS NOT NULL OR ReadAtUtc IS NOT NULL)"),
+        (StreamKeys.MessagesDelivered, "SELECT COUNT(*) FROM Messages WHERE TenantId=@t AND Direction='Outbound' AND SentAtUtc>=@f AND SentAtUtc<@e AND DeliveredAtUtc IS NOT NULL"),
         (StreamKeys.MessagesFailed, "SELECT COUNT(*) FROM Messages WHERE TenantId=@t AND Direction='Outbound' AND FailedAtUtc>=@f AND FailedAtUtc<@e"),
         (StreamKeys.DemosScheduled, "SELECT COUNT(*) FROM Demos WHERE TenantId=@t AND CreatedAtUtc>=@f AND CreatedAtUtc<@e"),
         (StreamKeys.DemosCompleted, "SELECT COUNT(*) FROM Demos WHERE TenantId=@t AND CompletedAtUtc>=@f AND CompletedAtUtc<@e"),

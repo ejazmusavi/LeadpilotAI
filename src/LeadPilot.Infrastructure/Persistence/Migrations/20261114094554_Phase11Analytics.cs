@@ -78,11 +78,6 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
                 columns: new[] { "TenantId", "Status", "UpdatedAtUtc" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_Messages_Tenant_Contact_Dir",
-                table: "Messages",
-                columns: new[] { "TenantId", "ContactId", "Direction" });
-
-            migrationBuilder.CreateIndex(
                 name: "IX_Messages_Tenant_Dir_Occurred",
                 table: "Messages",
                 columns: new[] { "TenantId", "Direction", "OccurredAtUtc" });
@@ -96,21 +91,6 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
                 name: "IX_Messages_Tenant_Failed",
                 table: "Messages",
                 columns: new[] { "TenantId", "FailedAtUtc" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Leads_Tenant_Created",
-                table: "Leads",
-                columns: new[] { "TenantId", "CreatedAtUtc" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_HandoffEvents_Tenant_Occurred",
-                table: "HandoffEvents",
-                columns: new[] { "TenantId", "OccurredAtUtc" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_DiscoveryResults_Tenant_Retrieved",
-                table: "DiscoveryResults",
-                columns: new[] { "TenantId", "RetrievedAtUtc" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_Demos_Tenant_Completed",
@@ -128,19 +108,9 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
                 columns: new[] { "TenantId", "ConvertedAtUtc" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_Campaigns_Tenant_Started",
-                table: "Campaigns",
-                columns: new[] { "TenantId", "StartedAtUtc" });
-
-            migrationBuilder.CreateIndex(
                 name: "IX_CampaignRecipients_Tenant_Sent",
                 table: "CampaignRecipients",
                 columns: new[] { "TenantId", "SentAtUtc" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_AiInteractions_Tenant_Created",
-                table: "AiInteractions",
-                columns: new[] { "TenantId", "CreatedAtUtc" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_AnalyticsRefreshStates_TenantId",
@@ -182,10 +152,6 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
                 table: "Opportunities");
 
             migrationBuilder.DropIndex(
-                name: "IX_Messages_Tenant_Contact_Dir",
-                table: "Messages");
-
-            migrationBuilder.DropIndex(
                 name: "IX_Messages_Tenant_Dir_Occurred",
                 table: "Messages");
 
@@ -196,18 +162,6 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
             migrationBuilder.DropIndex(
                 name: "IX_Messages_Tenant_Failed",
                 table: "Messages");
-
-            migrationBuilder.DropIndex(
-                name: "IX_Leads_Tenant_Created",
-                table: "Leads");
-
-            migrationBuilder.DropIndex(
-                name: "IX_HandoffEvents_Tenant_Occurred",
-                table: "HandoffEvents");
-
-            migrationBuilder.DropIndex(
-                name: "IX_DiscoveryResults_Tenant_Retrieved",
-                table: "DiscoveryResults");
 
             migrationBuilder.DropIndex(
                 name: "IX_Demos_Tenant_Completed",
@@ -222,16 +176,8 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
                 table: "Customers");
 
             migrationBuilder.DropIndex(
-                name: "IX_Campaigns_Tenant_Started",
-                table: "Campaigns");
-
-            migrationBuilder.DropIndex(
                 name: "IX_CampaignRecipients_Tenant_Sent",
                 table: "CampaignRecipients");
-
-            migrationBuilder.DropIndex(
-                name: "IX_AiInteractions_Tenant_Created",
-                table: "AiInteractions");
         }
     }
 }

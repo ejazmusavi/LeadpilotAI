@@ -435,9 +435,6 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("TenantId");
 
-                    b.HasIndex("TenantId", "OccurredAtUtc")
-                        .HasDatabaseName("IX_HandoffEvents_Tenant_Occurred");
-
                     b.HasIndex("TenantId", "ConversationId", "OccurredAtUtc");
 
                     b.ToTable("HandoffEvents", (string)null);
@@ -749,9 +746,6 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
                     b.HasIndex("TenantId");
 
                     b.HasIndex("TriggerMessageId");
-
-                    b.HasIndex("TenantId", "CreatedAtUtc")
-                        .HasDatabaseName("IX_AiInteractions_Tenant_Created");
 
                     b.HasIndex("TenantId", "TriggerMessageId")
                         .IsUnique();
@@ -1756,9 +1750,6 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
                     b.HasIndex("TenantId", "CreatedAtUtc");
 
                     b.HasIndex("TenantId", "ParentCampaignId");
-
-                    b.HasIndex("TenantId", "StartedAtUtc")
-                        .HasDatabaseName("IX_Campaigns_Tenant_Started");
 
                     b.HasIndex("TenantId", "Status", "ScheduledAtUtc");
 
@@ -3785,9 +3776,6 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("TenantId", "City");
 
-                    b.HasIndex("TenantId", "CreatedAtUtc")
-                        .HasDatabaseName("IX_Leads_Tenant_Created");
-
                     b.HasIndex("TenantId", "DedupKey");
 
                     b.HasIndex("TenantId", "NormalizedName");
@@ -5025,9 +5013,6 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ExpiresAtUtc", "ContentPurged");
 
-                    b.HasIndex("TenantId", "RetrievedAtUtc")
-                        .HasDatabaseName("IX_DiscoveryResults_Tenant_Retrieved");
-
                     b.HasIndex("TenantId", "ConnectorType", "ExternalId")
                         .IsUnique();
 
@@ -5657,9 +5642,6 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.HasIndex("TenantId", "ChannelAccountId", "SentAtUtc");
-
-                    b.HasIndex("TenantId", "ContactId", "Direction")
-                        .HasDatabaseName("IX_Messages_Tenant_Contact_Dir");
 
                     b.HasIndex("TenantId", "ConversationId", "OccurredAtUtc");
 

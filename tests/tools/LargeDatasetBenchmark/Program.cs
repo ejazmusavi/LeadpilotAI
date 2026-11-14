@@ -64,13 +64,13 @@ public static class Program
     {
         var admin = Environment.GetEnvironmentVariable("LEADPILOT_TEST_CONNECTION");
         if (string.IsNullOrEmpty(admin)) { Console.Error.WriteLine("Set LEADPILOT_TEST_CONNECTION to an account that may create and drop databases."); return 2; }
-        double scale = 1.0; var keep = false; string? outPath = null;
-        for (var i = 0; i < args.Length; i++) { if (args[i] == "--scale") scale = double.Parse(args[++i], System.Globalization.CultureInfo.InvariantCulture); else if (args[i] == "--keep") keep = true; else if (args[i] == "--out") outPath = args[++i]; }
-        var dbName = "leadpilot_bench_" + Guid.NewGuid().ToString("N")[..8];
+        double scale = 1.0; var keep = false; string? outPath = null; string? reuse = null;
+        for (var i = 0; i < args.Length; i++) { if (args[i] == "--scale") scale = double.Parse(args[++i], System.Globalization.CultureInfo.InvariantCulture); else if (args[i] == "--keep") keep = true; else if (args[i] == "--out") outPath = args[++i]; else if (args[i] == "--db") reuse = args[++i]; }
+        var dbName = reuse ?? "leadpilot_bench_" + Guid.NewGuid().ToString("N")[..8];
         var cs = new MySqlConnectionStringBuilder(admin) { Database = dbName, DefaultCommandTimeout = 3600 }.ConnectionString;
         var report = new StringBuilder();
         void W(string s = "") { Console.WriteLine(s); report.AppendLine(s); }
-        await using (var c = new MySqlConnection(admin)) { await c.OpenAsync(); await using var cmd = c.CreateCommand(); cmd.CommandText = $"CREATE DATABASE `{dbName}`"; await cmd.ExecuteNonQueryAsync(); }
+        if (reuse is null) await using (var c = new MySqlConnection(admin)) { await c.OpenAsync(); await using var cmd = c.CreateCommand(); cmd.CommandText = $"CREATE DATABASE `{dbName}`"; await cmd.ExecuteNonQueryAsync(); }
         try
         {
             var tenantCtx = new TenantContext(); var capture = new Capture();
@@ -78,8 +78,17 @@ public static class Program
             Guid tenantId, pipelineId, openStage, wonStage, lostStage, statusId;
             await using (var db = new AppDbContext(Options(), tenantCtx))
             {
-                var sw = Stopwatch.StartNew(); await db.Database.MigrateAsync(); W($"migrations applied in {sw.ElapsedMilliseconds} ms");
+                var sw = Stopwatch.StartNew(); if (reuse is null) await db.Database.MigrateAsync(); W($"migrations applied in {sw.ElapsedMilliseconds} ms");
                 using var _ = tenantCtx.BeginPlatformScope(); var now = DateTime.UtcNow;
+                if (reuse is not null)
+                {
+                    tenantId = await db.Tenants.Where(x => x.Slug == "bench-co").Select(x => x.Id).FirstAsync();
+                    var st = await db.PipelineStages.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).OrderBy(x => x.Position).ToListAsync();
+                    pipelineId = st[0].PipelineId; openStage = st.First(x => x.Kind == LeadPilot.Domain.Crm.StageKind.Open).Id; wonStage = st.First(x => x.Kind == LeadPilot.Domain.Crm.StageKind.Won).Id; lostStage = st.First(x => x.Kind == LeadPilot.Domain.Crm.StageKind.Lost).Id;
+                    statusId = await db.LeadStatuses.IgnoreQueryFilters().Where(x => x.TenantId == tenantId && x.IsDefault).Select(x => x.Id).FirstAsync();
+                    await db.Database.ExecuteSqlRawAsync("DELETE FROM DailyMetrics"); await db.Database.ExecuteSqlRawAsync("DELETE FROM AnalyticsRefreshStates");
+                    goto Reused;
+                }
                 var t = Tenant.Create("Bench Co", "bench-co", "Education", "UTC", "en", now); tenantId = t.Id; db.Tenants.Add(t);
                 LeadPilot.Infrastructure.Services.Crm.CrmDefaults.AddAll(db, tenantId, now);
                 var cset = ConversionSettings.Create(tenantId, now); typeof(ConversionSettings).GetProperty("TimeZoneId")!.SetValue(cset, "Asia/Karachi"); db.ConversionSettings.Add(cset);
@@ -87,11 +96,12 @@ public static class Program
                 var stages = await db.PipelineStages.IgnoreQueryFilters().Where(s => s.TenantId == tenantId).OrderBy(s => s.Position).ToListAsync();
                 pipelineId = stages[0].PipelineId; openStage = stages.First(s => s.Kind == LeadPilot.Domain.Crm.StageKind.Open).Id; wonStage = stages.First(s => s.Kind == LeadPilot.Domain.Crm.StageKind.Won).Id; lostStage = stages.First(s => s.Kind == LeadPilot.Domain.Crm.StageKind.Lost).Id;
                 statusId = await db.LeadStatuses.IgnoreQueryFilters().Where(s => s.TenantId == tenantId && s.IsDefault).Select(s => s.Id).FirstAsync();
+                Reused:;
             }
             var d = new Generator.Volumes(); int S(int v) => Math.Max(1, (int)(v * scale));
             var vol = new Generator.Volumes(S(d.Leads), S(d.Contacts), S(d.Consents), S(d.Suppressions), S(d.Conversations), S(d.Messages), S(d.StatusEvents), S(d.Demos), S(d.Trials), Math.Min(S(d.Customers), S(d.Leads)), S(d.Payments), S(d.Opportunities), S(d.Handoffs), S(d.AiInteractions), Math.Min(S(d.Qualifications), S(d.Leads)), Math.Max(2, S(d.Campaigns)), Math.Min(S(d.Recipients), S(d.Contacts)), S(d.DiscoveryJobs), S(d.DiscoveryResults), S(d.AiUsage));
             W($"# Large-dataset benchmark ({DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC, scale {scale}, MySQL {await Scalar(admin, "SELECT VERSION()")}, {Environment.ProcessorCount} cores)"); W();
-            var gen = new Generator(cs, tenantId, pipelineId, openStage, wonStage, lostStage, statusId); var gw = Stopwatch.StartNew(); await gen.RunAsync(vol);
+            var gen = new Generator(cs, tenantId, pipelineId, openStage, wonStage, lostStage, statusId); var gw = Stopwatch.StartNew(); if (reuse is null) await gen.RunAsync(vol);
             W($"Data generated in {gw.Elapsed.TotalSeconds:0.0} s:"); W(); W("| Table | Rows | ms |"); W("|---|---:|---:|");
             foreach (var (step, rows, ms) in gen.Log) W($"| {step} | {rows:N0} | {ms:N0} |");
             long total = 0; foreach (var tname in new[] { "Leads", "Contacts", "Messages", "MessageStatusEvents", "CampaignRecipients", "DiscoveryResults" }) { var n = await Scalar(cs, $"SELECT COUNT(*) FROM {tname} WHERE TenantId = '{tenantId}'"); total += Convert.ToInt64(n); W($"- `{tname}`: {Convert.ToInt64(n):N0} rows"); }
@@ -191,6 +201,7 @@ public static class Program
                 }
                 foreach (var (index, table, label, sql) in evidence)
                 {
+                    if (Convert.ToInt64(await Scalar(cs, $"SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND index_name = '{index}'")) == 0) { W($"| `{index}` | {label} | — | — | — | — | dropped after round 1 (no gain, see phase11-round1-before-optimisation.md) |"); continue; }
                     var with = await Time(sql.Replace("{I}", "")); var without = await Time(sql.Replace("{I}", $"IGNORE INDEX ({index})"));
                     var verdict = without.Ms >= with.Ms * 1.5 && without.Ms - with.Ms > 3 ? "KEEP (faster)" : with.Plan.Contains(index) ? "plan uses it, no measurable gain" : "NOT USED";
                     W($"| `{index}` | {label} | {with.Ms:N1} | {without.Ms:N1} | {with.Plan} | {without.Plan} | {verdict} |");

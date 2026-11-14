@@ -32,6 +32,9 @@ public sealed class AnalyticsRollupService(AppDbContext db, ITenantContext tenan
             foreach (var c in await q.DaysAsync(key, fromUtc, toUtc, tz, ct))
                 if (c.Day >= fromDay && c.Day <= today) fresh.Add(DailyMetric.Create(t, c.Day, key, c.Dim, c.Count, c.Amount, now));
 
+        // current-state figures are stored with today's date (recomputed every refresh) so the dashboard never runs their heavy queries per request
+        foreach (var (key, value) in await q.SnapshotsAsync(ct)) fresh.Add(DailyMetric.Create(t, today, AnalyticsQueries.SnapshotPrefix + key, "", value, 0m, now));
+
         for (var attempt = 0; ; attempt++)
         {
             await using var tx = await db.Database.BeginTransactionAsync(ct);

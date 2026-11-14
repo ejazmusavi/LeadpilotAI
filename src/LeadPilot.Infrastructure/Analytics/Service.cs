@@ -30,7 +30,7 @@ public sealed class AnalyticsService(AppDbContext db, ITenantContext tenant, ICu
     public IReadOnlyList<MetricDefinition> Metrics() => MetricCatalog.All;
     public IReadOnlyList<ReportDefinitionDto> Reports() => ReportCatalog.All;
 
-    private sealed record Ctx(Guid TenantId, string ZoneId, TimeZoneInfo Tz, ResolvedRange Range, bool Team, Guid? Owner, AnalyticsQueries Q, LeadPilot.Domain.Analytics.AnalyticsRefreshState? State, bool UseRollup, DateTime Now)
+    private sealed record Ctx(Guid TenantId, string ZoneId, TimeZoneInfo Tz, ResolvedRange Range, bool Team, Guid? Owner, AnalyticsQueries Q, LeadPilot.Domain.Analytics.AnalyticsRefreshState? State, bool UseRollup, DateTime Now, bool ComparisonDropped = false)
     {
         public string ScopeName => Team ? "Team" : "Own";
         public string ScopeKey => Team ? "team" : "own-" + Owner;
@@ -48,14 +48,17 @@ public sealed class AnalyticsService(AppDbContext db, ITenantContext tenant, ICu
         var state = await db.AnalyticsRefreshStates.AsNoTracking().FirstOrDefaultAsync(s => s.TenantId == t, ct);
         var owner = team ? (Guid?)null : user.UserId;
         var today = RangeResolver.LocalDay(tz, now); var r = range.Value;
-        var needFrom = r.Compare ? r.PrevFromLocal : r.FromLocal; var needTo = r.ToLocal < today ? r.ToLocal : today;
-        var useRollup = owner is null && state is not null && state.TimeZoneId == zone && state.FromDay <= needFrom && state.ToDay >= needTo;
-        return Result.Success(new Ctx(t, zone, tz, r, team, owner, new AnalyticsQueries(db, t, owner), state, useRollup, now));
+        var needTo = r.ToLocal < today ? r.ToLocal : today;
+        var rollupOk = owner is null && state is not null && state.TimeZoneId == zone && state.ToDay >= needTo;
+        var useRollup = rollupOk && state!.FromDay <= r.FromLocal;
+        var dropped = false;
+        if (useRollup && r.Compare && state!.FromDay > r.PrevFromLocal) { r = r with { Compare = false }; dropped = true; }   // the previous period is older than the rollup: no comparison rather than a slow live query
+        return Result.Success(new Ctx(t, zone, tz, r, team, owner, new AnalyticsQueries(db, t, owner), state, useRollup, now, dropped));
     }
 
     private FreshnessDto Freshness(Ctx c) => c.UseRollup
         ? new FreshnessDto("Rollup", c.State!.LastRefreshedAtUtc, (c.Now - c.State.LastRefreshedAtUtc).TotalMinutes > options.Value.StaleAfterMinutes,
-            "Period metrics come from the daily rollup, refreshed every few minutes by a background job. Current-state figures (leads, qualified, eligible), cohort rates and reports are read live.")
+            "Period metrics and current-state figures come from the daily rollup, refreshed every few minutes by a background job; cohort rates and reports are read live." + (c.ComparisonDropped ? " The previous period is older than the rollup, so no comparison is shown." : ""))
         : new FreshnessDto("Live", c.Now, false, c.Owner is not null ? "Own-data view: computed live from the raw records of your leads (the rollup is workspace-wide)." : "No usable rollup for this range yet: computed live from the raw records.");
 
     private TimeSpan Ttl => TimeSpan.FromSeconds(options.Value.CacheSeconds);
@@ -79,11 +82,8 @@ public sealed class AnalyticsService(AppDbContext db, ITenantContext tenant, ICu
         var prev = r.Compare ? await PeriodTotalsAsync(c, r.PrevFromLocal, r.PrevToLocal, r.PrevFromUtc, r.PrevToUtcExclusive, ct) : null;
         long N(Dictionary<string, List<(string Dim, long Count, decimal Amount)>>? d, string k) => d is null ? 0 : d.GetValueOrDefault(k)?.Sum(x => x.Count) ?? 0;
 
-        var snapshots = new Dictionary<string, long>
-        {
-            [MetricCatalog.TotalLeads] = await q.TotalLeadsAsync(ct), [MetricCatalog.VerifiedLeads] = await q.VerifiedLeadsAsync(ct), [MetricCatalog.EligibleLeads] = await q.EligibleLeadsAsync(ct),
-            [MetricCatalog.InterestedLeads] = await q.InterestedLeadsAsync(ct), [MetricCatalog.QualifiedLeads] = await q.QualifiedLeadsAsync(ct),
-        };
+        var snapshots = c.UseRollup ? await RolledSnapshotsAsync(c, ct) : null;
+        snapshots ??= await q.SnapshotsAsync(ct);
         var (cc, cv) = await q.ConversionCohortAsync(r.FromUtc, r.ToUtcExclusive, ct);
         (long Created, long Converted)? pc = r.Compare ? await q.ConversionCohortAsync(r.PrevFromUtc, r.PrevToUtcExclusive, ct) : null;
 
@@ -117,6 +117,15 @@ public sealed class AnalyticsService(AppDbContext db, ITenantContext tenant, ICu
             }
         }
         return new DashboardDto(RangeResolver.ToDto(r), c.ScopeName, Freshness(c), list, await TrendsAsync(c, ct));
+    }
+
+    /// <summary>The current-state figures stored by the latest refresh (null when this refresh predates them: the caller computes them live).</summary>
+    private async Task<Dictionary<string, long>?> RolledSnapshotsAsync(Ctx c, CancellationToken ct)
+    {
+        var day = c.State!.CoveredToDay;
+        var rows = await db.DailyMetrics.AsNoTracking().Where(m => m.TenantId == c.TenantId && m.Day == day && m.MetricKey.StartsWith(AnalyticsQueries.SnapshotPrefix)).Select(m => new { m.MetricKey, m.Count }).ToListAsync(ct);
+        var d = rows.ToDictionary(x => x.MetricKey[AnalyticsQueries.SnapshotPrefix.Length..], x => x.Count);
+        return new[] { MetricCatalog.TotalLeads, MetricCatalog.VerifiedLeads, MetricCatalog.EligibleLeads, MetricCatalog.InterestedLeads, MetricCatalog.QualifiedLeads }.All(d.ContainsKey) ? d : null;
     }
 
     private static MetricValueDto Dto(MetricDefinition d, bool available = true, decimal? value = null, decimal? previous = null, decimal? change = null, decimal? num = null, decimal? den = null, IReadOnlyList<MoneyDto>? money = null, string? drill = null) =>

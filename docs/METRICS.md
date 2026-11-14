@@ -49,7 +49,7 @@ Scope (the dashboard needs `Dashboard.View`, reports `Reports.View`): users with
 | `rate.lead_conversion` | Lead conversion rate | Calculated | A **cohort** rate: leads created in the period that are (today) customers ÷ leads created in the period × 100. | Leads, Customers |
 | `revenue.verified` | Verified revenue | Verified | Payments verified by staff or by a signed provider event, **per currency**; never added across currencies. A payment request that was never verified is not revenue (a payment row only exists after verification). | Payments.PaidAtUtc/Amount/Currency |
 | `messages.sent` | Messages sent | Verified | Outbound messages the gateway accepted (status Sent or later). Feeds the rate and the messaging report. | Messages.SentAtUtc |
-| `messages.delivered` | Messages delivered | Verified | Of those sent in the period, ones with a delivered or read receipt. | Messages.DeliveredAtUtc / ReadAtUtc |
+| `messages.delivered` | Messages delivered | Verified | Of those sent in the period, ones with a delivered or read receipt. | Messages.DeliveredAtUtc (a read receipt also sets it) |
 | `messages.failed` | Messages failed | Verified | Messages whose attempt failed in the period. | Messages.FailedAtUtc |
 
 Duplicates: events are rows, so duplicate *rows* are separate events (two handoff events are two handoffs); "first" metrics (`leads.contacted`, `ai.conversations`) are deliberately de-duplicated per lead / conversation. Archived leads stay in period counts of things that happened (they were created, they were messaged) but leave all current-state totals; soft-deleted contacts never make a lead verified or eligible.

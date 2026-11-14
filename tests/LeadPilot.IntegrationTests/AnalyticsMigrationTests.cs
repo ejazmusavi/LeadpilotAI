@@ -20,9 +20,8 @@ namespace LeadPilot.IntegrationTests;
 public class AnalyticsMigrationTests(AppFixture app)
 {
     private static readonly string[] Codes = ["Reports.Export", "Reports.Team", "Dashboard.View"];
-    private static readonly string[] Indexes = ["IX_Leads_Tenant_Created", "IX_Messages_Tenant_Dir_Sent", "IX_Messages_Tenant_Dir_Occurred", "IX_Messages_Tenant_Contact_Dir", "IX_Messages_Tenant_Failed", "IX_Demos_Tenant_Created", "IX_Demos_Tenant_Completed",
-        "IX_Trials_Tenant_Created", "IX_Customers_Tenant_Converted", "IX_Payments_Tenant_Paid", "IX_Opportunities_Tenant_Status_Updated", "IX_HandoffEvents_Tenant_Occurred", "IX_AiInteractions_Tenant_Created", "IX_CampaignRecipients_Tenant_Sent",
-        "IX_Campaigns_Tenant_Started", "IX_DiscoveryResults_Tenant_Retrieved"];
+    private static readonly string[] Indexes = ["IX_Messages_Tenant_Dir_Sent", "IX_Messages_Tenant_Dir_Occurred", "IX_Messages_Tenant_Failed", "IX_Demos_Tenant_Created", "IX_Demos_Tenant_Completed",
+        "IX_Trials_Tenant_Created", "IX_Customers_Tenant_Converted", "IX_Payments_Tenant_Paid", "IX_Opportunities_Tenant_Status_Updated", "IX_CampaignRecipients_Tenant_Sent"];
 
     [RequiresMySqlFact]
     public async Task A_phase10_database_with_data_upgrades_existing_roles_receive_the_analytics_permissions_and_the_rollup_works()

@@ -56,7 +56,7 @@ public sealed class AnalyticsQueries(AppDbContext db, Guid tenantId, Guid? owner
     // ---------- the recorded-event streams (what the rollup stores per day) ----------
 
     /// <summary>The stream of recorded events behind one period metric. Each element is ONE recorded fact, so counting elements in a range is exactly the metric.</summary>
-    public IQueryable<EventRow> Stream(string key)
+    public IQueryable<EventRow> Stream(string key, DateTime fromUtc, DateTime toUtc)
     {
         var t = tenantId;
         switch (key)
@@ -64,11 +64,15 @@ public sealed class AnalyticsQueries(AppDbContext db, Guid tenantId, Guid? owner
             case StreamKeys.LeadsCreated:
                 return Scope(db.Leads.AsNoTracking().Where(l => l.TenantId == t)).Select(l => new EventRow { At = l.CreatedAtUtc, LeadId = l.Id, Dim = "", Amount = 0m });
             case StreamKeys.LeadsContacted:
-                // first outbound message per lead (a lead counts once, on the day of its first send)
-                return (from m in OutboundMessages() where m.SentAtUtc != null && m.ContactId != null
-                        join c in db.Contacts.Where(c => c.TenantId == t) on m.ContactId equals c.Id
-                        group m by c.LeadId into g
-                        select new EventRow { At = g.Min(x => x.SentAtUtc!.Value), LeadId = g.Key, Dim = "", Amount = 0m });
+            {
+                // a lead counts once, on the day of its FIRST outbound message: candidates are the leads with a send inside [from, to); a lead that was messaged before `from` is not new
+                var inRange = from m in OutboundMessages() where m.SentAtUtc >= fromUtc && m.SentAtUtc < toUtc && m.ContactId != null
+                              join c in db.Contacts.Where(c => c.TenantId == t) on m.ContactId equals c.Id
+                              group m by c.LeadId into g
+                              select new { LeadId = g.Key, First = g.Min(x => x.SentAtUtc!.Value) };
+                return inRange.Where(x => !db.Contacts.Any(c2 => c2.TenantId == t && c2.LeadId == x.LeadId && db.Messages.Any(m2 => m2.TenantId == t && m2.ContactId == c2.Id && m2.Direction == MessageDirection.Outbound && m2.SentAtUtc < fromUtc)))
+                              .Select(x => new EventRow { At = x.First, LeadId = x.LeadId, Dim = "", Amount = 0m });
+            }
             case StreamKeys.Responses:
             {
                 var q = db.Messages.AsNoTracking().Where(m => m.TenantId == t && m.Direction == MessageDirection.Inbound && m.ContactId != null);
@@ -78,7 +82,7 @@ public sealed class AnalyticsQueries(AppDbContext db, Guid tenantId, Guid? owner
             case StreamKeys.MessagesSent:
                 return OutboundMessages().Where(m => m.SentAtUtc != null).Select(m => new EventRow { At = m.SentAtUtc!.Value, Dim = "", Amount = 0m });
             case StreamKeys.MessagesDelivered:
-                return OutboundMessages().Where(m => m.SentAtUtc != null && (m.DeliveredAtUtc != null || m.ReadAtUtc != null)).Select(m => new EventRow { At = m.SentAtUtc!.Value, Dim = "", Amount = 0m });
+                return OutboundMessages().Where(m => m.SentAtUtc != null && m.DeliveredAtUtc != null).Select(m => new EventRow { At = m.SentAtUtc!.Value, Dim = "", Amount = 0m });
             case StreamKeys.MessagesFailed:
                 return OutboundMessages().Where(m => m.FailedAtUtc != null).Select(m => new EventRow { At = m.FailedAtUtc!.Value, Dim = "", Amount = 0m });
             case StreamKeys.DemosScheduled:
@@ -131,7 +135,7 @@ public sealed class AnalyticsQueries(AppDbContext db, Guid tenantId, Guid? owner
 
     /// <summary>The grouped query behind <see cref="DaysAsync"/> (exposed so its SQL and plan can be inspected).</summary>
     public IQueryable<BucketRow> Buckets(string key, DateTime fromUtc, DateTime toUtc) =>
-        Stream(key).Where(e => e.At >= fromUtc && e.At < toUtc)
+        Stream(key, fromUtc, toUtc).Where(e => e.At >= fromUtc && e.At < toUtc)
             .GroupBy(e => new { e.At.Year, e.At.Month, e.At.Day, e.At.Hour, Q = e.At.Minute < 15 ? 0 : e.At.Minute < 30 ? 1 : e.At.Minute < 45 ? 2 : 3, e.Dim })
             .Select(g => new BucketRow { Year = g.Key.Year, Month = g.Key.Month, Day = g.Key.Day, Hour = g.Key.Hour, Q = g.Key.Q, Dim = g.Key.Dim, N = g.LongCount(), S = g.Sum(x => x.Amount) });
 
@@ -152,11 +156,20 @@ public sealed class AnalyticsQueries(AppDbContext db, Guid tenantId, Guid? owner
     /// <summary>Total of a stream in [fromUtc, toUtc) per dimension (one grouped SQL query).</summary>
     public async Task<List<(string Dim, long Count, decimal Amount)>> TotalsAsync(string key, DateTime fromUtc, DateTime toUtc, CancellationToken ct)
     {
-        var rows = await Stream(key).Where(e => e.At >= fromUtc && e.At < toUtc).GroupBy(e => e.Dim).Select(g => new { Dim = g.Key, N = g.LongCount(), S = g.Sum(x => x.Amount) }).ToListAsync(ct);
+        var rows = await Stream(key, fromUtc, toUtc).Where(e => e.At >= fromUtc && e.At < toUtc).GroupBy(e => e.Dim).Select(g => new { Dim = g.Key, N = g.LongCount(), S = g.Sum(x => x.Amount) }).ToListAsync(ct);
         return rows.Select(r => (r.Dim, r.N, r.S)).ToList();
     }
 
     // ---------- snapshot metrics ----------
+
+    public const string SnapshotPrefix = "snapshot:";
+
+    /// <summary>All current-state metrics in one go (what the rollup stores per refresh).</summary>
+    public async Task<Dictionary<string, long>> SnapshotsAsync(CancellationToken ct) => new()
+    {
+        [MetricCatalog.TotalLeads] = await TotalLeadsAsync(ct), [MetricCatalog.VerifiedLeads] = await VerifiedLeadsAsync(ct), [MetricCatalog.EligibleLeads] = await EligibleLeadsAsync(ct),
+        [MetricCatalog.InterestedLeads] = await InterestedLeadsAsync(ct), [MetricCatalog.QualifiedLeads] = await QualifiedLeadsAsync(ct),
+    };
 
     public Task<long> TotalLeadsAsync(CancellationToken ct) => ActiveLeads().LongCountAsync(ct);
 
@@ -175,7 +188,7 @@ public sealed class AnalyticsQueries(AppDbContext db, Guid tenantId, Guid? owner
                        join c in db.Contacts.Where(c => c.TenantId == t) on cv.ContactId equals c.Id
                        select c.LeadId;
         var ids = byFit.Union(byIntent);
-        return ActiveLeads().LongCountAsync(l => ids.Contains(l.Id), ct);
+        return (from l in ActiveLeads() join id in ids on l.Id equals id select l.Id).LongCountAsync(ct);
     }
 
     /// <summary>Mirrors ConsentService.QueryAudienceAsync for WhatsApp / Marketing, counted per lead.</summary>
@@ -187,7 +200,7 @@ public sealed class AnalyticsQueries(AppDbContext db, Guid tenantId, Guid? owner
             && db.ConsentRecords.Where(r => r.TenantId == t && r.ContactId == c.Id && r.Channel == channel && r.Purpose == purpose)
                 .OrderByDescending(r => r.OccurredAtUtc).ThenByDescending(r => r.IsRevocation).Select(r => r.Status).FirstOrDefault() == ConsentStatus.Granted)
             .Select(c => c.LeadId);
-        return ActiveLeads().Where(l => !db.PipelineStages.Any(s => s.Id == l.PipelineStageId && s.Kind == StageKind.Suppressed)).LongCountAsync(l => contacts.Contains(l.Id), ct);
+        return (from l in ActiveLeads().Where(l => !db.PipelineStages.Any(s => s.Id == l.PipelineStageId && s.Kind == StageKind.Suppressed)) join id in contacts.Distinct() on l.Id equals id select l.Id).LongCountAsync(ct);
     }
 
     /// <summary>Leads created in [from, to) and how many of them are customers today (cohort).</summary>

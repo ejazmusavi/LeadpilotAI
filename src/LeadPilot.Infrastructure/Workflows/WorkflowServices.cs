@@ -260,7 +260,7 @@ internal sealed class WorkflowService(CrmContext crm, ILogger<WorkflowService> l
     private async Task<List<ValidationProblem>> CheckReferencesAsync(WorkflowDefinition def, CancellationToken ct)
     {
         var db = crm.Db; var tenantId = crm.TenantId; var errors = new List<ValidationProblem>();
-        var raw = string.Concat(def.Triggers.Select(t => DefinitionMapper.Raw(t.Condition)), def.Steps.Select(x => DefinitionMapper.Raw(x.Condition) + DefinitionMapper.Raw(x.Config)));
+        var raw = string.Concat(def.Triggers.Select(t => DefinitionMapper.Raw(t.Condition)).Concat(def.Steps.Select(x => DefinitionMapper.Raw(x.Condition) + DefinitionMapper.Raw(x.Config))));
         var keys = System.Text.RegularExpressions.Regex.Matches(raw, @"lead\.cf\.([a-z][a-z0-9_]{0,39})").Select(m => m.Groups[1].Value).Distinct().ToList();
         if (keys.Count > 0)
         {

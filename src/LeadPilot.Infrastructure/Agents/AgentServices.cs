@@ -166,7 +166,7 @@ public sealed class CatalogService(CrmContext crm, ILogger<CatalogService> logge
     public Task<Result<ProductDto>> CreateAsync(SaveProductRequest r, CancellationToken ct = default) =>
         CrmFlow.GuardAsync(async () =>
         {
-            var p = CatalogProduct.Create(crm.TenantId, r.Name, r.Summary, r.Features, r.DemoProcess, r.TrialProcess, r.IsConfirmed, false, crm.Now, crm.Actor);
+            var p = CatalogProduct.Create(crm.TenantId, r.Name, r.Summary, r.Features, r.DemoProcess, r.TrialProcess, r.IsConfirmed, false, crm.Now, crm.Actor, Enum.IsDefined(r.Kind) ? r.Kind : CatalogItemKind.Product);
             if (!r.IsActive) p.Update(r.Name, r.Summary, r.Features, r.DemoProcess, r.TrialProcess, r.IsConfirmed, false, crm.Now, crm.Actor);
             crm.Db.CatalogProducts.Add(p);
             crm.Record("Catalog.ProductCreated", "CatalogProduct", p.Id, $"Product '{p.Name}' created ({(p.IsConfirmed ? "confirmed" : "not confirmed")}).");
@@ -182,7 +182,7 @@ public sealed class CatalogService(CrmContext crm, ILogger<CatalogService> logge
             if (p is null) return Result.Failure<ProductDto>(Error.NotFound("Product"));
             if (r.Version is { } v && v != p.Version) return Result.Failure<ProductDto>(Error.Conflict("The product was changed by someone else. Reload it and try again."));
             var was = p.IsConfirmed;
-            p.Update(r.Name, r.Summary, r.Features, r.DemoProcess, r.TrialProcess, r.IsConfirmed, r.IsActive, crm.Now, crm.Actor);
+            p.Update(r.Name, r.Summary, r.Features, r.DemoProcess, r.TrialProcess, r.IsConfirmed, r.IsActive, crm.Now, crm.Actor, Enum.IsDefined(r.Kind) ? r.Kind : null);
             crm.Record("Catalog.ProductUpdated", "CatalogProduct", id, $"Product '{p.Name}' updated{(was != p.IsConfirmed ? (p.IsConfirmed ? " and CONFIRMED (the AI may now state it as fact)" : " and un-confirmed") : "")}.");
             await crm.Db.SaveChangesAsync(ct);
             return Result.Success(await MapAsync(p, ct));
@@ -229,7 +229,7 @@ public sealed class CatalogService(CrmContext crm, ILogger<CatalogService> logge
     {
         var tenantId = crm.TenantId;
         var plans = await crm.Db.PricingPlans.AsNoTracking().Where(x => x.TenantId == tenantId && x.ProductId == p.Id).OrderBy(x => x.Price).ThenBy(x => x.Name).ToListAsync(ct);
-        return new ProductDto(p.Id, p.Name, p.Summary, p.Features, p.DemoProcess, p.TrialProcess, p.IsActive, p.IsConfirmed, p.IsSample, p.Version, plans.Select(Map).ToList());
+        return new ProductDto(p.Id, p.Name, p.Summary, p.Features, p.DemoProcess, p.TrialProcess, p.IsActive, p.IsConfirmed, p.IsSample, p.Version, plans.Select(Map).ToList(), p.Kind);
     }
 
     private static PlanDto Map(PricingPlan p) => new(p.Id, p.ProductId, p.Name, p.Price, p.Currency, p.BillingPeriod, p.Details, p.MaxDiscountPercent, p.IsActive, p.IsConfirmed, p.IsSample);

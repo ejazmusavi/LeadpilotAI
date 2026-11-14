@@ -7,6 +7,7 @@
     <input type="hidden" asp-for="Form.Id" /><input type="hidden" asp-for="Form.Version" />
     <div class="row g-3">
         <div class="col-12"><label asp-for="Form.Name" class="form-label">Name</label><input asp-for="Form.Name" class="form-control" /></div>
+        <div class="col-12 col-md-4"><label asp-for="Form.Kind" class="form-label">Kind</label><select asp-for="Form.Kind" class="form-select"><option value="Product">Product</option><option value="Service">Service</option></select></div>
         <div class="col-12"><label asp-for="Form.Summary" class="form-label">Summary</label><textarea asp-for="Form.Summary" class="form-control" rows="2"></textarea></div>
         <div class="col-12"><label asp-for="Form.Features" class="form-label">Features (one per line)</label><textarea asp-for="Form.Features" class="form-control" rows="6"></textarea></div>
         <div class="col-12 col-md-6"><label asp-for="Form.DemoProcess" class="form-label">Demo process</label><textarea asp-for="Form.DemoProcess" class="form-control" rows="3"></textarea></div>

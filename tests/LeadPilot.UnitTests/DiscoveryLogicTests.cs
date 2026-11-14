@@ -63,15 +63,14 @@ public class DiscoveryQueryBuilderTests
     [Fact] public void Nothing_to_search_for_gives_no_queries() => Assert.Empty(DiscoveryQueryBuilder.Build(new SearchLocation("Pakistan", null, null, null, null), [" "], null, null));
     [Fact] public void Duplicate_phrases_are_collapsed() => Assert.Single(DiscoveryQueryBuilder.Build(new SearchLocation("Pakistan", null, "Lahore", null, null), ["School", "school "], null, null));
     [Fact] public void Unknown_countries_get_no_region_code_and_are_not_rejected() { Assert.Null(DiscoveryQueryBuilder.RegionCode("Atlantis")); Assert.Equal("PK", DiscoveryQueryBuilder.RegionCode("pakistan")); }
-    [Fact] public void Categories_are_data_the_starter_pack_includes_the_school_categories_and_nothing_else_is_required()
+    [Fact]
+    public void Categories_and_locations_are_pack_data_the_education_pack_carries_the_school_categories_and_the_code_none()
     {
-        var pack = DiscoveryStarterPacks.Find(DiscoveryStarterPacks.EducationPakistan)!;
-        var names = pack.Categories.Select(c => c.Name).ToList();
+        var edu = LeadPilot.Application.Config.PackParser.Parse(LeadPilot.Infrastructure.Config.PackSeeder.Embedded().Single(p => p.Name.EndsWith("education.json")).Json).Pack!;
+        var names = edu.Categories.Select(c => c.Name).ToList();
         foreach (var n in new[] { "Private schools", "Primary schools", "Secondary schools", "Higher secondary schools", "Colleges", "Academies", "Educational institutions" }) Assert.Contains(n, names);
-        Assert.Contains(pack.Locations, l => l.City == "Karachi");
-        Assert.Equal(DiscoveryStarterPacks.EducationPakistan, DiscoveryStarterPacks.AutoPackForIndustry(" education "));
-        Assert.Null(DiscoveryStarterPacks.AutoPackForIndustry("Retail"));
-        Assert.Null(DiscoveryStarterPacks.AutoPackForIndustry(null));
+        Assert.Contains(edu.Discovery!.Locations, l => l.City == "Karachi");
+        Assert.Equal(7, edu.Discovery.Categories.Count);
     }
 }
 
@@ -173,5 +172,13 @@ public class DiscoveryDomainTests
         Assert.Throws<DomainException>(() => DiscoveryConnectorConfig.Create(Guid.NewGuid(), "x", DateTime.UtcNow).SetLimits(-1, null, null, DateTime.UtcNow));
         Assert.Throws<DomainException>(() => DiscoveryCategoryMapping.Create(Guid.NewGuid(), Guid.NewGuid(), " ", null, DateTime.UtcNow));
         Assert.Equal(["a", "b"], DiscoveryCategoryMapping.Create(Guid.NewGuid(), Guid.NewGuid(), "a;b\nA", null, DateTime.UtcNow).Terms);
+    }
+    [Fact]
+    public void The_words_of_the_searched_industry_come_from_the_tenants_own_phrases_so_they_never_make_different_businesses_alike()
+    {
+        var words = DiscoveryMatching.IndustryWords(["boutique hotel", "Hotels"]);
+        Assert.False(DiscoveryMatching.SharesDistinctiveWord("Sunrise Hotel", "Moonlight Hotel", words));
+        Assert.True(DiscoveryMatching.SharesDistinctiveWord("Sunrise Hotel Downtown", "Sunrise – Home", words));
+        Assert.True(DiscoveryMatching.SharesDistinctiveWord("Sunrise Hotel", "Moonlight Hotel"));          // without the tenant's words the shared noun counts, as it did before for any word that was not filler
     }
 }

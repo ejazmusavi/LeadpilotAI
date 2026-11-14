@@ -64,6 +64,13 @@ public class LeadQuery
     public DateTime? CreatedToUtc { get; set; }
     /// <summary>Filters on tenant-defined custom fields (only fields marked filterable match). Built from <c>cf.&lt;key&gt;</c>, <c>cf.&lt;key&gt;.min</c>, <c>.max</c> and <c>.contains</c> query parameters.</summary>
     public Dictionary<string, string?> Cf { get; set; } = [];
+
+    /// <summary>Fills <see cref="Cf"/> from the raw query string (<c>cf.rooms=…</c>, <c>cf.rooms.min=…</c>): the standard model binder cannot read two-part dotted names.</summary>
+    public LeadQuery WithCustomFilters(IEnumerable<KeyValuePair<string, string?>> rawQuery)
+    {
+        Cf = rawQuery.Where(kv => kv.Key.StartsWith("cf.", StringComparison.Ordinal) && kv.Key.Length > 3).GroupBy(kv => kv.Key[3..], StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First().Value, StringComparer.Ordinal);
+        return this;
+    }
     public IReadOnlyList<Config.CustomFieldFilter> CustomFilters => Config.CustomFieldFilters.FromQuery(Cf.Select(kv => new KeyValuePair<string, string?>("cf." + kv.Key, kv.Value)));
     public ArchivedFilter Archived { get; set; } = ArchivedFilter.Active;
     public LeadSort Sort { get; set; } = LeadSort.Created;

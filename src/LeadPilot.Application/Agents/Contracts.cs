@@ -100,8 +100,8 @@ public interface IAgentService
 
 public sealed record PlanDto(Guid Id, Guid ProductId, string Name, decimal? Price, string Currency, string? BillingPeriod, string? Details, decimal? MaxDiscountPercent, bool IsActive, bool IsConfirmed, bool IsSample);
 public sealed record ProductListItemDto(Guid Id, string Name, string? Summary, bool IsActive, bool IsConfirmed, bool IsSample, int PlanCount, DateTime? UpdatedAtUtc);
-public sealed record ProductDto(Guid Id, string Name, string? Summary, string? Features, string? DemoProcess, string? TrialProcess, bool IsActive, bool IsConfirmed, bool IsSample, int Version, IReadOnlyList<PlanDto> Plans);
-public sealed record SaveProductRequest(string Name, string? Summary, string? Features, string? DemoProcess, string? TrialProcess, bool IsConfirmed, bool IsActive, int? Version = null) : TenantScopedRequest;
+public sealed record ProductDto(Guid Id, string Name, string? Summary, string? Features, string? DemoProcess, string? TrialProcess, bool IsActive, bool IsConfirmed, bool IsSample, int Version, IReadOnlyList<PlanDto> Plans, CatalogItemKind Kind = CatalogItemKind.Product);
+public sealed record SaveProductRequest(string Name, string? Summary, string? Features, string? DemoProcess, string? TrialProcess, bool IsConfirmed, bool IsActive, int? Version = null, CatalogItemKind Kind = CatalogItemKind.Product) : TenantScopedRequest;
 public sealed record SavePlanRequest(string Name, decimal? Price, string Currency, string? BillingPeriod, string? Details, decimal? MaxDiscountPercent, bool IsConfirmed, bool IsActive) : TenantScopedRequest;
 
 public interface ICatalogService

@@ -35,7 +35,6 @@ public class DiscoverySecurityTests(AppFixture app)
         yield return new("POST", "/api/v1/discovery/results/bulk-approve", Review, new { resultIds = new[] { Any } }); yield return new("POST", "/api/v1/discovery/results/bulk-reject", Review, new { resultIds = new[] { Any } });
         yield return new("PUT", "/api/v1/discovery/categories", Manage, new { categoryId = Any, searchTerms = "x" }); yield return new("PUT", $"/api/v1/discovery/categories/{Any}/active?active=false", Manage, new { });
         yield return new("POST", "/api/v1/discovery/locations", Manage, new { country = "Nowhere" }); yield return new("DELETE", $"/api/v1/discovery/locations/{Any}", Manage);
-        yield return new("POST", $"/api/v1/discovery/starter-packs/{DiscoveryStarterPacks.EducationPakistan}/install", Manage, new { });
         yield return new("PUT", $"/api/v1/discovery/connectors/{DiscoveryKit.Fake}", Integ, new { enabled = true }); yield return new("GET", "/api/v1/discovery/connectors/usage", Integ);
     }
 
@@ -92,7 +91,7 @@ public class DiscoverySecurityTests(AppFixture app)
     private async Task<Seed> SeedAsync()
     {
         var a = await Api(W.AAdmin); var b = await Api(W.BAdmin);
-        await Crm.Ok<InstallPackResult>(await a.Post($"/api/v1/discovery/starter-packs/{DiscoveryStarterPacks.EducationPakistan}/install"));
+        await PackKit.Apply(a, await PackKit.BuiltinId(a, "education"), new { sections = new[] { "categories", "discovery" } });
         var tokenA = DiscoveryKit.NewToken(); var tokenB = DiscoveryKit.NewToken();
         Script.Set(tokenA, new FakeScript.Behavior { Total = 4 }); Script.Set(tokenB, new FakeScript.Behavior { Total = 4 });
         var ja = await DiscoveryKit.CreateAndRun(app, a, W.A.Id, tokenA, 10); var jb = await DiscoveryKit.CreateAndRun(app, b, W.B.Id, tokenB, 10);

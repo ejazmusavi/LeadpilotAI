@@ -1,6 +1,7 @@
 using System.Net;
 using LeadPilot.Application.Contracts;
 using LeadPilot.Application.Crm;
+using LeadPilot.Application.Config;
 using LeadPilot.Application.Discovery;
 using LeadPilot.Domain.Crm;
 using LeadPilot.Domain.Discovery;
@@ -22,7 +23,7 @@ public class DiscoveryLifecycleTests(AppFixture app)
     private async Task<(ApiSession Admin, Guid CategoryId)> AdminWithSchoolCategoriesAsync()
     {
         var admin = await Api(W.AAdmin);
-        await Crm.Ok<InstallPackResult>(await admin.Post($"/api/v1/discovery/starter-packs/{DiscoveryStarterPacks.EducationPakistan}/install"));
+        await PackKit.Apply(admin, await PackKit.BuiltinId(admin, "education"), new { sections = new[] { "categories", "discovery" } });
         var maps = await Crm.Ok<List<CategoryMappingDto>>(await admin.Get("/api/v1/discovery/categories"));
         return (admin, maps.Single(m => m.CategoryName == "Private schools").CategoryId);
     }
@@ -379,20 +380,31 @@ public class DiscoveryLifecycleTests(AppFixture app)
     }
 
     [RequiresMySqlFact]
-    public async Task Education_workspaces_get_the_school_categories_automatically_other_workspaces_do_not_and_everything_is_editable()
+    public async Task The_education_pack_installs_the_school_categories_nothing_is_automatic_and_everything_is_editable()
     {
         var (a, _) = await AdminWithSchoolCategoriesAsync();
         var maps = await Crm.Ok<List<CategoryMappingDto>>(await a.Get("/api/v1/discovery/categories"));
         foreach (var n in new[] { "Private schools", "Primary schools", "Secondary schools", "Higher secondary schools", "Colleges", "Academies", "Educational institutions" }) Assert.Contains(maps, m => m.CategoryName == n);
         Assert.Contains((await Crm.Ok<List<LocationPresetDto>>(await a.Get("/api/v1/discovery/locations"))), l => l.City == "Lahore" && l.Country == "Pakistan");
-        var again = await Crm.Ok<InstallPackResult>(await a.Post($"/api/v1/discovery/starter-packs/{DiscoveryStarterPacks.EducationPakistan}/install"));
-        Assert.Equal((0, 0, 0), (again.CategoriesCreated, again.MappingsCreated, again.LocationsCreated));   // idempotent
+        var sections = new { sections = new[] { "categories", "discovery" } };
+        var educationId = await PackKit.BuiltinId(a, "education");
+        Assert.Equal(0, (await PackKit.Apply(a, educationId, sections)).Plan.Counts.Create);   // idempotent
+        // nothing is installed automatically any more, not even for a workspace whose industry is "Education"
+        using (var scope = app.World.Services.CreateScope())
+        {
+            var t = (await scope.ServiceProvider.GetRequiredService<LeadPilot.Application.Contracts.ITenantAdminService>().CreateAsync(new LeadPilot.Application.Contracts.CreateTenantRequest("Edu " + DiscoveryKit.NewToken(), "edu-" + DiscoveryKit.NewToken(), "Education", "UTC", "en", null))).Value.Tenant;
+            var adm = await app.World.AddUserAsync(t.Id, $"edu-{DiscoveryKit.NewToken()}@e.test", LeadPilot.Application.Security.SystemRoles.TenantAdministrator);
+            var fresh = await ApiSession.LoginAsync(app, adm.Email, adm.Password);
+            Assert.Empty(await Crm.Ok<List<CategoryMappingDto>>(await fresh.Get("/api/v1/discovery/categories")));
+            Assert.Empty(await Crm.Ok<List<LocationPresetDto>>(await fresh.Get("/api/v1/discovery/locations")));
+        }
 
         // editable: change phrases, deactivate, saved locations
         var primary = maps.Single(m => m.CategoryName == "Primary schools");
         var edited = await Crm.Ok<CategoryMappingDto>(await a.Put("/api/v1/discovery/categories", new { categoryId = primary.CategoryId, searchTerms = "primary school\nmontessori", placeType = "primary_school" }));
         Assert.Equal(["primary school", "montessori"], edited.SearchTerms);
-        again = await Crm.Ok<InstallPackResult>(await a.Post($"/api/v1/discovery/starter-packs/{DiscoveryStarterPacks.EducationPakistan}/install"));
+        var reapplied = await PackKit.Apply(a, educationId, sections);
+        Assert.Equal(PackOutcome.KeepYours, reapplied.Plan.Items.Single(i => i.Type == "discoveryCategory" && i.Name.StartsWith("Primary schools")).Outcome);
         Assert.Equal(["primary school", "montessori"], (await Crm.Ok<List<CategoryMappingDto>>(await a.Get("/api/v1/discovery/categories"))).Single(m => m.CategoryId == primary.CategoryId).SearchTerms);   // re-installing never overwrites edits
         Assert.False((await Crm.Ok<CategoryMappingDto>(await a.Put($"/api/v1/discovery/categories/{primary.Id}/active?active=false", new { }))).IsActive);
         var loc = await Crm.Ok<LocationPresetDto>(await a.Post("/api/v1/discovery/locations", new { country = "Saudi Arabia", city = "Riyadh " + DiscoveryKit.NewToken() }));

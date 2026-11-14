@@ -95,6 +95,7 @@ public class ProductFormModel
     [StringLength(4000)] public string? Features { get; set; }
     [StringLength(2000)] public string? DemoProcess { get; set; }
     [StringLength(2000)] public string? TrialProcess { get; set; }
+    public LeadPilot.Domain.Agents.CatalogItemKind Kind { get; set; } = LeadPilot.Domain.Agents.CatalogItemKind.Product;
     public bool IsConfirmed { get; set; }
     public bool IsActive { get; set; } = true;
 }

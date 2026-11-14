@@ -174,7 +174,7 @@ public class CatalogController(ICatalogService catalog, IPermissionEvaluator per
             var p = await catalog.GetAsync(pid, ct);
             if (Reject(p) is { } rej) return rej;
             vm.Product = p.Value;
-            vm.Form = new ProductFormModel { Id = p.Value.Id, Version = p.Value.Version, Name = p.Value.Name, Summary = p.Value.Summary, Features = p.Value.Features, DemoProcess = p.Value.DemoProcess, TrialProcess = p.Value.TrialProcess, IsConfirmed = p.Value.IsConfirmed, IsActive = p.Value.IsActive };
+            vm.Form = new ProductFormModel { Id = p.Value.Id, Version = p.Value.Version, Name = p.Value.Name, Summary = p.Value.Summary, Features = p.Value.Features, DemoProcess = p.Value.DemoProcess, TrialProcess = p.Value.TrialProcess, Kind = p.Value.Kind, IsConfirmed = p.Value.IsConfirmed, IsActive = p.Value.IsActive };
         }
         else if (!vm.CanManage) return Forbid();
         Crumbs(("AI", null), ("Product catalog", Url.Action(nameof(Index))), (vm.Product?.Name ?? "New product", null));
@@ -186,7 +186,7 @@ public class CatalogController(ICatalogService catalog, IPermissionEvaluator per
     {
         if (ModelState.IsValid)
         {
-            var req = new SaveProductRequest(m.Name, m.Summary, m.Features, m.DemoProcess, m.TrialProcess, m.IsConfirmed, m.IsActive, m.Version);
+            var req = new SaveProductRequest(m.Name, m.Summary, m.Features, m.DemoProcess, m.TrialProcess, m.IsConfirmed, m.IsActive, m.Version, m.Kind);
             var r = m.Id is { } id ? await catalog.UpdateAsync(id, req, ct) : await catalog.CreateAsync(req, ct);
             if (r.IsSuccess) { Success("Product saved."); return RedirectToAction(nameof(Product), new { id = r.Value.Id }); }
             if (Reject(r) is { } rej) return rej;

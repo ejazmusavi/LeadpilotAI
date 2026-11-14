@@ -13,7 +13,7 @@ public class LeadsController(ILeadService leads, ILeadExportService export, ISco
 {
     /// <summary>Search, filter, sort and page leads.</summary>
     [HttpGet, Authorize(Policy = PermissionCodes.LeadsView)]
-    public async Task<PagedResult<LeadListItemDto>> List([FromQuery] LeadQuery query, CancellationToken ct) => await leads.ListAsync(query, ct);
+    public async Task<PagedResult<LeadListItemDto>> List([FromQuery] LeadQuery query, CancellationToken ct) => await leads.ListAsync(query.WithCustomFilters(Request.Query.Select(kv => new KeyValuePair<string, string?>(kv.Key, kv.Value.ToString()))), ct);
 
     /// <summary>One lead with stage, owner, tags, sources and the score breakdown.</summary>
     [HttpGet("{id:guid}"), Authorize(Policy = PermissionCodes.LeadsView)]
@@ -95,7 +95,7 @@ public class LeadsController(ILeadService leads, ILeadExportService export, ISco
     [HttpGet("export"), Authorize(Policy = PermissionCodes.LeadsExport)]
     public async Task<IActionResult> Export([FromQuery] LeadQuery query, ExportFormat format = ExportFormat.Csv, CancellationToken ct = default)
     {
-        var r = await export.ExportAsync(query, format, ct);
+        var r = await export.ExportAsync(query.WithCustomFilters(Request.Query.Select(kv => new KeyValuePair<string, string?>(kv.Key, kv.Value.ToString()))), format, ct);
         return r.IsSuccess ? File(r.Value.Content, r.Value.ContentType, r.Value.FileName) : Fail(r);
     }
 }
@@ -258,6 +258,10 @@ public class CatalogController(ILeadCatalogService catalog) : ApiControllerBase
         return r.IsSuccess ? StatusCode(StatusCodes.Status201Created, r.Value) : Fail(r);
     }
 
+    /// <summary>Moves a category under another one (parentId) or to the top level (null). Loops and trees deeper than four levels are refused.</summary>
+    [HttpPut("categories/{id:guid}/parent"), Authorize(Policy = PermissionCodes.PipelinesManage)]
+    public async Task<IActionResult> MoveCategory(Guid id, MoveCategoryRequest request, CancellationToken ct) => Respond(await catalog.MoveCategoryAsync(id, request.ParentId, ct));
+
     [HttpPut("categories/{id:guid}"), Authorize(Policy = PermissionCodes.PipelinesManage)]
     public async Task<IActionResult> RenameCategory(Guid id, SaveCategoryRequest request, CancellationToken ct) => Respond(await catalog.RenameCategoryAsync(id, request, ct));
 
@@ -384,3 +388,5 @@ public class OpportunitiesController(IOpportunityService opportunities) : ApiCon
     [HttpPut("opportunities/{id:guid}/stage"), Authorize(Policy = PermissionCodes.LeadsUpdate)]
     public async Task<IActionResult> ChangeStage(Guid id, OpportunityStageRequest request, CancellationToken ct) => Respond(await opportunities.ChangeStageAsync(id, request.StageId, ct));
 }
+
+public sealed record MoveCategoryRequest(Guid? ParentId) : LeadPilot.Application.Crm.TenantScopedRequest;

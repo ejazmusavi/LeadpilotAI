@@ -26,6 +26,7 @@ public class LeadsController(ILeadService leads, IContactService contacts, ICons
     [HttpGet]
     public async Task<IActionResult> Index([FromQuery] LeadQuery query, CancellationToken ct)
     {
+        query.WithCustomFilters(Request.Query.Select(kv => new KeyValuePair<string, string?>(kv.Key, kv.Value.ToString())));
         Crumbs(("Leads", null));
         var filterable = (await customFields.ListAsync(LeadPilot.Domain.Config.CustomEntityType.Lead, false, ct)).Where(f => f.IsFilterable).ToList();
         return View(new LeadListViewModel { Query = query, Result = await leads.ListAsync(query, ct), Lookups = await leads.LookupsAsync(ct), Can = await AbilitiesAsync(ct), FilterableFields = filterable });
@@ -304,6 +305,7 @@ public class LeadsController(ILeadService leads, IContactService contacts, ICons
     [HttpGet, Authorize(Policy = PermissionCodes.LeadsExport)]
     public async Task<IActionResult> Export([FromQuery] LeadQuery query, ExportFormat format = ExportFormat.Csv, CancellationToken ct = default)
     {
+        query.WithCustomFilters(Request.Query.Select(kv => new KeyValuePair<string, string?>(kv.Key, kv.Value.ToString())));
         var result = await export.ExportAsync(query, format, ct);
         if (result.IsFailure)
         {

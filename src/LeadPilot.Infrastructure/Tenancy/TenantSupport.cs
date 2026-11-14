@@ -53,6 +53,17 @@ public sealed class TenantScopeRunner(IServiceScopeFactory scopes) : ITenantScop
         await work(sp, ct);
     }
 
+    public async Task RunForOperatorAsync(Guid tenantId, Func<IServiceProvider, CancellationToken, Task> work, CancellationToken ct = default)
+    {
+        if (tenantId == Guid.Empty) throw new TenantContextMissingException("An operator action must name a tenant.");
+        using var scope = scopes.CreateScope();
+        var sp = scope.ServiceProvider;
+        var db = sp.GetRequiredService<AppDbContext>();
+        if (!await db.Tenants.AsNoTracking().AnyAsync(t => t.Id == tenantId, ct)) throw new TenantUnavailableException($"Tenant {tenantId} does not exist.");
+        sp.GetRequiredService<ITenantContextAccessor>().SetTenant(tenantId);
+        await work(sp, ct);
+    }
+
     public async Task RunPlatformJobAsync(Func<IServiceProvider, CancellationToken, Task> work, CancellationToken ct = default)
     {
         using var scope = scopes.CreateScope();

@@ -1,0 +1,16 @@
+@model InvoiceViewModel
+@using LeadPilot.Web.Models
+@using LeadPilot.Domain.Billing
+@{ ViewData["Title"] = "Invoice " + Model.Invoice.Number; var i = Model.Invoice; }
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3"><h1 class="h3 mb-0">Invoice @i.Number <span class="badge bg-secondary fs-6">@i.Status</span></h1><a class="btn btn-outline-secondary" asp-action="Print" asp-route-id="@i.Id" target="_blank">Printable view</a></div>
+<partial name="_InvoiceBody" model="i" />
+@if (i.Status == InvoiceStatus.Issued && Model.CanManage)
+{
+    <div class="card mt-3"><div class="card-header">I have paid this invoice</div><div class="card-body">
+    <p class="small text-muted">Tell the platform which transfer paid it. This does not mark the invoice as paid: a platform operator verifies the payment (amount, currency and your transfer reference must match) and only then is your plan activated or renewed.</p>
+    <form asp-action="ReportPayment" asp-route-id="@i.Id" method="post"><div class="row g-3">
+        <div class="col-md-5"><label class="form-label" asp-for="Form.EvidenceReference">Transfer / receipt reference</label><input asp-for="Form.EvidenceReference" class="form-control" required /></div>
+        <div class="col-md-3"><label class="form-label" asp-for="Form.PaidOn">Paid on</label><input asp-for="Form.PaidOn" type="date" class="form-control" /></div>
+        <div class="col-md-4"><label class="form-label" asp-for="Form.Note">Note</label><input asp-for="Form.Note" class="form-control" /></div>
+        <div class="col-12"><button class="btn btn-primary">Report payment</button></div></div></form></div></div>
+}

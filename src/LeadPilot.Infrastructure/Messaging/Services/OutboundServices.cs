@@ -1,3 +1,5 @@
+using LeadPilot.Application.Billing;
+using LeadPilot.Domain.Billing;
 using System.Text.Json;
 using LeadPilot.Application.Abstractions;
 using LeadPilot.Application.Campaigns;
@@ -37,7 +39,7 @@ internal sealed record QueueRequest(Guid? ConversationId, Guid? ContactId, Guid?
 /// → new-contact restriction → queue limits → persist Message(Queued) + status event + audit in one transaction → schedule the send job.
 /// Marketing eligibility is checked again immediately before the actual send by <see cref="OutboundSendRunner"/>.
 /// </summary>
-public sealed class OutboundQueueService(CrmContext crm, IContactEligibilityService eligibility, ITenantSettingsService settings, IMessagingJobScheduler jobs, IRequestInfo request, IOptions<MessagingOptions> options, ILogger<OutboundQueueService> logger)
+public sealed class OutboundQueueService(IEntitlementService entitlements, CrmContext crm, IContactEligibilityService eligibility, ITenantSettingsService settings, IMessagingJobScheduler jobs, IRequestInfo request, IOptions<MessagingOptions> options, ILogger<OutboundQueueService> logger)
 {
     internal async Task<Result<Message>> QueueAsync(QueueRequest q, CancellationToken ct)
     {
@@ -113,19 +115,25 @@ public sealed class OutboundQueueService(CrmContext crm, IContactEligibilityServ
         var message = Message.Outbound(tenantId, conv.Id, account.Id, contact?.Id, purpose, text, key, request.CorrelationId ?? Guid.NewGuid().ToString("N"), q.TemplateId, crm.UserId, now);
         if (q.CampaignId is { } campaignId) message.SetCampaign(campaignId, q.CampaignRecipientId);
         if (q.AiInteractionId is { } aiInteraction) message.MarkAiGenerated(aiInteraction, q.AiEpoch);
-        db.Messages.Add(message);
-        db.MessageStatusEvents.Add(MessageStatusEvent.Create(tenantId, message.Id, MessageStatus.Queued, "queue", null, true, now, now));
-        conv.RegisterOutbound(now, text, now);
-        crm.Record("Message.Queued", "Message", message.Id, $"{purpose} message queued to {CrmContext.Mask(conv.PeerPhoneE164 ?? conv.ExternalChatId)} on '{account.DisplayName}'.");
-        try { await db.SaveChangesAsync(ct); }
-        catch (DbUpdateException ex) when (TenancyResultFlow.IsDuplicate(ex))
+        var wonByOther = false;
+        var queued = await entitlements.RunWithinLimitAsync(UsageDimension.MonthlyMessages, 1, async c2 =>
         {
-            // a concurrent request with the same idempotency key won: return its message
-            db.ChangeTracker.Clear();
-            var winner = await db.Messages.AsNoTracking().FirstOrDefaultAsync(m => m.TenantId == tenantId && m.IdempotencyKey == key, ct);
-            if (winner is not null && winner.Body == text) return Result.Success(winner);
-            throw;
-        }
+            db.Messages.Add(message);
+            db.MessageStatusEvents.Add(MessageStatusEvent.Create(tenantId, message.Id, MessageStatus.Queued, "queue", null, true, now, now));
+            conv.RegisterOutbound(now, text, now);
+            crm.Record("Message.Queued", "Message", message.Id, $"{purpose} message queued to {CrmContext.Mask(conv.PeerPhoneE164 ?? conv.ExternalChatId)} on '{account.DisplayName}'.");
+            try { await db.SaveChangesAsync(c2); return Result.Success(message); }
+            catch (DbUpdateException ex) when (TenancyResultFlow.IsDuplicate(ex))
+            {
+                // a concurrent request with the same idempotency key won: return its message
+                db.ChangeTracker.Clear();
+                var winner = await db.Messages.AsNoTracking().FirstOrDefaultAsync(m => m.TenantId == tenantId && m.IdempotencyKey == key, c2);
+                if (winner is not null && winner.Body == text) { wonByOther = true; return Result.Success(winner); }
+                throw;
+            }
+        }, ct);
+        if (queued.IsFailure) { db.ChangeTracker.Clear(); return Result.Failure<Message>(queued.Error); }
+        if (wonByOther) return Result.Success(queued.Value);
 
         try { jobs.EnqueueSend(tenantId, message.Id); }
         catch (Exception ex) { logger.LogWarning(ex, "Send job for message {MessageId} could not be scheduled; the maintenance job will pick it up", message.Id); }

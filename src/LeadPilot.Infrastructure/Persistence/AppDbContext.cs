@@ -2,6 +2,7 @@ using LeadPilot.Domain.Agents;
 using System.Reflection;
 using LeadPilot.Application.Abstractions;
 using LeadPilot.Domain.Ai;
+using LeadPilot.Domain.Billing;
 using LeadPilot.Domain.Campaigns;
 using LeadPilot.Domain.Common;
 using LeadPilot.Domain.Crm;
@@ -81,6 +82,24 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<ProcessedMessage> ProcessedMessages => Set<ProcessedMessage>();
     public DbSet<ChannelAccountNotification> ChannelAccountNotifications => Set<ChannelAccountNotification>();
+
+    // Platform billing (Phase 12)
+    public DbSet<Plan> Plans => Set<Plan>();
+    public DbSet<PlanLimit> PlanLimits => Set<PlanLimit>();
+    public DbSet<PlanFeature> PlanFeatures => Set<PlanFeature>();
+    public DbSet<PlatformSetting> PlatformSettings => Set<PlatformSetting>();
+    public DbSet<InvoiceSequence> InvoiceSequences => Set<InvoiceSequence>();
+    public DbSet<RegistrationAttempt> RegistrationAttempts => Set<RegistrationAttempt>();
+    public DbSet<TenantSubscription> TenantSubscriptions => Set<TenantSubscription>();
+    public DbSet<SubscriptionEvent> SubscriptionEvents => Set<SubscriptionEvent>();
+    public DbSet<TenantEntitlementOverride> TenantEntitlementOverrides => Set<TenantEntitlementOverride>();
+    public DbSet<UsageNotice> UsageNotices => Set<UsageNotice>();
+    public DbSet<UsageReservation> UsageReservations => Set<UsageReservation>();
+    public DbSet<Invoice> Invoices => Set<Invoice>();
+    public DbSet<InvoiceLine> InvoiceLines => Set<InvoiceLine>();
+    public DbSet<BillingPayment> BillingPayments => Set<BillingPayment>();
+    public DbSet<PaymentReport> PaymentReports => Set<PaymentReport>();
+    public DbSet<PlanChangeRequest> PlanChangeRequests => Set<PlanChangeRequest>();
 
     // Campaigns (Phase 6)
     public DbSet<Campaign> Campaigns => Set<Campaign>();
@@ -296,6 +315,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
         WorkflowModel.Configure(builder);
         ConversionModel.Configure(builder);
         AnalyticsModel.Configure(builder);
+        BillingModel.Configure(builder);
 
         // Every tenant-owned entity: mandatory FK to Tenant (restrict), indexed TenantId and the global tenant filter.
         foreach (var type in builder.Model.GetEntityTypes().Select(e => e.ClrType).Where(t => typeof(ITenantOwned).IsAssignableFrom(t)).ToList())

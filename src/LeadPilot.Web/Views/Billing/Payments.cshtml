@@ -1,0 +1,14 @@
+@model BillingPaymentsViewModel
+@using LeadPilot.Web.Models
+@{ ViewData["Title"] = "Payments"; }
+<h1 class="h3 mb-3">Payment history</h1>
+<p class="text-muted">Only payments verified by the platform appear here.</p>
+@if (Model.Payments.Count == 0) { <div class="card mb-4"><partial name="_EmptyState" model='("No verified payments", "A payment shows up once the platform has verified it.")' /></div> }
+else { <div class="card mb-4"><div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Invoice</th><th class="text-end">Amount</th><th>Method</th><th>Reference</th><th>Paid</th><th>Verified</th></tr></thead><tbody>
+@foreach (var p in Model.Payments) { <tr><td><a asp-action="Invoice" asp-route-id="@p.InvoiceId">@p.InvoiceNumber</a></td><td class="text-end">@BillingFormat.Money(p.Amount, p.Currency)</td><td>@p.Method</td><td>@p.EvidenceReference</td><td>@p.PaidAtUtc.ToString("yyyy-MM-dd")</td><td>@p.VerifiedAtUtc.ToString("yyyy-MM-dd")</td></tr> }
+</tbody></table></div></div> }
+<h2 class="h5">Plan changes</h2>
+@if (Model.Changes.Count == 0) { <p class="text-muted">None yet.</p> }
+else { <div class="card"><div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Requested</th><th>From → to</th><th>Kind</th><th>Status</th><th>Detail</th></tr></thead><tbody>
+@foreach (var c in Model.Changes) { <tr><td>@c.CreatedAtUtc.ToString("yyyy-MM-dd")</td><td>@c.FromPlanName → @c.ToPlanName</td><td>@c.Kind</td><td>@c.Status</td><td class="small">@(c.EffectiveAtUtc is not null ? "Effective " + c.EffectiveAtUtc.Value.ToString("yyyy-MM-dd") : "")@c.CloseReason@if (c.InvoiceId is { } inv) { <a asp-action="Invoice" asp-route-id="@inv"> invoice</a> }</td></tr> }
+</tbody></table></div></div> }

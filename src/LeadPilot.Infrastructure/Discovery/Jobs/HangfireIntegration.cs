@@ -92,7 +92,7 @@ public static class HangfireSetup
         if (server)
             services.AddHangfireServer(o =>
             {
-                o.Queues = [DiscoveryQueues.Discovery, Messaging.Jobs.MessagingQueues.Messaging, Campaigns.CampaignQueues.Campaigns, Ai.Jobs.AiQueues.Knowledge, Workflows.WorkflowQueues.Workflows, Conversion.ConversionQueues.Conversion, Analytics.AnalyticsQueues.Analytics, "default"];
+                o.Queues = [DiscoveryQueues.Discovery, Messaging.Jobs.MessagingQueues.Messaging, Campaigns.CampaignQueues.Campaigns, Ai.Jobs.AiQueues.Knowledge, Workflows.WorkflowQueues.Workflows, Conversion.ConversionQueues.Conversion, Analytics.AnalyticsQueues.Analytics, Billing.BillingQueues.Billing, "default"];
                 o.WorkerCount = Math.Clamp(config.GetValue("Discovery:Hangfire:Workers", 2), 1, 16);
                 o.ServerName = $"leadpilot-{Environment.MachineName}";
             });
@@ -108,5 +108,6 @@ public static class HangfireSetup
         Workflows.WorkflowSweepJob.ScheduleRecurring(recurring);
         Conversion.ConversionSweepJob.ScheduleRecurring(recurring);
         Analytics.AnalyticsJob.ScheduleRecurring(recurring);
+        Billing.BillingJob.ScheduleRecurring(recurring);
     }
 }

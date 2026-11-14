@@ -44,6 +44,11 @@ public interface ITenantScopeRunner
     Task RunAsync(Guid tenantId, Func<IServiceProvider, CancellationToken, Task> work, CancellationToken ct = default);
     /// <summary>For jobs that are explicitly cross-tenant (maintenance). Feature jobs must use <see cref="RunAsync"/>.</summary>
     Task RunPlatformJobAsync(Func<IServiceProvider, CancellationToken, Task> work, CancellationToken ct = default);
+    /// <summary>
+    /// For a platform operator acting ON a tenant (verify its payment, grant a plan, reactivate it). Unlike <see cref="RunAsync"/> it also works for a suspended tenant (that is the point: reactivation), but the
+    /// tenant must exist and the work then runs inside that tenant's scope with the usual tenant predicates and save guard. Callers must have checked a Platform.* permission.
+    /// </summary>
+    Task RunForOperatorAsync(Guid tenantId, Func<IServiceProvider, CancellationToken, Task> work, CancellationToken ct = default);
 }
 
 public sealed class TenantUnavailableException(string message) : InvalidOperationException(message);

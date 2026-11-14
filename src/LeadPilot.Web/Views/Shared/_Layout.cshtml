@@ -143,15 +143,21 @@
                 <a class="nav-link @(Nav("/Invitations") ? "active" : "")" asp-controller="Invitations" asp-action="Index">Invitations</a>
                 <a class="nav-link @(Nav("/Roles") ? "active" : "")" asp-controller="Roles" asp-action="Index">Roles &amp; permissions</a>
             }
-            @if (perms.Has(PermissionCodes.SettingsManage)) { <a class="nav-link @(Nav("/Settings") ? "active" : "")" asp-controller="Settings" asp-action="Index">Settings</a> }
+            @if (perms.Has(PermissionCodes.SettingsManage)) { <a class="nav-link @(Nav("/Onboarding") ? "active" : "")" asp-controller="Onboarding" asp-action="Index">Getting started</a><a class="nav-link @(Nav("/Settings") ? "active" : "")" asp-controller="Settings" asp-action="Index">Settings</a> }
+            @if (perms.Has(PermissionCodes.BillingView)) { <a class="nav-link @(Nav("/Billing") ? "active" : "")" asp-controller="Billing" asp-action="Index">Plan &amp; billing</a> }
             @if (perms.Has(PermissionCodes.AuditView)) { <a class="nav-link @(Nav("/Audit") ? "active" : "")" asp-controller="Audit" asp-action="Index">Audit log</a> }
         </nav>
     }
-    @if (perms.Has(PermissionCodes.TenantsManage))
+    @if (perms.Has(PermissionCodes.TenantsManage) || perms.Has(PermissionCodes.PlatformTenantsManage) || perms.Has(PermissionCodes.PlatformPlansManage) || perms.Has(PermissionCodes.PlatformBillingVerify) || perms.Has(PermissionCodes.PlatformSettingsManage) || perms.Has(PermissionCodes.PlatformAuditView))
     {
         <div class="nav-section">Platform</div>
         <nav class="nav flex-column px-2">
-            <a class="nav-link @(Nav("/Tenants") && !Nav("/Tenants/Switch") ? "active" : "")" asp-controller="Tenants" asp-action="Index">Tenants</a>
+            @if (perms.Has(PermissionCodes.TenantsManage)) { <a class="nav-link @(Nav("/Tenants") && !Nav("/Tenants/Switch") ? "active" : "")" asp-controller="Tenants" asp-action="Index">Tenants</a> }
+            @if (perms.Has(PermissionCodes.PlatformTenantsManage)) { <a class="nav-link @(Nav("/PlatformTenants") ? "active" : "")" asp-controller="PlatformTenants" asp-action="Index">Subscriptions</a> }
+            @if (perms.Has(PermissionCodes.PlatformPlansManage)) { <a class="nav-link @(Nav("/PlatformPlans") ? "active" : "")" asp-controller="PlatformPlans" asp-action="Index">Plans</a> }
+            @if (perms.Has(PermissionCodes.PlatformBillingVerify)) { <a class="nav-link @(Nav("/PlatformPayments") ? "active" : "")" asp-controller="PlatformPayments" asp-action="Index">Payment verification</a><a class="nav-link @(Nav("/PlatformPayments/Invoices") ? "active" : "")" asp-controller="PlatformPayments" asp-action="Invoices">All invoices</a> }
+            @if (perms.Has(PermissionCodes.PlatformSettingsManage)) { <a class="nav-link @(Nav("/PlatformSettings") ? "active" : "")" asp-controller="PlatformSettings" asp-action="Index">Platform settings</a> }
+            @if (perms.Has(PermissionCodes.PlatformAuditView)) { <a class="nav-link @(Nav("/PlatformAudit") ? "active" : "")" asp-controller="PlatformAudit" asp-action="Index">Platform audit</a> }
             <a class="nav-link @(Nav("/DeadLetters") ? "active" : "")" asp-controller="DeadLetters" asp-action="Index">Dead-letter queues</a>
             <a class="nav-link" href="/hangfire" target="_blank" rel="noopener">Background jobs</a>
         </nav>

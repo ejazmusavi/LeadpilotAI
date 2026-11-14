@@ -1,0 +1,25 @@
+@model PlatformSettingsViewModel
+@{ ViewData["Title"] = "Platform settings"; var s = Model.Settings; }
+<h1 class="h3 mb-3">Platform settings</h1>
+<form asp-action="Index" method="post">
+<div class="card mb-3"><div class="card-header">Sign-up</div><div class="card-body"><div class="row g-3">
+<div class="col-12"><div class="form-check form-switch"><input id="RegistrationEnabled" name="RegistrationEnabled" type="checkbox" value="true" class="form-check-input" checked="@s.RegistrationEnabled" /><label class="form-check-label" for="RegistrationEnabled">Public sign-up is open</label></div><div class="form-text">Off by default. When off, the sign-up page says registration is closed and the API refuses new registrations.</div></div>
+<div class="col-md-6"><label class="form-label" for="RegistrationPlanId">Plan new sign-ups start on (free or trial)</label><select id="RegistrationPlanId" name="RegistrationPlanId" class="form-select"><option value="">—</option>@foreach (var p in Model.Plans) { <option value="@p.Id" selected="@(s.RegistrationPlanId == p.Id)">@p.Name</option> }</select></div>
+<div class="col-md-6"><label class="form-label" for="DefaultPlanId">Default plan (tenants created by operators, existing tenants)</label><select id="DefaultPlanId" name="DefaultPlanId" class="form-select"><option value="">— none: nothing is limited —</option>@foreach (var p in Model.Plans) { <option value="@p.Id" selected="@(s.DefaultPlanId == p.Id)">@p.Name</option> }</select></div>
+<div class="col-md-4"><label class="form-label" for="MaxRegistrationsPerIpPerHour">Max attempts per IP per hour</label><input id="MaxRegistrationsPerIpPerHour" name="MaxRegistrationsPerIpPerHour" type="number" min="1" class="form-control" value="@s.MaxRegistrationsPerIpPerHour" /></div>
+<div class="col-md-4"><label class="form-label" for="MaxRegistrationsPerDomainPerDay">Max sign-ups per e-mail domain per day</label><input id="MaxRegistrationsPerDomainPerDay" name="MaxRegistrationsPerDomainPerDay" type="number" min="1" class="form-control" value="@s.MaxRegistrationsPerDomainPerDay" /></div>
+<div class="col-md-4 pt-4"><div class="form-check"><input id="CaptchaRequired" name="CaptchaRequired" type="checkbox" value="true" class="form-check-input" checked="@s.CaptchaRequired" /><label class="form-check-label" for="CaptchaRequired">Require a CAPTCHA (needs a CAPTCHA provider installed)</label></div></div>
+<div class="col-12"><label class="form-label" for="ExtraBlockedDomains">Extra blocked e-mail domains (comma or line separated)</label><textarea id="ExtraBlockedDomains" name="ExtraBlockedDomains" class="form-control" rows="2">@s.ExtraBlockedDomains</textarea></div>
+</div></div></div>
+<div class="card mb-3"><div class="card-header">Billing</div><div class="card-body"><div class="row g-3">
+<div class="col-md-3"><label class="form-label" for="GraceDays">Grace period (days)</label><input id="GraceDays" name="GraceDays" type="number" min="0" class="form-control" value="@s.GraceDays" /><div class="form-text">Access continues this long after a period ends unpaid; then the tenant is suspended.</div></div>
+<div class="col-md-3"><label class="form-label" for="RenewalLeadDays">Renewal invoice lead (days)</label><input id="RenewalLeadDays" name="RenewalLeadDays" type="number" min="1" class="form-control" value="@s.RenewalLeadDays" /></div>
+<div class="col-md-3"><label class="form-label" for="InvoiceDueDays">Invoice due after (days)</label><input id="InvoiceDueDays" name="InvoiceDueDays" type="number" min="0" class="form-control" value="@s.InvoiceDueDays" /></div>
+<div class="col-md-3"><label class="form-label" for="InvoicePrefix">Invoice number prefix</label><input id="InvoicePrefix" name="InvoicePrefix" class="form-control" value="@s.InvoicePrefix" /></div>
+<div class="col-md-4"><label class="form-label" for="TaxName">Tax name (e.g. VAT)</label><input id="TaxName" name="TaxName" class="form-control" value="@s.TaxName" /></div>
+<div class="col-md-4"><label class="form-label" for="TaxRatePercent">Tax rate (%)</label><input id="TaxRatePercent" name="TaxRatePercent" type="number" step="0.01" min="0" class="form-control" value="@s.TaxRatePercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)" /></div>
+<div class="col-md-6"><label class="form-label" for="IssuerText">Invoice issuer (name, address, tax id)</label><textarea id="IssuerText" name="IssuerText" class="form-control" rows="3">@s.IssuerText</textarea></div>
+<div class="col-md-6"><label class="form-label" for="PaymentInstructions">Payment instructions (bank details)</label><textarea id="PaymentInstructions" name="PaymentInstructions" class="form-control" rows="3">@s.PaymentInstructions</textarea></div>
+</div></div></div>
+<button class="btn btn-primary">Save settings</button>
+</form>

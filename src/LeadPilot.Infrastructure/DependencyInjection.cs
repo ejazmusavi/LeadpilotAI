@@ -1,3 +1,4 @@
+using LeadPilot.Infrastructure.Billing;
 using LeadPilot.Application.Abstractions;
 using LeadPilot.Application.Contracts;
 using LeadPilot.Infrastructure.Persistence;
@@ -96,6 +97,7 @@ public static class DependencyInjection
         services.AddWorkflows(config);
         services.AddConversion(config);
         services.AddAnalytics(config);
+        services.AddBilling();
         return services;
     }
 

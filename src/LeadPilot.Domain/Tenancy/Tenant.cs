@@ -5,6 +5,9 @@ namespace LeadPilot.Domain.Tenancy;
 
 public enum TenantStatus { Active = 1, Suspended = 2 }
 
+/// <summary>Why a tenant is suspended. Only a NonPayment suspension is lifted automatically by a verified payment; Manual and Abuse need an operator.</summary>
+public enum SuspensionKind { Manual = 1, NonPayment = 2, Abuse = 3 }
+
 /// <summary>A customer workspace. Global entity (no TenantId): it *is* the tenant.</summary>
 public class Tenant : AuditableEntity
 {
@@ -25,6 +28,12 @@ public class Tenant : AuditableEntity
     public string Locale { get; private set; } = "en";
     public DateTime? SuspendedAtUtc { get; private set; }
     public string? SuspensionReason { get; private set; }
+    public SuspensionKind? SuspensionKind { get; private set; }
+    /// <summary>True when the workspace was created through public sign-up (its owner must verify the e-mail before sensitive features unlock).</summary>
+    public bool IsSelfRegistered { get; private set; }
+    public DateTime? OwnerEmailVerifiedAtUtc { get; private set; }
+    /// <summary>Sensitive features (sending, AI, discovery) are locked for a self-registered tenant until its owner verified the e-mail address.</summary>
+    public bool SensitiveFeaturesLocked => IsSelfRegistered && OwnerEmailVerifiedAtUtc is null;
 
     public bool IsActive => Status == TenantStatus.Active;
 
@@ -61,11 +70,15 @@ public class Tenant : AuditableEntity
         Slug = s;
     }
 
-    public void Suspend(string? reason, DateTime nowUtc)
+    public void MarkSelfRegistered() => IsSelfRegistered = true;
+    public void VerifyOwnerEmail(DateTime nowUtc) { if (OwnerEmailVerifiedAtUtc is null) { OwnerEmailVerifiedAtUtc = nowUtc; UpdatedAtUtc = nowUtc; } }
+
+    public void Suspend(string? reason, DateTime nowUtc, SuspensionKind kind = Tenancy.SuspensionKind.Manual)
     {
         if (IsPlatform) throw new DomainException("The platform tenant cannot be suspended.");
         if (Status == TenantStatus.Suspended) throw new DomainException("The tenant is already suspended.");
         Status = TenantStatus.Suspended;
+        SuspensionKind = kind;
         SuspendedAtUtc = nowUtc;
         SuspensionReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim()[..Math.Min(reason.Trim().Length, 500)];
         UpdatedAtUtc = nowUtc;
@@ -77,6 +90,7 @@ public class Tenant : AuditableEntity
         Status = TenantStatus.Active;
         SuspendedAtUtc = null;
         SuspensionReason = null;
+        SuspensionKind = null;
         UpdatedAtUtc = nowUtc;
     }
 

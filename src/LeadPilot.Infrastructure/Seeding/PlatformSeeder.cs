@@ -45,6 +45,7 @@ public static class PlatformSeeder
 
         await EnsureCrmDefaultsAsync(db, now, ct);
         await EnsurePlatformOwnerAsync(db, users, config, platform, now, logger, ct);
+        await Billing.BillingSeed.EnsureAsync(db, now, logger, ct);
     }
 
     /// <summary>Gives every customer tenant that predates the CRM (or lost it) its default pipeline, lead statuses and scoring rules. Idempotent.</summary>

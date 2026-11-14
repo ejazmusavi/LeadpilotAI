@@ -12,6 +12,8 @@ public interface ITenantAdminService
     Task<Result<CreateTenantResult>> CreateAsync(CreateTenantRequest request, CancellationToken ct = default);
     Task<Result<TenantDto>> UpdateAsync(Guid id, UpdateTenantProfileRequest request, CancellationToken ct = default);
     Task<Result<TenantDto>> SuspendAsync(Guid id, string? reason, CancellationToken ct = default);
+    /// <summary>The ONE suspension path: manual, abuse and non-payment suspensions all end here (blocks sign-in, API, sending and jobs through the Phase 2 tenant status).</summary>
+    Task<Result<TenantDto>> SuspendAsync(Guid id, string? reason, SuspensionKind kind, CancellationToken ct = default);
     Task<Result<TenantDto>> ActivateAsync(Guid id, CancellationToken ct = default);
 }
 

@@ -301,6 +301,7 @@ public class MessageProcessorTests
             await work(scope.ServiceProvider, ct);
         }
         public Task RunPlatformJobAsync(Func<IServiceProvider, CancellationToken, Task> work, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task RunForOperatorAsync(Guid tenantId, Func<IServiceProvider, CancellationToken, Task> work, CancellationToken ct = default) => throw new NotSupportedException();
     }
 
     private static readonly ConsumerQueue Queue = new("q.inbound", "messaging.inbound", [MessagingEventTypes.MessageReceived]);

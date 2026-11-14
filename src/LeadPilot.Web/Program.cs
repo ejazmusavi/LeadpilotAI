@@ -30,7 +30,7 @@ builder.Services.Configure<TenantResolutionOptions>(o =>
 {
     o.NoTenantRedirectPath = "/Account/NoWorkspace";
     o.SignOutOnAccessLoss = true;
-    o.ExemptPathPrefixes = ["/Account", "/Tenants/Switch", "/Invitations/Accept", "/Home/Error", "/Home/StatusPage", "/health", "/css", "/js", "/lib", "/favicon"];
+    o.ExemptPathPrefixes = ["/Account", "/Register", "/Tenants/Switch", "/Invitations/Accept", "/Home/Error", "/Home/StatusPage", "/health", "/css", "/js", "/lib", "/favicon"];
 });
 
 builder.Services.Configure<DataProtectionTokenProviderOptions>(o => o.TokenLifespan = TimeSpan.FromHours(2));

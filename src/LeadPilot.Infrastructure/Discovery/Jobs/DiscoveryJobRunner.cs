@@ -1,3 +1,5 @@
+using LeadPilot.Application.Billing;
+using LeadPilot.Domain.Billing;
 using System.Text.Json;
 using LeadPilot.Application.Abstractions;
 using LeadPilot.Application.Contracts;
@@ -20,7 +22,7 @@ namespace LeadPilot.Infrastructure.Discovery.Jobs;
 /// calculation, idempotent storage (unique per tenant + connector + external id) and a resume checkpoint after every page.
 /// </summary>
 public sealed class DiscoveryJobRunner(
-    CrmContext crm, IDiscoveryConnectorRegistry registry, DiscoveryUsage usage, DuplicateDetector duplicates, IWebsiteEnricher enricher, ISecretProtector secrets,
+    IEntitlementService entitlements, CrmContext crm, IDiscoveryConnectorRegistry registry, DiscoveryUsage usage, DuplicateDetector duplicates, IWebsiteEnricher enricher, ISecretProtector secrets,
     IOptions<DiscoveryOptions> options, ILogger<DiscoveryJobRunner> logger) : IDiscoveryJobRunner
 {
     private const int MaxInfrastructureAttempts = 3;
@@ -123,6 +125,9 @@ public sealed class DiscoveryJobRunner(
                 if (job.ResultsFound >= job.MaxResults) break;
                 var decision = UsageLimitPolicy.Check(callsUsed, costUsed, settings.CallLimit, settings.Budget, 1, settings.CostPerCall);
                 if (!decision.Allowed) throw new UsageLimitReached(decision.Reason!);
+                var hold = await entitlements.HoldAsync(UsageDimension.MonthlyDiscoveryCalls, 1, ct);   // plan limit: concurrent searches see each other's in-flight call
+                if (hold.IsFailure) throw new UsageLimitReached(hold.Error.Message);
+                await using var heldCall = hold.Value;
                 await RateLimitAsync(o.PageDelayMs, ct);
 
                 var page = await connector.SearchAsync(new ConnectorRequest(queries[qi], apiKey, token, Math.Clamp(o.PageSize, 1, 20), seed, settings.CostPerCall, crm.Now), ct);

@@ -1,0 +1,37 @@
+@model PackGalleryViewModel
+@using LeadPilot.Domain.Config
+@{
+    ViewData["Title"] = "Industry templates";
+    var labels = new Dictionary<string, string> { ["categories"] = "categories", ["pipelines"] = "pipelines", ["customFields"] = "custom fields", ["scoringRules"] = "scoring rules", ["messageTemplates"] = "message templates", ["agents"] = "agent drafts", ["catalog"] = "catalog items", ["knowledgeBase"] = "knowledge sources", ["workflows"] = "workflow drafts", ["discovery"] = "discovery settings" };
+}
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
+    <div><h1 class="h3 mb-1">Industry templates</h1>
+        <p class="text-muted mb-0">A template sets up categories, a pipeline, custom fields, scoring rules, message templates, a draft sales assistant and more for your kind of business. Nothing is switched on, nothing you edited is overwritten silently, and you see exactly what will change before anything is written.</p></div>
+    <div class="d-flex gap-2"><a asp-action="History" class="btn btn-outline-secondary">History</a>
+        @if (Model.CanManage || Model.CanExport) { <a asp-action="Manage" class="btn btn-outline-secondary">Private packs &amp; export</a> }</div>
+</div>
+@if (Model.Packs.Count == 0)
+{
+    <partial name="_EmptyState" model='("No templates available", "Ask a platform administrator to publish one, or upload your own private pack.")' />
+}
+else
+{
+    <div class="row g-3">
+    @foreach (var p in Model.Packs)
+    {
+        <div class="col-12 col-md-6 col-xl-4"><div class="card h-100"><div class="card-body d-flex flex-column">
+            <div class="d-flex justify-content-between align-items-start gap-2"><h2 class="h5 mb-1">@p.Name</h2>
+                <span class="badge text-bg-light border">@(p.Scope == PackScope.Tenant ? "Private" : p.Scope == PackScope.Platform ? "Platform" : "Built in")</span></div>
+            @if (p.IsSample) { <div><span class="badge text-bg-warning">@(p.Notice ?? "SAMPLE – review before use")</span></div> }
+            <p class="text-muted small mt-2">@p.Description</p>
+            <ul class="small mb-3">@foreach (var s in p.Sections.Where(x => x.Value > 0)) { <li>@s.Value @labels.GetValueOrDefault(s.Key, s.Key)</li> }</ul>
+            <div class="mt-auto">
+                @if (p.AppliedVersion is { } av)
+                {
+                    <div class="small mb-2"><span class="badge text-bg-success">Applied v@av</span> @if (p.UpgradeAvailable) { <span class="badge text-bg-info">v@p.Version available</span> }<div class="text-muted">@p.AppliedAtUtc?.ToString("yyyy-MM-dd") UTC</div></div>
+                }
+                <a asp-action="Import" asp-route-id="@p.Id" class="btn btn-primary">@(p.AppliedVersion is null ? "Preview and import" : p.UpgradeAvailable ? "Preview upgrade" : "Preview again")</a>
+            </div></div></div></div>
+    }
+    </div>
+}

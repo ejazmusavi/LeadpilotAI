@@ -13,7 +13,7 @@ namespace LeadPilot.Web.Controllers;
 
 [Authorize(Policy = PermissionCodes.LeadsView)]
 public class LeadsController(ILeadService leads, IContactService contacts, IConsentService consent, INoteService notes, ITagService tags, IPipelineService pipelines,
-    ILeadExportService export, IPermissionEvaluator permissions) : AppController
+    ILeadExportService export, IPermissionEvaluator permissions, LeadPilot.Application.Config.ICustomFieldService customFields) : AppController
 {
     private async Task<LeadAbilities> AbilitiesAsync(CancellationToken ct)
     {
@@ -27,7 +27,8 @@ public class LeadsController(ILeadService leads, IContactService contacts, ICons
     public async Task<IActionResult> Index([FromQuery] LeadQuery query, CancellationToken ct)
     {
         Crumbs(("Leads", null));
-        return View(new LeadListViewModel { Query = query, Result = await leads.ListAsync(query, ct), Lookups = await leads.LookupsAsync(ct), Can = await AbilitiesAsync(ct) });
+        var filterable = (await customFields.ListAsync(LeadPilot.Domain.Config.CustomEntityType.Lead, false, ct)).Where(f => f.IsFilterable).ToList();
+        return View(new LeadListViewModel { Query = query, Result = await leads.ListAsync(query, ct), Lookups = await leads.LookupsAsync(ct), Can = await AbilitiesAsync(ct), FilterableFields = filterable });
     }
 
     [HttpGet]
@@ -52,6 +53,9 @@ public class LeadsController(ILeadService leads, IContactService contacts, ICons
     {
         Crumbs(("Leads", Url.Action(nameof(Index))), ("New lead", null));
         if (!ModelState.IsValid) return View("Form", await NewForm(model, ct));
+        var customValues = CustomFieldForm.ToValues(model.Cf);
+        var customProblems = await customFields.ValidateAsync(LeadPilot.Domain.Config.CustomEntityType.Lead, customValues, ct);
+        if (customProblems.Count > 0) { foreach (var p in customProblems) ModelState.AddModelError(string.Empty, p); return View("Form", await NewForm(model, ct)); }
         var contactInput = string.IsNullOrWhiteSpace(model.ContactName) && string.IsNullOrWhiteSpace(model.ContactPhone) && string.IsNullOrWhiteSpace(model.ContactEmail)
             ? null : new[] { new ContactInput(model.ContactName, model.ContactRole, model.ContactPhone, model.ContactEmail, DataOrigin.Provided, true) };
         var result = await leads.CreateAsync(new CreateLeadRequest(model.Name, model.CategoryId, model.Country, model.Province, model.City, model.District, model.Area, model.Address, model.Website,
@@ -63,7 +67,9 @@ public class LeadsController(ILeadService leads, IContactService contacts, ICons
             model.ShowDuplicateOverride = result.Error.Code == "duplicate";
             return View("Form", await NewForm(model, ct));
         }
-        Success("Lead created.");
+        var saved = await customFields.SetValuesAsync(LeadPilot.Domain.Config.CustomEntityType.Lead, result.Value.Id, customValues, ct);
+        if (saved.IsFailure) Failure("The lead was created, but its custom fields were not saved: " + saved.Error.Message);
+        else Success("Lead created.");
         return RedirectToAction(nameof(Details), new { id = result.Value.Id });
     }
 
@@ -78,7 +84,7 @@ public class LeadsController(ILeadService leads, IContactService contacts, ICons
         {
             Id = id, Name = l.Name, CategoryId = l.CategoryId, Country = l.Country, Province = l.Province, City = l.City, District = l.District, Area = l.Area, Address = l.Address,
             Website = l.Website, Confidence = l.Confidence, StatusId = l.StatusId, Version = l.Version
-        }, ct));
+        }, ct, id));
     }
 
     [HttpPost, Authorize(Policy = PermissionCodes.LeadsUpdate)]
@@ -86,21 +92,29 @@ public class LeadsController(ILeadService leads, IContactService contacts, ICons
     {
         model.Id = id;
         Crumbs(("Leads", Url.Action(nameof(Index))), (model.Name, Url.Action(nameof(Details), new { id })), ("Edit", null));
-        if (!ModelState.IsValid) return View("Form", await NewForm(model, ct));
+        if (!ModelState.IsValid) return View("Form", await NewForm(model, ct, id));
+        var customValues = CustomFieldForm.ToValues(model.Cf);
+        var customProblems = await customFields.ValidateAsync(LeadPilot.Domain.Config.CustomEntityType.Lead, customValues, ct);
+        if (customProblems.Count > 0) { foreach (var p in customProblems) ModelState.AddModelError(string.Empty, p); return View("Form", await NewForm(model, ct, id)); }
         var result = await leads.UpdateAsync(id, new UpdateLeadRequest(model.Name, model.CategoryId, model.Country, model.Province, model.City, model.District, model.Area, model.Address, model.Website,
             model.Confidence, model.StatusId, model.Version), ct);
         if (result.IsFailure)
         {
             if (Reject(result) is { } r) return r;
             AddError(result);
-            return View("Form", await NewForm(model, ct));
+            return View("Form", await NewForm(model, ct, id));
         }
+        var savedCustom = await customFields.SetValuesAsync(LeadPilot.Domain.Config.CustomEntityType.Lead, id, customValues, ct);
+        if (savedCustom.IsFailure) Failure("The lead was updated, but its custom fields were not saved: " + savedCustom.Error.Message);
         Success("Lead updated.");
         return RedirectToAction(nameof(Details), new { id });
     }
 
-    private async Task<LeadFormModel> NewForm(LeadFormModel model, CancellationToken ct)
+    private async Task<LeadFormModel> NewForm(LeadFormModel model, CancellationToken ct, Guid? leadId = null)
     {
+        // the inputs show what was just typed when the form is shown again after a problem, otherwise what the lead holds now
+        var current = leadId is { } lid ? (await customFields.GetValuesAsync(LeadPilot.Domain.Config.CustomEntityType.Lead, lid, ct)) is { IsSuccess: true } cv ? cv.Value : [] : (await customFields.ListAsync(LeadPilot.Domain.Config.CustomEntityType.Lead, false, ct)).Select(f => new LeadPilot.Application.Config.CustomFieldValueDto(f, null, null)).ToList();
+        model.CustomFields = current.Select(v => model.Cf.TryGetValue(v.Field.Key, out var posted) ? v with { Raw = string.Join(", ", posted) } : v).ToList();
         model.Lookups = await leads.LookupsAsync(ct);
         model.CanAssign = (await AbilitiesAsync(ct)).Assign;
         return model;
@@ -114,6 +128,7 @@ public class LeadsController(ILeadService leads, IContactService contacts, ICons
         if (Reject(lead) is { } r) return r;
         tab = tab?.ToLowerInvariant() is "contacts" or "activity" or "notes" or "consent" ? tab.ToLowerInvariant() : "overview";
         var vm = new LeadDetailsViewModel { Lead = lead.Value, Tab = tab, Can = await AbilitiesAsync(ct), Lookups = await leads.LookupsAsync(ct) };
+        vm.CustomFields = (await customFields.GetValuesAsync(LeadPilot.Domain.Config.CustomEntityType.Lead, id, ct)) is { IsSuccess: true } cvs ? cvs.Value : [];
         var pipeline = await pipelines.GetAsync(lead.Value.PipelineId, ct);
         vm.Stages = pipeline.IsSuccess ? pipeline.Value.Stages : [];
         var contactList = await contacts.ListAsync(id, ct);
@@ -127,6 +142,15 @@ public class LeadsController(ILeadService leads, IContactService contacts, ICons
         }
         Crumbs(("Leads", Url.Action(nameof(Index))), (lead.Value.Name, null));
         return View(vm);
+    }
+
+    [HttpPost, Authorize(Policy = PermissionCodes.LeadsUpdate)]
+    public async Task<IActionResult> SaveCustomFields(Guid id, [Bind(Prefix = "Cf")] Dictionary<string, string[]> cf, CancellationToken ct)
+    {
+        var r = await customFields.SetValuesAsync(LeadPilot.Domain.Config.CustomEntityType.Lead, id, CustomFieldForm.ToValues(cf), ct);
+        if (Reject(r) is { } rej) return rej;
+        if (r.IsSuccess) Success("Custom fields saved."); else Failure(r.Error.Message);
+        return BackTo(id, "overview");
     }
 
     private IActionResult BackTo(Guid id, string tab) => RedirectToAction(nameof(Details), new { id, tab });

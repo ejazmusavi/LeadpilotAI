@@ -263,7 +263,8 @@ public class CategoriesController(ILeadCatalogService catalog) : AppController
         return RedirectToAction(nameof(Index));
     }
 
-    [HttpPost] public async Task<IActionResult> CreateCategory(string? name, CancellationToken ct) => Outcome(await catalog.CreateCategoryAsync(new SaveCategoryRequest(name ?? ""), ct), "Category created.");
+    [HttpPost] public async Task<IActionResult> CreateCategory(string? name, Guid? parentId, CancellationToken ct) => Outcome(await catalog.CreateCategoryAsync(new SaveCategoryRequest(name ?? "", parentId), ct), "Category created.");
+    [HttpPost] public async Task<IActionResult> MoveCategory(Guid id, Guid? parentId, CancellationToken ct) => Outcome(await catalog.MoveCategoryAsync(id, parentId, ct), "Category moved.");
     [HttpPost] public async Task<IActionResult> RenameCategory(Guid id, string? name, CancellationToken ct) => Outcome(await catalog.RenameCategoryAsync(id, new SaveCategoryRequest(name ?? ""), ct), "Category renamed.");
     [HttpPost] public async Task<IActionResult> SetCategoryActive(Guid id, bool active, CancellationToken ct) => Outcome(await catalog.SetCategoryActiveAsync(id, active, ct), active ? "Category activated." : "Category deactivated. Existing leads keep it; new leads cannot choose it.");
     [HttpPost] public async Task<IActionResult> CreateStatus(string? name, bool isClosed, CancellationToken ct) => Outcome(await catalog.CreateStatusAsync(new SaveStatusRequest(name ?? "", isClosed), ct), "Status created.");

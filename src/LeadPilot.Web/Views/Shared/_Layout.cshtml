@@ -121,10 +121,12 @@
             <a class="nav-link @(Nav("/Suppression") ? "active" : "")" asp-controller="Suppression" asp-action="Index">Suppression list</a>
         </nav>
     }
-    @if (perms.Has(PermissionCodes.PipelinesManage) || perms.Has(PermissionCodes.ScoringManage))
+    @if (perms.Has(PermissionCodes.PipelinesManage) || perms.Has(PermissionCodes.ScoringManage) || perms.Has(PermissionCodes.CustomFieldsManage) || perms.Has(PermissionCodes.ConfigPacksImport))
     {
         <div class="nav-section">CRM setup</div>
         <nav class="nav flex-column px-2">
+            @if (perms.Has(PermissionCodes.ConfigPacksImport)) { <a class="nav-link @(Nav("/Packs") ? "active" : "")" asp-controller="Packs" asp-action="Index">Industry templates</a> }
+            @if (perms.Has(PermissionCodes.CustomFieldsManage)) { <a class="nav-link @(Nav("/CustomFields") ? "active" : "")" asp-controller="CustomFields" asp-action="Index">Custom fields</a> }
             @if (perms.Has(PermissionCodes.PipelinesManage))
             {
                 <a class="nav-link @(Nav("/Pipelines") ? "active" : "")" asp-controller="Pipelines" asp-action="Index">Pipelines</a>
@@ -148,7 +150,7 @@
             @if (perms.Has(PermissionCodes.AuditView)) { <a class="nav-link @(Nav("/Audit") ? "active" : "")" asp-controller="Audit" asp-action="Index">Audit log</a> }
         </nav>
     }
-    @if (perms.Has(PermissionCodes.TenantsManage) || perms.Has(PermissionCodes.PlatformTenantsManage) || perms.Has(PermissionCodes.PlatformPlansManage) || perms.Has(PermissionCodes.PlatformBillingVerify) || perms.Has(PermissionCodes.PlatformSettingsManage) || perms.Has(PermissionCodes.PlatformAuditView))
+    @if (perms.Has(PermissionCodes.PlatformPacksManage) || perms.Has(PermissionCodes.TenantsManage) || perms.Has(PermissionCodes.PlatformTenantsManage) || perms.Has(PermissionCodes.PlatformPlansManage) || perms.Has(PermissionCodes.PlatformBillingVerify) || perms.Has(PermissionCodes.PlatformSettingsManage) || perms.Has(PermissionCodes.PlatformAuditView))
     {
         <div class="nav-section">Platform</div>
         <nav class="nav flex-column px-2">
@@ -157,6 +159,7 @@
             @if (perms.Has(PermissionCodes.PlatformPlansManage)) { <a class="nav-link @(Nav("/PlatformPlans") ? "active" : "")" asp-controller="PlatformPlans" asp-action="Index">Plans</a> }
             @if (perms.Has(PermissionCodes.PlatformBillingVerify)) { <a class="nav-link @(Nav("/PlatformPayments") ? "active" : "")" asp-controller="PlatformPayments" asp-action="Index">Payment verification</a><a class="nav-link @(Nav("/PlatformPayments/Invoices") ? "active" : "")" asp-controller="PlatformPayments" asp-action="Invoices">All invoices</a> }
             @if (perms.Has(PermissionCodes.PlatformSettingsManage)) { <a class="nav-link @(Nav("/PlatformSettings") ? "active" : "")" asp-controller="PlatformSettings" asp-action="Index">Platform settings</a> }
+            @if (perms.Has(PermissionCodes.PlatformPacksManage)) { <a class="nav-link @(Nav("/PlatformPacks") ? "active" : "")" asp-controller="PlatformPacks" asp-action="Index">Industry packs</a> }
             @if (perms.Has(PermissionCodes.PlatformAuditView)) { <a class="nav-link @(Nav("/PlatformAudit") ? "active" : "")" asp-controller="PlatformAudit" asp-action="Index">Platform audit</a> }
             <a class="nav-link @(Nav("/DeadLetters") ? "active" : "")" asp-controller="DeadLetters" asp-action="Index">Dead-letter queues</a>
             <a class="nav-link" href="/hangfire" target="_blank" rel="noopener">Background jobs</a>

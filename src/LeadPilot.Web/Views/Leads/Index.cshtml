@@ -54,6 +54,7 @@
         <div class="col-12 col-md-6 col-xl-3"><label class="form-label" for="city">City</label><input id="city" name="city" value="@q.City" class="form-control" /></div>
         <div class="col-6 col-md-3 col-xl-2"><label class="form-label" for="minScore">Min score</label><input id="minScore" name="minScore" type="number" min="0" max="100" value="@q.MinScore" class="form-control" /></div>
         <div class="col-6 col-md-3 col-xl-2"><label class="form-label" for="maxScore">Max score</label><input id="maxScore" name="maxScore" type="number" min="0" max="100" value="@q.MaxScore" class="form-control" /></div>
+        <partial name="_CustomFieldFilters" model="(Model.FilterableFields, q.CustomFilters)" />
         <div class="col-12 col-md-6 col-xl-2"><label class="form-label" for="archived">Show</label>
             <select id="archived" name="archived" class="form-select"><option value="Active" selected="@(q.Archived == ArchivedFilter.Active)">Active leads</option><option value="Archived" selected="@(q.Archived == ArchivedFilter.Archived)">Archived</option><option value="All" selected="@(q.Archived == ArchivedFilter.All)">All</option></select></div>
         <div class="col-12 col-md-6 col-xl-2 d-flex gap-2"><button type="submit" class="btn btn-outline-primary">Apply</button>@if (hasFilter) { <a asp-action="Index" class="btn btn-link">Clear</a> }</div>

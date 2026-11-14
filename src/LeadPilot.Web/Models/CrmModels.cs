@@ -15,6 +15,7 @@ public class LeadListViewModel
 {
     public required LeadQuery Query { get; set; }
     public required PagedResult<LeadListItemDto> Result { get; set; }
+    public IReadOnlyList<LeadPilot.Application.Config.CustomFieldDto> FilterableFields { get; set; } = [];
     public required CrmLookupsDto Lookups { get; set; }
     public LeadAbilities Can { get; set; } = LeadAbilities.None;
     public IDictionary<string, string?> QueryValues => LeadFilterQuery.ToValues(Query);
@@ -66,11 +67,15 @@ public class LeadFormModel
     public bool ShowDuplicateOverride { get; set; }
     public CrmLookupsDto Lookups { get; set; } = new([], [], null, [], []);
     public bool CanAssign { get; set; }
+    /// <summary>Custom field inputs, posted as Cf[key] (several values for multi-select).</summary>
+    public Dictionary<string, string[]> Cf { get; set; } = new();
+    public IReadOnlyList<LeadPilot.Application.Config.CustomFieldValueDto> CustomFields { get; set; } = [];
 }
 
 public class LeadDetailsViewModel
 {
     public required LeadDto Lead { get; set; }
+    public IReadOnlyList<LeadPilot.Application.Config.CustomFieldValueDto> CustomFields { get; set; } = [];
     public string Tab { get; set; } = "overview";
     public LeadAbilities Can { get; set; } = LeadAbilities.None;
     public required CrmLookupsDto Lookups { get; set; }
@@ -210,4 +215,11 @@ public class CategoriesViewModel
 {
     public required IReadOnlyList<CategoryDto> Categories { get; set; }
     public required IReadOnlyList<StatusDto> Statuses { get; set; }
+}
+
+public static class CustomFieldForm
+{
+    /// <summary>Posted inputs → values for the service: one value, or a comma-separated list for multi-select; blank = no value.</summary>
+    public static Dictionary<string, string?> ToValues(Dictionary<string, string[]>? posted) =>
+        (posted ?? []).ToDictionary(kv => kv.Key, kv => (string?)(kv.Value is { Length: > 0 } v ? string.Join(", ", v.Where(x => !string.IsNullOrWhiteSpace(x))) : null));
 }

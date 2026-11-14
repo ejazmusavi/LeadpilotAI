@@ -50,6 +50,8 @@ public interface ICustomFieldService
     /// <summary>Key, record type and field type never change; everything else does.</summary>
     Task<Result<CustomFieldDto>> UpdateAsync(Guid id, SaveCustomFieldRequest request, CancellationToken ct = default);
     Task<Result<CustomFieldDto>> SetActiveAsync(Guid id, bool active, CancellationToken ct = default);
+    /// <summary>Checks values without storing them (for forms that validate before creating the record). Fields not mentioned count as empty, so required fields must be given.</summary>
+    Task<IReadOnlyList<string>> ValidateAsync(CustomEntityType entityType, IReadOnlyDictionary<string, string?> values, CancellationToken ct = default);
     Task<Result<IReadOnlyList<CustomFieldValueDto>>> GetValuesAsync(CustomEntityType entityType, Guid entityId, CancellationToken ct = default);
     /// <summary>Validates every given key against its field (type, options, range, pattern, required) and stores them all or none. A null value clears the field. Fields not mentioned are left alone.</summary>
     Task<Result<IReadOnlyList<CustomFieldValueDto>>> SetValuesAsync(CustomEntityType entityType, Guid entityId, IReadOnlyDictionary<string, string?> values, CancellationToken ct = default);

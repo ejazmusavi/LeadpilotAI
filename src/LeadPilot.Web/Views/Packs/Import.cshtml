@@ -1,0 +1,95 @@
+@model PackImportViewModel
+@using LeadPilot.Application.Config
+@{
+    ViewData["Title"] = "Import " + Model.Pack.Name;
+    var plan = Model.Plan; var applied = Model.Applied;
+    var labels = new Dictionary<string, string> { ["categories"] = "Categories", ["pipelines"] = "Pipelines", ["customFields"] = "Custom fields", ["scoringRules"] = "Scoring rules", ["messageTemplates"] = "Message templates", ["agents"] = "Agent drafts", ["catalog"] = "Catalog", ["knowledgeBase"] = "Knowledge sources", ["workflows"] = "Workflow drafts", ["discovery"] = "Discovery settings" };
+    var types = new Dictionary<string, string> { ["category"] = "Category", ["pipeline"] = "Pipeline", ["stage"] = "Stage", ["customField"] = "Custom field", ["scoringRule"] = "Scoring rule", ["messageTemplate"] = "Message template", ["agent"] = "Agent", ["question"] = "Question", ["product"] = "Catalog item", ["plan"] = "Price plan", ["knowledgeSource"] = "Knowledge source", ["discoveryCategory"] = "Search setting", ["discoveryLocation"] = "Location", ["workflow"] = "Workflow" };
+    string Badge(PackOutcome o) => o switch { PackOutcome.Create or PackOutcome.Recreate => "text-bg-success", PackOutcome.Update or PackOutcome.Overwrite => "text-bg-primary", PackOutcome.Blocked => "text-bg-danger", PackOutcome.KeepYours or PackOutcome.LeaveDeleted => "text-bg-warning", _ => "text-bg-secondary" };
+    string Text(PackOutcome o) => o switch { PackOutcome.Create => applied is null ? "Will create" : "Created", PackOutcome.Update => applied is null ? "Will update" : "Updated", PackOutcome.Unchanged => "Already up to date", PackOutcome.Link => "Already exists (linked)", PackOutcome.KeepYours => "Keeps your version", PackOutcome.Overwrite => applied is null ? "Will overwrite yours" : "Overwrote yours", PackOutcome.LeaveDeleted => "Stays deleted", PackOutcome.Recreate => applied is null ? "Will restore" : "Restored", _ => "Cannot apply" };
+}
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
+    <div><h1 class="h3 mb-1">@Model.Pack.Name <small class="text-muted">v@Model.Pack.Version</small></h1>
+        @if (Model.Pack.IsSample) { <span class="badge text-bg-warning">@(Model.Pack.Notice ?? "SAMPLE – review before use")</span> }
+        <p class="text-muted mt-2 mb-0">@Model.Pack.Description</p></div>
+    <a asp-action="Index" class="btn btn-outline-secondary">Back to templates</a>
+</div>
+
+@if (applied is not null)
+{
+    <div class="alert alert-success"><strong>Applied.</strong> <a asp-controller="Packs" asp-action="History">See the history</a>. Review the agents, workflows and catalog it created: they are drafts, nothing is switched on, and products and prices start unconfirmed.</div>
+}
+
+<form method="post" asp-action="Preview" asp-route-id="@Model.Pack.Id" class="card card-body mb-3" data-loading-form>
+    <h2 class="h6">1. Choose what to import</h2>
+    <div class="row g-3">
+        <div class="col-12 col-xl-6"><div class="form-label">Parts of the pack</div>
+            @foreach (var s in Model.Pack.Sections.Where(x => x.Value > 0))
+            {
+                <div class="form-check"><input class="form-check-input" type="checkbox" name="Sections" value="@s.Key" id="sec-@s.Key" checked="@(Model.Sections.Count == 0 || Model.Sections.Contains(s.Key))" /><label class="form-check-label" for="sec-@s.Key">@labels.GetValueOrDefault(s.Key, s.Key) (@s.Value)</label></div>
+            }</div>
+        <div class="col-12 col-xl-6">
+            <label class="form-label" for="Policy">When something you edited also changed in the pack</label>
+            <select id="Policy" name="Policy" class="form-select"><option value="KeepMine" selected="@(Model.Policy == ConflictPolicy.KeepMine)">Keep my version (recommended)</option><option value="UseThePack" selected="@(Model.Policy == ConflictPolicy.UseThePack)">Use the pack's version (audited)</option></select>
+            <div class="form-text">You can still decide item by item after the preview.</div>
+            @if (Model.Pipelines.Count > 0)
+            {
+                <label class="form-label mt-3" for="DefaultPipelineKey">Use a pipeline of this pack for new leads</label>
+                <select id="DefaultPipelineKey" name="DefaultPipelineKey" class="form-select"><option value="">No, keep my default pipeline</option>@foreach (var p in Model.Pipelines) { <option value="@p.Key" selected="@(Model.DefaultPipelineKey == p.Key)">@p.Name</option> }</select>
+                <div class="form-text">Existing leads stay in their stages.</div>
+            }</div>
+    </div>
+    <div class="mt-3"><button type="submit" class="btn btn-outline-primary">@(plan is null ? "2. Preview (dry run)" : "Preview again")</button> <span class="text-muted small ms-2">Nothing is written during the preview.</span></div>
+</form>
+
+@if (plan is not null)
+{
+    <div class="card mb-3"><div class="card-header">@(applied is null ? "Preview: what will happen" : "Result")</div>
+        <div class="card-body border-bottom"><div class="d-flex flex-wrap gap-3">
+            <span><strong>@plan.Counts.Create</strong> @(applied is null ? "to create" : "created")</span><span><strong>@plan.Counts.Update</strong> @(applied is null ? "to update" : "updated")</span>
+            <span><strong>@(plan.Counts.Unchanged + plan.Counts.Link)</strong> already there</span><span><strong>@plan.Counts.KeepYours</strong> keep yours</span>
+            @if (plan.Counts.Overwrite > 0) { <span class="text-danger"><strong>@plan.Counts.Overwrite</strong> overwritten</span> }
+            @if (plan.Counts.LeaveDeleted > 0) { <span><strong>@plan.Counts.LeaveDeleted</strong> stay deleted</span> }
+            @if (plan.Counts.Blocked > 0) { <span class="text-danger"><strong>@plan.Counts.Blocked</strong> blocked</span> }</div>
+            <div class="small text-muted mt-2">Mode: @plan.Mode. @string.Join(" ", plan.Notes)</div></div>
+        @if (applied is null && plan.Items.All(i => i.Outcome is PackOutcome.Unchanged or PackOutcome.Link))
+        { <div class="card-body text-muted">Everything in this pack is already in your workspace. There is nothing to apply.</div> }
+        <form method="post" asp-action="Apply" asp-route-id="@Model.Pack.Id">
+            @foreach (var s in Model.Sections) { <input type="hidden" name="Sections" value="@s" /> }
+            <input type="hidden" name="Policy" value="@Model.Policy" /><input type="hidden" name="DefaultPipelineKey" value="@Model.DefaultPipelineKey" />
+            <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+                <thead><tr><th>Item</th><th>What happens</th><th>Details</th></tr></thead>
+                <tbody>
+                @foreach (var i in plan.Items.Where(i => i.Outcome != PackOutcome.Unchanged || applied is null).OrderBy(i => i.IsConflict ? 0 : 1).ThenBy(i => i.Type))
+                {
+                    <tr>
+                        <td><div class="fw-semibold">@i.Name</div><div class="small text-muted">@types.GetValueOrDefault(i.Type, i.Type)</div></td>
+                        <td><span class="badge @Badge(i.Outcome)">@Text(i.Outcome)</span></td>
+                        <td class="small">
+                            @if (i.Reason is not null) { <div>@i.Reason</div> }
+                            @foreach (var c in i.Changes) { <div class="text-muted"><code>@c.Field</code>: <span class="text-decoration-line-through">@(string.IsNullOrEmpty(c.Before) ? "(empty)" : c.Before)</span> → @(string.IsNullOrEmpty(c.After) ? "(empty)" : c.After)</div> }
+                            @if (applied is null && i.IsConflict)
+                            {
+                                var key = i.Type + ":" + i.Key; var chosen = Model.Res.GetValueOrDefault(key, i.Outcome == PackOutcome.Overwrite ? "replace" : "keep");
+                                <fieldset class="mt-1"><legend class="visually-hidden">Decision for @i.Name</legend>
+                                    <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="Res[@key]" id="r-k-@key" value="keep" checked="@(chosen == "keep")" /><label class="form-check-label" for="r-k-@key">Keep mine</label></div>
+                                    <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="Res[@key]" id="r-r-@key" value="replace" checked="@(chosen == "replace")" /><label class="form-check-label" for="r-r-@key">Use the pack's</label></div></fieldset>
+                            }
+                            else if (applied is null && i.Outcome == PackOutcome.LeaveDeleted)
+                            {
+                                var key = i.Type + ":" + i.Key;
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="Res[@key]" id="r-d-@key" value="replace" /><label class="form-check-label" for="r-d-@key">Restore it</label></div>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody></table></div>
+            @if (applied is null && plan.Items.Any(i => i.Outcome is PackOutcome.Create or PackOutcome.Update or PackOutcome.Overwrite or PackOutcome.Recreate or PackOutcome.Link))
+            {
+                <div class="card-footer d-flex flex-wrap gap-2 align-items-center">
+                    <button type="submit" class="btn btn-primary" data-confirm="Apply this pack now? Everything is applied together (all or nothing) and recorded in the audit log.">Apply to my workspace</button>
+                    <span class="small text-muted">Applied all at once: if anything fails, nothing changes.</span></div>
+            }
+        </form>
+    </div>
+}

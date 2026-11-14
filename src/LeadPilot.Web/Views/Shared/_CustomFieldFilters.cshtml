@@ -1,0 +1,27 @@
+@using LeadPilot.Application.Config
+@using LeadPilot.Domain.Config
+@model (IReadOnlyList<CustomFieldDto> Fields, IReadOnlyList<CustomFieldFilter> Active)
+@* Filters on custom fields marked "filterable". Sent as cf.key, cf.key.min, cf.key.max, cf.key.contains. *@
+@foreach (var f in Model.Fields)
+{
+    string Val(string op) => Model.Active.FirstOrDefault(a => a.Key == f.Key && a.Op == op)?.Value ?? "";
+    switch (f.Type)
+    {
+        case CustomFieldType.Number:
+        case CustomFieldType.Date:
+            var t = f.Type == CustomFieldType.Date ? "date" : "number";
+            <div class="col-6 col-md-3 col-xl-2"><label class="form-label" for="cf_@(f.Key)_min">@f.Label (from)</label><input id="cf_@(f.Key)_min" name="cf.@(f.Key).min" type="@t" step="any" value="@Val("min")" class="form-control" /></div>
+            <div class="col-6 col-md-3 col-xl-2"><label class="form-label" for="cf_@(f.Key)_max">@f.Label (to)</label><input id="cf_@(f.Key)_max" name="cf.@(f.Key).max" type="@t" step="any" value="@Val("max")" class="form-control" /></div>
+            break;
+        case CustomFieldType.Bool:
+            <div class="col-12 col-md-6 col-xl-2"><label class="form-label" for="cf_@(f.Key)">@f.Label</label><select id="cf_@(f.Key)" name="cf.@(f.Key)" class="form-select"><option value="">Any</option><option value="true" selected="@(Val("eq") == "true")">Yes</option><option value="false" selected="@(Val("eq") == "false")">No</option></select></div>
+            break;
+        case CustomFieldType.Select:
+        case CustomFieldType.MultiSelect:
+            <div class="col-12 col-md-6 col-xl-2"><label class="form-label" for="cf_@(f.Key)">@f.Label</label><select id="cf_@(f.Key)" name="cf.@(f.Key)" class="form-select"><option value="">Any</option>@foreach (var o in f.Options) { <option value="@o" selected="@(string.Equals(Val("eq"), o, StringComparison.OrdinalIgnoreCase))">@o</option> }</select></div>
+            break;
+        default:
+            <div class="col-12 col-md-6 col-xl-2"><label class="form-label" for="cf_@(f.Key)">@f.Label (contains)</label><input id="cf_@(f.Key)" name="cf.@(f.Key).contains" value="@Val("contains")" maxlength="100" class="form-control" /></div>
+            break;
+    }
+}

@@ -62,6 +62,17 @@ public sealed class CustomFieldService(CrmContext crm, ILogger<CustomFieldServic
             return Result.Success(Map(f, await crm.Db.CustomFieldValues.CountAsync(x => x.TenantId == tenantId && x.FieldId == f.Id, ct)));
         }, logger);
 
+    public async Task<IReadOnlyList<string>> ValidateAsync(CustomEntityType entityType, IReadOnlyDictionary<string, string?> values, CancellationToken ct = default)
+    {
+        var tenantId = crm.TenantId;
+        var defs = await crm.Db.CustomFieldDefinitions.AsNoTracking().Where(d => d.TenantId == tenantId && d.EntityType == entityType && d.IsActive).ToListAsync(ct);
+        var given = values.ToDictionary(kv => kv.Key.Trim().ToLowerInvariant(), kv => kv.Value, StringComparer.Ordinal);
+        var errors = new List<string>();
+        foreach (var k in given.Keys.Where(k => defs.All(d => d.Key != k))) errors.Add($"Unknown custom field '{(k.Length > 40 ? k[..40] : k)}'.");
+        foreach (var d in defs) { d.Normalize(given.GetValueOrDefault(d.Key), out var err); if (err is not null) errors.Add(err); }
+        return errors;
+    }
+
     public async Task<Result<IReadOnlyList<CustomFieldValueDto>>> GetValuesAsync(CustomEntityType entityType, Guid entityId, CancellationToken ct = default)
     {
         if (!await EntityExistsAsync(entityType, entityId, ct)) return Result.Failure<IReadOnlyList<CustomFieldValueDto>>(Error.NotFound(entityType.ToString()));

@@ -1,0 +1,11 @@
+@model PackHistoryViewModel
+@{ ViewData["Title"] = "Applied templates"; }
+<h1 class="h3 mb-2">Applied templates</h1>
+<p class="text-muted">Every import of an industry template into this workspace. Importing a newer version later upgrades what the pack created and never overwrites your edits silently.</p>
+@if (Model.History.Count == 0) { <partial name="_EmptyState" model='("Nothing applied yet", "Choose an industry template to get started.")' /> <p class="text-center"><a asp-action="Index" class="btn btn-primary">Browse templates</a></p> }
+else
+{
+    <div class="card"><div class="table-responsive"><table class="table align-middle mb-0">
+        <thead><tr><th>When (UTC)</th><th>Template</th><th>Version</th><th>Mode</th><th>Conflict choice</th><th>By</th></tr></thead>
+        <tbody>@foreach (var h in Model.History) { <tr><td>@h.AppliedAtUtc.ToString("yyyy-MM-dd HH:mm")</td><td>@h.PackName</td><td>v@h.PackVersion</td><td>@h.Mode</td><td>@h.ConflictPolicy</td><td>@(h.AppliedBy ?? "—")</td></tr> }</tbody></table></div></div>
+}

@@ -1,0 +1,34 @@
+@using LeadPilot.Application.Config
+@using LeadPilot.Domain.Config
+@model IReadOnlyList<CustomFieldValueDto>
+@* Inputs for custom fields, posted as Cf[key]. Required, options and ranges are enforced again on the server. *@
+@foreach (var v in Model)
+{
+    var f = v.Field; var id = "cf_" + f.Key; var name = "Cf[" + f.Key + "]";
+    <div class="col-12 col-md-6 col-xl-3">
+        <label class="form-label" for="@id">@f.Label@if (f.IsRequired) { <span class="text-danger" aria-hidden="true"> *</span> }</label>
+        @switch (f.Type)
+        {
+            case CustomFieldType.Number:
+                <input id="@id" name="@name" type="number" step="any" class="form-control" value="@v.Raw" min="@f.MinValue" max="@f.MaxValue" required="@f.IsRequired" />
+                break;
+            case CustomFieldType.Date:
+                <input id="@id" name="@name" type="date" class="form-control" value="@v.Raw" required="@f.IsRequired" />
+                break;
+            case CustomFieldType.Bool:
+                <select id="@id" name="@name" class="form-select" required="@f.IsRequired"><option value="">—</option><option value="true" selected="@(v.Raw == "true")">Yes</option><option value="false" selected="@(v.Raw == "false")">No</option></select>
+                break;
+            case CustomFieldType.Select:
+                <select id="@id" name="@name" class="form-select" required="@f.IsRequired"><option value="">—</option>@foreach (var o in f.Options) { <option value="@o" selected="@(string.Equals(v.Raw, o, StringComparison.OrdinalIgnoreCase))">@o</option> }</select>
+                break;
+            case CustomFieldType.MultiSelect:
+                var chosen = (v.Raw ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                <select id="@id" name="@name" class="form-select" multiple size="@Math.Min(5, f.Options.Count)">@foreach (var o in f.Options) { <option value="@o" selected="@(chosen.Contains(o, StringComparer.OrdinalIgnoreCase))">@o</option> }</select>
+                break;
+            default:
+                <input id="@id" name="@name" class="form-control" value="@v.Raw" maxlength="@((int)(f.MaxValue ?? 500))" required="@f.IsRequired" />
+                break;
+        }
+        @if (!string.IsNullOrEmpty(f.HelpText)) { <div class="form-text">@f.HelpText</div> }
+    </div>
+}

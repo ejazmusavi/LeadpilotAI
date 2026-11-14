@@ -14,6 +14,19 @@
             <dt class="col-sm-4">Created</dt><dd class="col-sm-8">@l.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm") UTC@(l.CreatedBy is null ? "" : " by " + l.CreatedBy)</dd>
         </dl></div></div>
 
+        @if (Model.CustomFields.Count > 0)
+        {
+            <div class="card mb-3"><div class="card-header d-flex justify-content-between align-items-center"><span>Custom fields</span>
+                @if (can.Update && !frozen) { <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#cf-edit" aria-expanded="false" aria-controls="cf-edit">Edit</button> }</div>
+                <div class="card-body"><dl class="row mb-0">@foreach (var cf in Model.CustomFields) { <dt class="col-sm-4">@cf.Field.Label</dt><dd class="col-sm-8">@(cf.Display ?? "—")</dd> }</dl></div>
+                @if (can.Update && !frozen)
+                {
+                    <div class="collapse border-top" id="cf-edit"><form method="post" asp-action="SaveCustomFields" asp-route-id="@l.Id" class="card-body"><div class="row g-3"><partial name="_CustomFieldInputs" model="Model.CustomFields" /></div>
+                        <div class="mt-3"><button type="submit" class="btn btn-primary btn-sm">Save custom fields</button></div></form></div>
+                }
+            </div>
+        }
+
         <div class="card mb-3"><div class="card-header">Score <partial name="_ScoreBadge" model="l.Score" /> <span class="text-muted small">rule version @(l.ScoreRuleVersion?.ToString() ?? "—")</span></div>
             @if (l.ScoreBreakdown.Count == 0) { <div class="card-body text-muted small">No scoring rule matched this lead yet.</div> }
             else { <ul class="list-group list-group-flush">@foreach (var m in l.ScoreBreakdown) { <li class="list-group-item d-flex justify-content-between"><span>@(m.Description ?? $"{m.Dimension}: {m.Target}")</span><span class="fw-semibold">@(m.Points > 0 ? "+" : "")@m.Points</span></li> }</ul> }

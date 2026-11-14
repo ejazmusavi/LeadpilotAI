@@ -1,0 +1,44 @@
+@model CustomFieldsViewModel
+@using LeadPilot.Domain.Config
+@{
+    ViewData["Title"] = "Custom fields";
+    var f = Model.Form; var editing = Model.EditingId is not null;
+}
+<h1 class="h3 mb-2">Custom fields</h1>
+<p class="text-muted">Add your own typed fields to leads, contacts, opportunities and customers. They appear on forms, can be filtered, exported and imported, and can drive scoring rules and workflow conditions. A field's key and type cannot change once created.</p>
+<ul class="nav nav-pills mb-3">@foreach (var e in Enum.GetValues<CustomEntityType>()) { <li class="nav-item"><a class="nav-link @(Model.Entity == e ? "active" : "")" asp-action="Index" asp-route-entity="@e">@e</a></li> }</ul>
+<div class="row g-3">
+    <div class="col-12 col-xl-7"><div class="card"><div class="card-header">@Model.Entity fields</div>
+        @if (Model.Fields.Count == 0) { <partial name="_EmptyState" model='("No custom fields yet", "Create the first one on the right, or import an industry template.")' /> }
+        else
+        {
+            <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Field</th><th>Type</th><th>Rules</th><th></th></tr></thead><tbody>
+            @foreach (var c in Model.Fields)
+            {
+                <tr class="@(c.IsActive ? "" : "text-muted")"><td><div class="fw-semibold">@c.Label</div><div class="small text-muted"><code>@c.Key</code> · @c.ValueCount value(s)</div></td><td>@c.Type</td>
+                    <td class="small">@if (c.IsRequired) { <span class="badge text-bg-secondary">required</span> } @if (c.IsFilterable) { <span class="badge text-bg-secondary">filter</span> } @if (c.Options.Count > 0) { <div>@string.Join(", ", c.Options)</div> }
+                        @if (c.MinValue is not null || c.MaxValue is not null) { <div>@(c.Type == CustomFieldType.Text ? "max length " + c.MaxValue : $"{c.MinValue}–{c.MaxValue}")</div> } @if (c.Pattern is not null) { <div><code>@c.Pattern</code></div> }</td>
+                    <td class="text-end text-nowrap"><a asp-action="Index" asp-route-entity="@c.EntityType" asp-route-edit="@c.Id" class="btn btn-sm btn-outline-secondary">Edit</a>
+                        <form asp-action="SetActive" method="post" class="d-inline"><input type="hidden" name="id" value="@c.Id" /><input type="hidden" name="entity" value="@c.EntityType" /><input type="hidden" name="active" value="@((!c.IsActive).ToString().ToLowerInvariant())" />
+                            <button type="submit" class="btn btn-sm btn-outline-warning" data-confirm="@(c.IsActive ? "Deactivate this field? It disappears from forms, filters and rules; its values are kept." : "Activate this field again?")">@(c.IsActive ? "Deactivate" : "Activate")</button></form></td></tr>
+            }</tbody></table></div>
+        }</div></div>
+    <div class="col-12 col-xl-5"><div class="card"><div class="card-header">@(editing ? "Edit field" : "New field")</div><div class="card-body">
+        <form method="post" asp-action="@(editing ? "Update" : "Create")" asp-route-id="@Model.EditingId" class="row g-2">
+            <input type="hidden" name="EntityType" value="@f.EntityType" /><input type="hidden" name="ExpectedVersion" value="@f.ExpectedVersion" />
+            <div class="col-12 col-md-6"><label class="form-label" for="cf-label">Label</label><input id="cf-label" name="Label" value="@f.Label" class="form-control" maxlength="100" required /></div>
+            <div class="col-12 col-md-6"><label class="form-label" for="cf-key">Key</label><input id="cf-key" name="Key" value="@f.Key" class="form-control" maxlength="40" pattern="[a-z][a-z0-9_]*" placeholder="student_count" readonly="@editing" required /></div>
+            <div class="col-12 col-md-6"><label class="form-label" for="cf-type">Type</label>
+                @if (editing) { <input type="hidden" name="Type" value="@f.Type" /><input id="cf-type" class="form-control" value="@f.Type" disabled /> }
+                else { <select id="cf-type" name="Type" class="form-select">@foreach (var t in Enum.GetValues<CustomFieldType>()) { <option value="@t" selected="@(f.Type == t)">@t</option> }</select> }</div>
+            <div class="col-12 col-md-6"><label class="form-label" for="cf-order">Order</label><input id="cf-order" name="SortOrder" type="number" value="@f.SortOrder" class="form-control" /></div>
+            <div class="col-12"><label class="form-label" for="cf-options">Options (select fields, one per line)</label><textarea id="cf-options" name="Options" rows="3" class="form-control">@f.Options</textarea></div>
+            <div class="col-6"><label class="form-label" for="cf-min">Minimum (numbers)</label><input id="cf-min" name="MinValue" type="number" step="any" value="@f.MinValue" class="form-control" /></div>
+            <div class="col-6"><label class="form-label" for="cf-max">Maximum (numbers) / length (text)</label><input id="cf-max" name="MaxValue" type="number" step="any" value="@f.MaxValue" class="form-control" /></div>
+            <div class="col-12"><label class="form-label" for="cf-pattern">Text must match (regular expression)</label><input id="cf-pattern" name="Pattern" value="@f.Pattern" class="form-control" maxlength="200" /></div>
+            <div class="col-12"><label class="form-label" for="cf-help">Help text</label><input id="cf-help" name="HelpText" value="@f.HelpText" class="form-control" maxlength="200" /></div>
+            <div class="col-6"><div class="form-check"><input class="form-check-input" type="checkbox" name="IsRequired" value="true" id="cf-req" checked="@f.IsRequired" /><label class="form-check-label" for="cf-req">Required</label></div></div>
+            <div class="col-6"><div class="form-check"><input class="form-check-input" type="checkbox" name="IsFilterable" value="true" id="cf-filter" checked="@f.IsFilterable" /><label class="form-check-label" for="cf-filter">Filterable</label></div></div>
+            <div class="col-12 d-flex gap-2"><button type="submit" class="btn btn-primary">@(editing ? "Save" : "Add field")</button>@if (editing) { <a asp-action="Index" asp-route-entity="@Model.Entity" class="btn btn-link">Cancel</a> }</div>
+        </form></div></div></div>
+</div>

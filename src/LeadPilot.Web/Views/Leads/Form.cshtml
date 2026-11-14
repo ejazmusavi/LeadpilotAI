@@ -29,6 +29,7 @@
         <div class="col-12 col-md-6 col-xl-3"><label asp-for="Area" class="form-label"></label><input asp-for="Area" class="form-control" /></div>
         <div class="col-12 col-md-6 col-xl-6"><label asp-for="Address" class="form-label"></label><input asp-for="Address" class="form-control" /></div>
         <div class="col-12 col-md-6 col-xl-3"><label asp-for="Confidence" class="form-label"></label><input asp-for="Confidence" type="number" min="0" max="100" class="form-control" /><span asp-validation-for="Confidence" class="text-danger small"></span></div>
+        <partial name="_CustomFieldInputs" model="Model.CustomFields" />
         @if (edit)
         {
             <div class="col-12 col-md-6 col-xl-3"><label asp-for="StatusId" class="form-label"></label>

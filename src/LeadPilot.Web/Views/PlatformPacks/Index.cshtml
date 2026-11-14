@@ -1,0 +1,18 @@
+@model PlatformPacksViewModel
+@using LeadPilot.Domain.Config
+@{ ViewData["Title"] = "Industry packs (platform)"; }
+<h1 class="h3 mb-2">Industry packs</h1>
+<p class="text-muted">Published packs appear in every workspace's template gallery. Built-in packs ship with the product and cannot be withdrawn. A pack that was applied keeps working when you withdraw it.</p>
+<div class="card mb-3"><div class="card-body"><form asp-action="Upload" method="post" enctype="multipart/form-data" class="row g-2 align-items-end">
+    <div class="col-12 col-md-6"><label class="form-label" for="pf">Pack file (.json)</label><input id="pf" type="file" name="file" accept=".json,application/json" class="form-control" required /></div>
+    <div class="col-12 col-md-3"><div class="form-check"><input class="form-check-input" type="checkbox" name="publish" value="true" id="pub" /><label class="form-check-label" for="pub">Publish to all workspaces</label></div></div>
+    <div class="col-12 col-md-3"><button type="submit" class="btn btn-primary">Upload</button></div></form></div></div>
+@if (Model.Packs.Count == 0) { <partial name="_EmptyState" model='("No packs", "Upload a pack file to publish it.")' /> }
+else
+{
+    <div class="card"><div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Pack</th><th>Key</th><th>Version</th><th>Origin</th><th>Status</th><th></th></tr></thead>
+        <tbody>@foreach (var p in Model.Packs)
+        { <tr><td>@p.Name @if (p.IsSample) { <span class="badge text-bg-warning">sample</span> }</td><td><code>@p.Key</code></td><td>v@p.Version</td><td>@(p.Scope == PackScope.Builtin ? "Built in" : "Platform")</td>
+            <td>@if (p.IsPublished) { <span class="badge text-bg-success">published</span> } else { <span class="badge text-bg-secondary">not published</span> }</td>
+            <td>@if (p.Scope == PackScope.Platform) { <form asp-action="SetPublished" method="post"><input type="hidden" name="id" value="@p.Id" /><input type="hidden" name="published" value="@((!p.IsPublished).ToString().ToLowerInvariant())" /><button type="submit" class="btn btn-sm @(p.IsPublished ? "btn-outline-warning" : "btn-outline-primary")" data-confirm="@(p.IsPublished ? "Withdraw this pack from all workspaces?" : "Publish this pack to all workspaces?")">@(p.IsPublished ? "Withdraw" : "Publish")</button></form> }</td></tr> }</tbody></table></div></div>
+}

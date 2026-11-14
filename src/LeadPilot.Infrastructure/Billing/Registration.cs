@@ -270,9 +270,11 @@ public sealed class OnboardingService(AppDbContext db, ITenantContext tenant) : 
         var products = await db.CatalogProducts.AsNoTracking().CountAsync(p => p.TenantId == t, ct);
         var leads = await db.Leads.AsNoTracking().CountAsync(l => l.TenantId == t, ct);
         var campaigns = await db.Campaigns.AsNoTracking().CountAsync(c => c.TenantId == t, ct);
+        var packs = await db.TenantPackApplications.AsNoTracking().Where(a => a.TenantId == t).Select(a => a.PackName).Distinct().ToListAsync(ct);
 
         var steps = new List<OnboardingStep>();
         if (tn.IsSelfRegistered) steps.Add(new("verify_email", "Verify your e-mail address", "Unlocks messaging, AI, discovery, campaigns and workflows.", tn.OwnerEmailVerifiedAtUtc is not null, "Register", "Resend", tn.OwnerEmailVerifiedAtUtc is null ? "Check your inbox or request a new link." : null));
+        steps.Add(new("industry", "Choose an industry template", "Starter categories, pipeline, custom fields, templates and a draft assistant for your kind of business (optional: you can also set everything up by hand).", packs.Count > 0, "Packs", "Index", packs.Count > 0 ? string.Join(", ", packs) + "." : "No template applied yet."));
         steps.Add(new("whatsapp", "Connect a WhatsApp account", "Add your gateway account and scan the QR code.", accounts.Any(s => s == ConnectionStatus.Working), "Channels", "Index", accounts.Count == 0 ? "No account added yet." : accounts.Any(s => s == ConnectionStatus.Working) ? null : $"{accounts.Count} added, none connected yet."));
         steps.Add(new("ai", "Configure the AI assistant", "Store your AI provider key and turn the assistant on.", ai, "AiSettings", "Index", null));
         steps.Add(new("knowledge", "Add knowledge", "Give the assistant documents to answer from.", docs > 0, "Knowledge", "Index", docs > 0 ? $"{docs} document(s)." : null));

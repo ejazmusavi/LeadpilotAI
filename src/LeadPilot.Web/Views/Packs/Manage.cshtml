@@ -1,0 +1,35 @@
+@model PackManageViewModel
+@{ ViewData["Title"] = "Private packs and export"; }
+<h1 class="h3 mb-2">Private packs and export</h1>
+<p class="text-muted">Packs are plain data files. A pack you upload here is visible to this workspace only; nobody else can see, apply or export it.</p>
+@if (Model.Validation is { } v)
+{
+    <div class="alert @(v.IsValid ? "alert-success" : "alert-danger")">
+        @if (v.IsValid) { <span>The file is a valid pack: <strong>@v.Name</strong> (@v.Key, version @v.Version, @v.ItemCount items). It was not stored.</span> }
+        else { <div><strong>The file is not a valid pack.</strong></div><ul class="mb-0">@foreach (var p in v.Problems.Take(20)) { <li><code>@p.Path</code> @p.Message</li> }</ul> }
+    </div>
+}
+<div class="row g-3">
+    <div class="col-12 col-xl-6"><div class="card"><div class="card-header">Private packs</div>
+        @if (Model.Private.Count == 0) { <partial name="_EmptyState" model='("No private packs", "Upload a pack file or export your own configuration.")' /> }
+        else
+        {
+            <ul class="list-group list-group-flush">@foreach (var p in Model.Private)
+            { <li class="list-group-item d-flex justify-content-between align-items-center gap-2"><div><div class="fw-semibold">@p.Name <span class="text-muted">v@p.Version</span></div><div class="small text-muted">@p.Key · @p.ItemCount items</div></div>
+                <div class="d-flex gap-2"><a asp-action="Import" asp-route-id="@p.Id" class="btn btn-sm btn-outline-primary">Preview</a>
+                    <form asp-action="Delete" asp-route-id="@p.Id" method="post"><button type="submit" class="btn btn-sm btn-outline-danger" data-confirm="Delete this private pack? What it already created stays.">Delete</button></form></div></li> }</ul>
+        }
+        <div class="card-body border-top"><form asp-action="Upload" method="post" enctype="multipart/form-data" class="d-flex flex-column gap-2">
+            <label class="form-label mb-0" for="pack-file">Pack file (.json, at most 256 KB)</label><input id="pack-file" type="file" name="file" accept=".json,application/json" class="form-control" required />
+            <div class="form-check"><input class="form-check-input" type="checkbox" name="validateOnly" value="true" id="validate-only" /><label class="form-check-label" for="validate-only">Only check the file, do not store it</label></div>
+            <div><button type="submit" class="btn btn-primary">Upload</button></div></form></div></div></div>
+    <div class="col-12 col-xl-6"><div class="card"><div class="card-header">Export this workspace's configuration</div><div class="card-body">
+        <p class="small text-muted">Writes categories, pipelines, custom fields, scoring rules, message templates, agent drafts, catalog, knowledge source names, workflows and discovery settings. <strong>Never</strong> leads, contacts, conversations, users, API keys, accounts or settings. E-mail addresses and phone numbers in free text are removed. Review the file before sharing it.</p>
+        <form asp-action="Export" method="post" class="row g-2">
+            <div class="col-12 col-md-6"><label class="form-label" for="ex-key">Pack key</label><input id="ex-key" name="key" class="form-control" placeholder="my-industry" pattern="[a-z][a-z0-9\-]{1,59}" maxlength="60" required /></div>
+            <div class="col-12 col-md-6"><label class="form-label" for="ex-name">Name</label><input id="ex-name" name="name" class="form-control" maxlength="150" required /></div>
+            <div class="col-12 col-md-8"><label class="form-label" for="ex-ind">Industry</label><input id="ex-ind" name="industry" class="form-control" maxlength="60" /></div>
+            <div class="col-12 col-md-4"><label class="form-label" for="ex-ver">Version</label><input id="ex-ver" name="version" type="number" min="1" value="1" class="form-control" /></div>
+            <div class="col-12"><label class="form-label" for="ex-desc">Description</label><textarea id="ex-desc" name="description" rows="2" class="form-control" maxlength="1000"></textarea></div>
+            <div class="col-12"><button type="submit" class="btn btn-outline-primary">Download pack file</button></div></form></div></div></div>
+</div>

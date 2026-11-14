@@ -1,0 +1,8 @@
+@host = http://localhost:5100
+
+### Service info
+GET {{host}}/api/v1/system/info
+
+### Liveness / readiness
+GET {{host}}/health/live
+GET {{host}}/health/ready

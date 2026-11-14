@@ -1,0 +1,15 @@
+@model ErrorViewModel
+@{
+    Layout = "_AuthLayout";
+    var code = Model.StatusCode ?? 500;
+    ViewData["Title"] = code == 404 ? "Page not found" : "Something went wrong";
+}
+<div class="text-center">
+    <h2 class="h5">@(code == 404 ? "Page not found" : code == 403 ? "Access denied" : "Something went wrong")</h2>
+    <p class="text-muted">@(code == 404 ? "The page you requested does not exist." : "The request could not be completed. Please try again.")</p>
+    @if (!string.IsNullOrEmpty(Model.CorrelationId))
+    {
+        <p class="small text-muted">Reference: <code>@Model.CorrelationId</code></p>
+    }
+    <a class="btn btn-primary" href="/">Back to dashboard</a>
+</div>

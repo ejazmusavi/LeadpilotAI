@@ -1,0 +1,49 @@
+@model ReportViewModel
+@using LeadPilot.Application.Analytics
+@{
+    var r = Model.Report; ViewData["Title"] = r.Definition.Title;
+    var totalPages = (int)Math.Ceiling(r.TotalRows / (double)r.PageSize);
+}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+    <h1 class="h3 mb-0">@r.Definition.Title</h1>
+    @if (Model.CanExport && r.TotalRows > 0)
+    {
+        <a class="btn btn-outline-primary btn-sm" id="export-csv" asp-action="Export" asp-route-key="@r.Definition.Key" asp-route-preset="@Model.Request.Preset" asp-route-from="@Model.Request.From" asp-route-to="@Model.Request.To" asp-route-compare="@Model.Request.Compare">Export CSV</a>
+    }
+</div>
+<p class="text-muted">@r.Definition.Description</p>
+@if (r.Definition.UsesDateRange)
+{
+    <partial name="_RangeFilter" model='new RangeFilterModel("Reports", "Show", Model.Request, r.Range, new Dictionary<string, string?> { ["key"] = r.Definition.Key }, false)' />
+}
+<div class="d-flex flex-wrap gap-2 align-items-center mb-3 small">
+    <span class="badge text-bg-light border">@r.Freshness.Source</span><span>As of <strong>@r.Freshness.AsOfUtc.ToString("yyyy-MM-dd HH:mm") UTC</strong></span><span class="text-muted">@r.Freshness.Note</span>
+    @if (r.Scope == "Own") { <span class="badge text-bg-secondary">Your own leads</span> }
+</div>
+@if (r.Rows.Count == 0)
+{
+    <div class="card"><partial name="_EmptyState" model='("No records for this period", "No matching rows were recorded. Nothing here is sample data.")' /></div>
+}
+else
+{
+    <div class="card"><div class="table-responsive"><table class="table table-sm align-middle mb-0 report-table">
+        <thead><tr>
+        @foreach (var c in r.Definition.Columns)
+        {
+            <th scope="col" class="@(AnalyticsFormat.IsNumeric(c.Format) ? "text-end" : "")"><span title="@c.Kind: @c.Definition">@c.Label</span> <span class="badge @AnalyticsFormat.KindClass(c.Kind) fw-normal">@c.Kind</span></th>
+        }
+        </tr></thead>
+        <tbody>
+        @foreach (var row in r.Rows)
+        {
+            <tr>@for (var i = 0; i < r.Definition.Columns.Count; i++) { var f = r.Definition.Columns[i].Format; <td class="@(AnalyticsFormat.IsNumeric(f) ? "text-end text-nowrap" : "")">@AnalyticsFormat.Cell(i < row.Count ? row[i] : null, f)</td> }</tr>
+        }
+        </tbody>
+        @if (r.Totals is not null)
+        {
+            <tfoot><tr class="table-light fw-semibold">@for (var i = 0; i < r.Definition.Columns.Count; i++) { var f = r.Definition.Columns[i].Format; <td class="@(AnalyticsFormat.IsNumeric(f) ? "text-end text-nowrap" : "")">@AnalyticsFormat.Cell(i < r.Totals.Count ? r.Totals[i] : null, f)</td> }</tr></tfoot>
+        }
+    </table></div></div>
+    <partial name="_Pager" model='new PagerModel(r.Page, totalPages, r.TotalRows, "Show", new Dictionary<string, string?>(Model.QueryValues) { ["key"] = r.Definition.Key })' />
+}
+@if (r.Notes.Count > 0) { <ul class="small text-muted mt-3">@foreach (var n in r.Notes) { <li>@n</li> }</ul> }

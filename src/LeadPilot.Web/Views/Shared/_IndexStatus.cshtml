@@ -1,0 +1,3 @@
+@model LeadPilot.Domain.Ai.IndexStatus
+@{ var (cls, text) = Model switch { LeadPilot.Domain.Ai.IndexStatus.Indexed => ("text-bg-success", "Indexed"), LeadPilot.Domain.Ai.IndexStatus.Indexing => ("text-bg-info", "Indexing…"), LeadPilot.Domain.Ai.IndexStatus.Failed => ("text-bg-danger", "Failed"), LeadPilot.Domain.Ai.IndexStatus.Superseded => ("text-bg-secondary", "Replaced"), _ => ("text-bg-warning", "Waiting") }; }
+<span class="badge @cls">@text</span>

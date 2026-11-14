@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>LeadPilot.Tools.Benchmark</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\LeadPilot.Infrastructure\LeadPilot.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\src\LeadPilot.Application\LeadPilot.Application.csproj" />
+    <ProjectReference Include="..\..\..\src\LeadPilot.Domain\LeadPilot.Domain.csproj" />
+  </ItemGroup>
+</Project>

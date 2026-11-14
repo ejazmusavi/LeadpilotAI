@@ -1,0 +1,60 @@
+@model DemoSettingsViewModel
+@using LeadPilot.Domain.Conversion
+@{ ViewData["Title"] = "Demo, trial and payment settings"; var s = Model.Settings; var dis = Model.CanManage ? null : "disabled"; }
+<h1 class="h3 mb-1">Demo, trial and payment settings</h1>
+<p class="text-muted">These settings drive the demo calendar, reminders, trial expiry notices and payment requests. Reminders and notices are service messages and go through the normal WhatsApp pipeline: never to suppressed or opted-out contacts, and only with a recorded service consent or inside the 24-hour service window.</p>
+<form asp-action="Save" method="post" class="card card-body mb-4">
+    <input type="hidden" name="ExpectedVersion" value="@s.Version" />
+    <h2 class="h6">Demo calendar</h2>
+    <div class="row g-3 mb-3">
+        <div class="col-md-4"><label class="form-label" for="TimeZoneId">Time zone (IANA)</label><input id="TimeZoneId" name="TimeZoneId" class="form-control" value="@s.TimeZoneId" @dis /></div>
+        <div class="col-6 col-md-2"><label class="form-label" for="SlotMinutes">Slot (min)</label><input id="SlotMinutes" name="SlotMinutes" type="number" class="form-control" value="@s.SlotMinutes" @dis /></div>
+        <div class="col-6 col-md-3"><label class="form-label" for="MinNoticeMinutes">Minimum notice (min)</label><input id="MinNoticeMinutes" name="MinNoticeMinutes" type="number" class="form-control" value="@s.MinNoticeMinutes" @dis /></div>
+        <div class="col-6 col-md-3"><label class="form-label" for="MaxDaysAhead">Book up to (days ahead)</label><input id="MaxDaysAhead" name="MaxDaysAhead" type="number" class="form-control" value="@s.MaxDaysAhead" @dis /></div>
+        <div class="col-md-4"><label class="form-label" for="Assignment">Rep assignment</label><select id="Assignment" name="Assignment" class="form-select" @dis><option value="RoundRobin" selected="@(s.Assignment == AssignmentStrategy.RoundRobin)">Round-robin (longest since last demo)</option><option value="LeastLoaded" selected="@(s.Assignment == AssignmentStrategy.LeastLoaded)">Least loaded (fewest upcoming demos)</option></select></div>
+        <div class="col-md-8"><label class="form-label" for="MeetingLinkTemplate">Meeting link template (optional, https; {code} = short code)</label><input id="MeetingLinkTemplate" name="MeetingLinkTemplate" class="form-control" value="@s.MeetingLinkTemplate" @dis /><div class="form-text">The platform only fills in your template. It does not create meetings at Google Meet, Zoom or Teams; staff can paste a link on each demo.</div></div>
+        <div class="col-12"><div class="form-check"><input type="hidden" name="ConfirmAutomatedBookings" value="false" /><input class="form-check-input" type="checkbox" id="cab" name="ConfirmAutomatedBookings" value="true" checked="@s.ConfirmAutomatedBookings" @dis /><label class="form-check-label" for="cab">Demos booked by the AI assistant or a workflow start as “Requested” and hold the slot until a person accepts them</label></div></div>
+    </div>
+    <h2 class="h6">Reminders</h2>
+    <div class="row g-3 mb-3">
+        <div class="col-12"><div class="form-check"><input type="hidden" name="RemindersEnabled" value="false" /><input class="form-check-input" type="checkbox" id="re" name="RemindersEnabled" value="true" checked="@s.RemindersEnabled" @dis /><label class="form-check-label" for="re">Send demo reminders on WhatsApp</label></div></div>
+        <div class="col-md-5"><label class="form-label" for="ReminderChannelAccountId">WhatsApp account</label><select id="ReminderChannelAccountId" name="ReminderChannelAccountId" class="form-select" @dis><option value="">— none —</option>@foreach (var a in Model.Accounts) { <option value="@a.Id" selected="@(s.ReminderChannelAccountId == a.Id)">@a.Name</option> }</select></div>
+        <div class="col-md-3"><label class="form-label" for="ReminderOffsets">Minutes before (comma separated)</label><input id="ReminderOffsets" name="ReminderOffsets" class="form-control" value="@s.ReminderOffsets" @dis /></div>
+        <div class="col-12"><label class="form-label" for="ReminderBody">Reminder text</label><textarea id="ReminderBody" name="ReminderBody" class="form-control" rows="2" @dis>@s.ReminderBody</textarea><div class="form-text">Placeholders: {name} {first_name} {date} {time} {timezone} {link} {rep}</div></div>
+    </div>
+    <h2 class="h6">Trials</h2>
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-md-3"><label class="form-label" for="TrialDefaultDays">Default length (days)</label><input id="TrialDefaultDays" name="TrialDefaultDays" type="number" class="form-control" value="@s.TrialDefaultDays" @dis /></div>
+        <div class="col-6 col-md-3"><label class="form-label" for="TrialExpiryNoticeHours">Expiry notice (hours before)</label><input id="TrialExpiryNoticeHours" name="TrialExpiryNoticeHours" type="number" class="form-control" value="@s.TrialExpiryNoticeHours" @dis /></div>
+        <div class="col-12"><div class="form-check"><input type="hidden" name="TrialCustomerNoticesEnabled" value="false" /><input class="form-check-input" type="checkbox" id="tn" name="TrialCustomerNoticesEnabled" value="true" checked="@s.TrialCustomerNoticesEnabled" @dis /><label class="form-check-label" for="tn">Also message the customer on WhatsApp (uses the account above). The team always gets a follow-up task.</label></div></div>
+        <div class="col-12"><label class="form-label" for="TrialNoticeBody">Trial notice text</label><textarea id="TrialNoticeBody" name="TrialNoticeBody" class="form-control" rows="2" @dis>@s.TrialNoticeBody</textarea><div class="form-text">Placeholders: {name} {first_name} {plan} {date}</div></div>
+    </div>
+    <h2 class="h6">Payment requests</h2>
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-md-3"><label class="form-label" for="PaymentDueDays">Due after (days)</label><input id="PaymentDueDays" name="PaymentDueDays" type="number" class="form-control" value="@s.PaymentDueDays" @dis /></div>
+        <div class="col-12"><label class="form-label" for="PaymentInstructions">Payment instructions (written by you: bank details, how to pay)</label><textarea id="PaymentInstructions" name="PaymentInstructions" class="form-control" rows="3" @dis>@s.PaymentInstructions</textarea></div>
+    </div>
+    @if (Model.CanManage) { <div><button class="btn btn-primary" type="submit">Save settings</button></div> }
+</form>
+<h2 class="h5">Sales representatives</h2>
+@if (Model.Reps.Count == 0) { <div class="card mb-3"><partial name="_EmptyState" model='("No representatives yet", "Add the team members who take demos, then give each their weekly hours.")' /></div> }
+else
+{
+    <div class="card mb-3"><div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Name</th><th>Time zone</th><th>Buffer</th><th>Max/day</th><th>Hours</th><th>Status</th><th></th></tr></thead><tbody>
+    @foreach (var r in Model.Reps)
+    {
+        <tr><td>@r.UserName</td><td>@r.EffectiveTimeZoneId</td><td>@r.BufferMinutes min</td><td>@r.MaxPerDay</td><td>@r.Rules.Count periods</td><td>@(r.IsActive ? "Active" : "Off")</td>
+        <td class="text-end"><a class="btn btn-outline-primary btn-sm" asp-action="Hours" asp-route-id="@r.Id">Hours &amp; exceptions</a></td></tr>
+    }
+    </tbody></table></div></div>
+}
+@if (Model.CanManage)
+{
+    <form asp-action="SaveRep" method="post" class="card card-body"><h3 class="h6">Add or update a representative</h3><div class="row g-2 align-items-end">
+        <div class="col-md-3"><label class="form-label" for="userId">Team member</label><select id="userId" name="userId" class="form-select" required>@foreach (var c in Model.Candidates) { <option value="@c.Id">@c.Name</option> }@foreach (var r in Model.Reps) { <option value="@r.UserId">@r.UserName (update)</option> }</select></div>
+        <div class="col-md-3"><label class="form-label" for="timeZoneId">Time zone (empty = workspace)</label><input id="timeZoneId" name="timeZoneId" class="form-control" /></div>
+        <div class="col-6 col-md-2"><label class="form-label" for="bufferMinutes">Buffer (min)</label><input id="bufferMinutes" name="bufferMinutes" type="number" class="form-control" value="10" /></div>
+        <div class="col-6 col-md-2"><label class="form-label" for="maxPerDay">Max per day</label><input id="maxPerDay" name="maxPerDay" type="number" class="form-control" value="6" /></div>
+        <div class="col-md-2"><div class="form-check"><input type="hidden" name="isActive" value="false" /><input class="form-check-input" type="checkbox" id="ia" name="isActive" value="true" checked /><label class="form-check-label" for="ia">Takes demos</label></div><button class="btn btn-primary mt-1" type="submit">Save</button></div>
+    </div></form>
+}

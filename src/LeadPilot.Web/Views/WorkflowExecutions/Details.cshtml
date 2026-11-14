@@ -1,0 +1,32 @@
+@model ExecutionDetailsViewModel
+@using LeadPilot.Domain.Workflows
+@{ var e = Model.Execution; var s = e.Summary; ViewData["Title"] = "Run of " + s.WorkflowName; }
+<div class="d-flex flex-wrap justify-content-between align-items-start mb-3 gap-2">
+    <div><h1 class="h3 mb-1">@s.WorkflowName <span class="text-muted fs-6">v@(s.VersionNumber)</span> <span class="badge @WorkflowDescribe.StatusClass(s.Status) fs-6 align-middle">@s.Status</span></h1>
+        <p class="text-muted mb-0">Lead <a asp-controller="Leads" asp-action="Details" asp-route-id="@s.LeadId">@s.LeadName</a> · started by @s.TriggerKey@(e.StartedBy is null ? "" : " (" + e.StartedBy + ")") · @s.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm") UTC</p>
+        @if (!string.IsNullOrWhiteSpace(s.StatusReason)) { <p class="mb-0">@s.StatusReason</p> }</div>
+    @if (Model.CanExecute)
+    {
+        <div class="d-flex gap-2">
+            @if (e.CanRetry) { <form asp-action="Retry" asp-route-id="@s.Id" method="post"><button class="btn btn-primary" type="submit" data-confirm="Retry from the failed step? Steps that already ran (for example a message that was queued) are not repeated." data-confirm-label="Retry">Retry failed step</button></form> }
+            @if (e.CanCancel) { <form asp-action="Cancel" asp-route-id="@s.Id" method="post"><button class="btn btn-outline-danger" type="submit" data-confirm="Cancel this run? Steps that already ran are not undone." data-confirm-label="Cancel run">Cancel run</button></form> }
+        </div>
+    }
+</div>
+@if (s.Status == ExecutionStatus.Stopped) { <div class="alert alert-warning">This run stopped on purpose (for example because the contact may not be messaged). It cannot be retried.</div> }
+<div class="card mb-3"><div class="card-header">Steps</div><div class="table-responsive"><table class="table align-middle mb-0">
+    <thead><tr><th>Step</th><th>State</th><th class="text-end">Attempts</th><th>Result</th></tr></thead><tbody>
+    @foreach (var st in e.Steps)
+    {
+        <tr class="@(st.Key == s.CurrentStepKey && s.Status is not (ExecutionStatus.Completed) ? "table-active" : "")"><td>@st.Name <span class="small text-muted">@st.Type</span></td>
+            <td><span class="badge @(st.Status == "done" ? "text-bg-success" : st.Status == "failed" ? "text-bg-danger" : st.Status == "blocked" ? "text-bg-warning" : st.Status == "waiting" ? "text-bg-info" : "text-bg-light border")">@st.Status</span></td>
+            <td class="text-end">@st.Attempts</td><td class="small">@st.Error@(st.WaitUntilUtc is { } u ? $"waits until {u:yyyy-MM-dd HH:mm} UTC" : "")</td></tr>
+    }
+    </tbody></table></div></div>
+<div class="card"><div class="card-header">Log</div><ul class="list-group list-group-flush">
+    @foreach (var l in e.Logs)
+    {
+        <li class="list-group-item"><span class="small text-muted text-nowrap">@l.OccurredAtUtc.ToString("HH:mm:ss")</span> <span class="badge @(l.Outcome == LogOutcome.Succeeded ? "text-bg-success" : l.Outcome is LogOutcome.Failed ? "text-bg-danger" : l.Outcome is LogOutcome.Blocked ? "text-bg-warning" : "text-bg-light border")">@l.Outcome</span>
+            @if (l.StepName is not null) { <strong>@l.StepName</strong> }  @l.Message</li>
+    }
+</ul></div>

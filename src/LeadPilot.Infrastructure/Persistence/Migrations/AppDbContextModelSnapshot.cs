@@ -435,6 +435,9 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("TenantId");
 
+                    b.HasIndex("TenantId", "OccurredAtUtc")
+                        .HasDatabaseName("IX_HandoffEvents_Tenant_Occurred");
+
                     b.HasIndex("TenantId", "ConversationId", "OccurredAtUtc");
 
                     b.ToTable("HandoffEvents", (string)null);
@@ -746,6 +749,9 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
                     b.HasIndex("TenantId");
 
                     b.HasIndex("TriggerMessageId");
+
+                    b.HasIndex("TenantId", "CreatedAtUtc")
+                        .HasDatabaseName("IX_AiInteractions_Tenant_Created");
 
                     b.HasIndex("TenantId", "TriggerMessageId")
                         .IsUnique();
@@ -1464,6 +1470,95 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
                     b.ToTable("RetrievalLogs", (string)null);
                 });
 
+            modelBuilder.Entity("LeadPilot.Domain.Analytics.AnalyticsRefreshState", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("CoveredFromDay")
+                        .HasPrecision(6)
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("CoveredToDay")
+                        .HasPrecision(6)
+                        .HasColumnType("date");
+
+                    b.Property<int>("LastDurationMs")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("LastFullRebuildAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTime>("LastRefreshedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("LastRowCount")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("TimeZoneId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId")
+                        .IsUnique();
+
+                    b.ToTable("AnalyticsRefreshStates", (string)null);
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Analytics.DailyMetric", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("ComputedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<long>("Count")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("Day")
+                        .HasPrecision(6)
+                        .HasColumnType("date");
+
+                    b.Property<string>("Dimension")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("varchar(10)");
+
+                    b.Property<string>("MetricKey")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("varchar(40)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("char(36)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("TenantId", "MetricKey", "Day", "Dimension")
+                        .IsUnique()
+                        .HasDatabaseName("UX_DailyMetrics_Tenant_Metric_Day_Dim");
+
+                    b.ToTable("DailyMetrics", (string)null);
+                });
+
             modelBuilder.Entity("LeadPilot.Domain.Campaigns.Campaign", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1661,6 +1756,9 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
                     b.HasIndex("TenantId", "CreatedAtUtc");
 
                     b.HasIndex("TenantId", "ParentCampaignId");
+
+                    b.HasIndex("TenantId", "StartedAtUtc")
+                        .HasDatabaseName("IX_Campaigns_Tenant_Started");
 
                     b.HasIndex("TenantId", "Status", "ScheduledAtUtc");
 
@@ -1944,6 +2042,9 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
                     b.HasIndex("TenantId", "LeadId");
 
                     b.HasIndex("TenantId", "MessageId");
+
+                    b.HasIndex("TenantId", "SentAtUtc")
+                        .HasDatabaseName("IX_CampaignRecipients_Tenant_Sent");
 
                     b.HasIndex("TenantId", "ContactId", "QueuedAtUtc");
 
@@ -2354,6 +2455,9 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("TenantId");
 
+                    b.HasIndex("TenantId", "ConvertedAtUtc")
+                        .HasDatabaseName("IX_Customers_Tenant_Converted");
+
                     b.HasIndex("TenantId", "LeadId")
                         .IsUnique();
 
@@ -2452,6 +2556,12 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("TenantId", "ActiveSlot")
                         .IsUnique();
+
+                    b.HasIndex("TenantId", "CompletedAtUtc")
+                        .HasDatabaseName("IX_Demos_Tenant_Completed");
+
+                    b.HasIndex("TenantId", "CreatedAtUtc")
+                        .HasDatabaseName("IX_Demos_Tenant_Created");
 
                     b.HasIndex("TenantId", "LeadId");
 
@@ -2763,6 +2873,9 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("TenantId", "EvidenceKey")
                         .IsUnique();
+
+                    b.HasIndex("TenantId", "PaidAtUtc")
+                        .HasDatabaseName("IX_Payments_Tenant_Paid");
 
                     b.ToTable("Payments", (string)null);
                 });
@@ -3172,6 +3285,9 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
                     b.HasIndex("PlanId");
 
                     b.HasIndex("TenantId");
+
+                    b.HasIndex("TenantId", "CreatedAtUtc")
+                        .HasDatabaseName("IX_Trials_Tenant_Created");
 
                     b.HasIndex("TenantId", "LeadId");
 
@@ -3669,6 +3785,9 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("TenantId", "City");
 
+                    b.HasIndex("TenantId", "CreatedAtUtc")
+                        .HasDatabaseName("IX_Leads_Tenant_Created");
+
                     b.HasIndex("TenantId", "DedupKey");
 
                     b.HasIndex("TenantId", "NormalizedName");
@@ -4109,6 +4228,9 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
                     b.HasIndex("TenantId", "LeadId");
 
                     b.HasIndex("TenantId", "PipelineStageId");
+
+                    b.HasIndex("TenantId", "Status", "UpdatedAtUtc")
+                        .HasDatabaseName("IX_Opportunities_Tenant_Status_Updated");
 
                     b.ToTable("Opportunities", (string)null);
                 });
@@ -4903,6 +5025,9 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ExpiresAtUtc", "ContentPurged");
 
+                    b.HasIndex("TenantId", "RetrievedAtUtc")
+                        .HasDatabaseName("IX_DiscoveryResults_Tenant_Retrieved");
+
                     b.HasIndex("TenantId", "ConnectorType", "ExternalId")
                         .IsUnique();
 
@@ -5520,6 +5645,9 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("TenantId", "CampaignRecipientId");
 
+                    b.HasIndex("TenantId", "FailedAtUtc")
+                        .HasDatabaseName("IX_Messages_Tenant_Failed");
+
                     b.HasIndex("TenantId", "IdempotencyKey")
                         .IsUnique();
 
@@ -5530,7 +5658,16 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("TenantId", "ChannelAccountId", "SentAtUtc");
 
+                    b.HasIndex("TenantId", "ContactId", "Direction")
+                        .HasDatabaseName("IX_Messages_Tenant_Contact_Dir");
+
                     b.HasIndex("TenantId", "ConversationId", "OccurredAtUtc");
+
+                    b.HasIndex("TenantId", "Direction", "OccurredAtUtc")
+                        .HasDatabaseName("IX_Messages_Tenant_Dir_Occurred");
+
+                    b.HasIndex("TenantId", "Direction", "SentAtUtc")
+                        .HasDatabaseName("IX_Messages_Tenant_Dir_Sent");
 
                     b.ToTable("Messages", (string)null);
                 });
@@ -7370,6 +7507,24 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
                 });
 
             modelBuilder.Entity("LeadPilot.Domain.Ai.RetrievalLog", b =>
+                {
+                    b.HasOne("LeadPilot.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Analytics.AnalyticsRefreshState", b =>
+                {
+                    b.HasOne("LeadPilot.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Analytics.DailyMetric", b =>
                 {
                     b.HasOne("LeadPilot.Domain.Tenancy.Tenant", null)
                         .WithMany()

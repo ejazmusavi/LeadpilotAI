@@ -14,6 +14,7 @@ using LeadPilot.Infrastructure.Tenancy;
 using LeadPilot.Infrastructure.Web;
 using LeadPilot.Infrastructure.Workflows;
 using LeadPilot.Infrastructure.Conversion;
+using LeadPilot.Infrastructure.Analytics;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Builder;
@@ -94,6 +95,7 @@ public static class DependencyInjection
         services.AddAi(config);
         services.AddWorkflows(config);
         services.AddConversion(config);
+        services.AddAnalytics(config);
         return services;
     }
 

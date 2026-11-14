@@ -75,6 +75,14 @@
             <a class="nav-link @(Nav("/WorkflowNotifications") ? "active" : "")" asp-controller="WorkflowNotifications" asp-action="Index">My notices</a>
         </nav>
     }
+    @if (perms.Has(PermissionCodes.ReportsView))
+    {
+        <div class="nav-section">Analytics</div>
+        <nav class="nav flex-column px-2">
+            <a class="nav-link @(Nav("/Reports") && !Nav("/Reports/Metrics") ? "active" : "")" asp-controller="Reports" asp-action="Index">Reports</a>
+            <a class="nav-link @(Nav("/Reports/Metrics") ? "active" : "")" asp-controller="Reports" asp-action="Metrics">Metric definitions</a>
+        </nav>
+    }
     @if (perms.Has(PermissionCodes.DemosView) || perms.Has(PermissionCodes.TrialsView) || perms.Has(PermissionCodes.CustomersView))
     {
         <div class="nav-section">Sales conversion</div>

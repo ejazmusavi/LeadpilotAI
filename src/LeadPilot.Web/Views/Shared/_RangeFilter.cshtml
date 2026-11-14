@@ -1,0 +1,21 @@
+@model RangeFilterModel
+@using LeadPilot.Application.Analytics
+<form method="get" asp-controller="@Model.Controller" asp-action="@Model.Action" class="card card-body mb-3" aria-label="Date range">
+    <div class="row g-2 align-items-end">
+        @foreach (var kv in Model.Extra) { if (kv.Value is not null) { <input type="hidden" name="@kv.Key" value="@kv.Value" /> } }
+        <div class="col-12 col-sm-6 col-lg-3">
+            <label class="form-label small mb-1" for="preset">Period</label>
+            <select id="preset" name="preset" class="form-select form-select-sm">
+                @foreach (var p in Enum.GetValues<RangePreset>()) { <option value="@p" selected="@(Model.Request.Preset == p)">@(p == RangePreset.Custom ? "Custom range" : System.Text.RegularExpressions.Regex.Replace(p.ToString(), "(?<=[a-z0-9])(?=[A-Z])", " "))</option> }
+            </select>
+        </div>
+        <div class="col-6 col-lg-2"><label class="form-label small mb-1" for="from">From (inclusive)</label><input id="from" name="from" type="date" class="form-control form-control-sm" value="@Model.Request.From?.ToString("yyyy-MM-dd")" /></div>
+        <div class="col-6 col-lg-2"><label class="form-label small mb-1" for="to">To (inclusive)</label><input id="to" name="to" type="date" class="form-control form-control-sm" value="@Model.Request.To?.ToString("yyyy-MM-dd")" /></div>
+        @if (Model.ShowCompare)
+        {
+            <div class="col-12 col-sm-6 col-lg-3"><div class="form-check mt-2"><input class="form-check-input" type="checkbox" id="compare" name="compare" value="true" checked="@Model.Request.Compare" /><input type="hidden" name="compare" value="false" /><label class="form-check-label small" for="compare">Compare with the previous period</label></div></div>
+        }
+        <div class="col-12 col-lg-2"><button class="btn btn-outline-primary btn-sm" type="submit">Apply</button></div>
+    </div>
+    <div class="form-text mt-2">Dates are workspace calendar days@(Model.Range is null ? "" : $" in {Model.Range.TimeZoneId}"). "From" and "To" are both included@(Model.Range is null ? "" : $": {Model.Range.From:yyyy-MM-dd} to {Model.Range.To:yyyy-MM-dd} = {Model.Range.FromUtc:yyyy-MM-dd HH:mm} (inclusive) to {Model.Range.ToUtcExclusive:yyyy-MM-dd HH:mm} (exclusive) UTC"). Custom dates apply only when "Custom range" is selected.</div>
+</form>

@@ -1,0 +1,23 @@
+@model TrendDto
+@{
+    var pts = Model.Points; var max = pts.Count == 0 ? 0 : pts.Max(p => p.Value); var n = Math.Max(pts.Count, 1);
+    const double W = 300, H = 70; var bw = W / n; var total = pts.Sum(p => p.Value);
+}
+<div class="card h-100"><div class="card-body p-3">
+    <div class="d-flex justify-content-between"><div class="small fw-semibold">@Model.Name</div><div class="small text-muted">@total.ToString("N0") in range · per @Model.Grain</div></div>
+    @if (total == 0) { <div class="small text-muted py-4 text-center">No events in this period.</div> }
+    else
+    {
+        <svg viewBox="0 0 @W @(H + 14)" class="w-100 trend-chart text-primary" role="img" aria-label="@Model.Name per @Model.Grain, peak @max.ToString("N0")" preserveAspectRatio="none">
+            @for (var i = 0; i < pts.Count; i++)
+            {
+                var h = max == 0 ? 0 : Math.Max(pts[i].Value == 0 ? 0 : 1.5, H * pts[i].Value / max);
+                <rect x="@((i * bw + 0.5).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))" y="@((H - h).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))" width="@(Math.Max(bw - 1, 0.5).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))" height="@h.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)" fill="currentColor"><title>@pts[i].Day.ToString("yyyy-MM-dd"): @pts[i].Value.ToString("N0")</title></rect>
+            }
+            <line x1="0" y1="@H" x2="@W" y2="@H" stroke="#cbd5e1" stroke-width="0.5" />
+            <text x="0" y="@(H + 10)" font-size="8" fill="#64748b">@pts.First().Day.ToString("MMM d")</text>
+            <text x="@W" y="@(H + 10)" font-size="8" fill="#64748b" text-anchor="end">@pts.Last().Day.ToString("MMM d")</text>
+        </svg>
+        <div class="small text-muted">Peak @max.ToString("N0")</div>
+    }
+</div></div>

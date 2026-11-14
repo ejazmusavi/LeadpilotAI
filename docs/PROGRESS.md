@@ -471,7 +471,7 @@ Migration `Phase9Workflows`: 8 new tables, no change to existing tables (see DAT
 | Build | succeeded, 0 warnings, 0 errors (TreatWarningsAsErrors) |
 | Unit | 1022 passed, 0 failed, 0 skipped |
 | Architecture | 97 passed, 0 failed |
-| Integration | see the final line of the report; includes 29 new workflow tests; 1 skipped (live Claude/Voyage), as before |
+| Integration | 451 passed, 0 failed, 1 skipped (live Claude/Voyage test, as before); includes 29 new workflow tests |
 | Not executed | live WAHA, live Claude/Voyage, real Qdrant, Docker, load tests |
 
 Existing tests changed on purpose: the worker harness now delivers an event to every queue bound to its routing key (as the real topic exchange does), and the real-broker campaign test drains the outbox in rounds because the shared workspace now also holds Phase 9 events. A first full run exposed two real defects that were fixed: a Swagger schema-name clash (`KillSwitchRequest`) and a builder form model that failed validation on server-side properties.

@@ -203,6 +203,67 @@ public class AiArchitectureTests
         }
     }
 
+    public static IEnumerable<object[]> AgentControllers() =>
+        Web.GetTypes().Where(t => typeof(Controller).IsAssignableFrom(t) && t.Name is "AgentsController" or "ApprovalsController" or "CatalogController" or "FollowUpsController").Select(t => new object[] { t })
+            .Concat(Api.GetTypes().Where(t => t.Name is "AgentsController" or "ProductCatalogController" or "ApprovalsController" or "ToolExecutionsController" or "FollowUpsController").Select(t => new object[] { t }));
+
+    [Theory, MemberData(nameof(AgentControllers))]
+    public void Every_sales_agent_action_has_a_catalog_permission_an_explicit_verb_and_web_mutations_are_post(Type controller)
+    {
+        var actions = controller.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly).Where(m => !m.IsSpecialName && m.GetCustomAttribute<NonActionAttribute>() is null && m.DeclaringType == controller).ToList();
+        Assert.NotEmpty(actions);
+        var classPolicy = controller.GetCustomAttributes<AuthorizeAttribute>().Select(a => a.Policy).FirstOrDefault(p => p is not null);
+        string[] webReads = ["Index", "Edit", "Executions", "Product"];
+        foreach (var a in actions)
+        {
+            var policy = a.GetCustomAttributes<AuthorizeAttribute>().Select(x => x.Policy).FirstOrDefault(p => p is not null) ?? classPolicy;
+            Assert.True(policy is not null && PermissionCatalog.Exists(policy), $"{controller.Name}.{a.Name} needs a catalog permission");
+            var verbs = a.GetCustomAttributes().OfType<HttpMethodAttribute>().SelectMany(v => v.HttpMethods).ToList();
+            Assert.True(verbs.Count > 0, $"{controller.Name}.{a.Name} needs an explicit HTTP verb");
+            if (controller.Namespace!.Contains("Web")) Assert.Equal(webReads.Contains(a.Name) ? ["GET"] : ["POST"], verbs);
+        }
+    }
+
+    [Fact]
+    public void The_conversation_handoff_actions_are_post_only_and_need_reply_permission()
+    {
+        var web = Web.GetTypes().Single(t => t.Name == "ConversationsController");
+        foreach (var name in new[] { "TakeOver", "PauseAi", "ResumeAi", "AddNote", "Assign" })
+        {
+            var m = web.GetMethod(name)!;
+            Assert.Equal(["POST"], m.GetCustomAttributes().OfType<HttpMethodAttribute>().SelectMany(v => v.HttpMethods).ToList());
+            Assert.Equal(PermissionCodes.ConversationsReply, m.GetCustomAttributes<AuthorizeAttribute>().Single().Policy);
+        }
+        var api = Api.GetTypes().Single(t => t.Name == "ConversationsController");
+        foreach (var name in new[] { "TakeOver", "PauseAi", "ResumeAi", "AddNote" })
+            Assert.Equal(PermissionCodes.ConversationsReply, api.GetMethod(name)!.GetCustomAttributes<AuthorizeAttribute>().Single().Policy);
+    }
+
+    [Fact]
+    public void Every_phase_8_entity_is_tenant_owned_ledgers_are_append_only_and_hangfire_is_still_the_only_scheduler()
+    {
+        var ns = typeof(LeadPilot.Domain.Agents.SalesAgent).Namespace;
+        var entities = typeof(LeadPilot.Domain.Agents.SalesAgent).Assembly.GetTypes().Where(t => t.Namespace == ns && typeof(Entity).IsAssignableFrom(t) && !t.IsAbstract).ToList();
+        Assert.True(entities.Count >= 10);
+        Assert.All(entities, t => Assert.True(typeof(ITenantOwned).IsAssignableFrom(t), $"{t.Name} must be tenant owned"));
+        foreach (var t in new[] { typeof(LeadPilot.Domain.Agents.ConversationNote), typeof(LeadPilot.Domain.Agents.HandoffEvent), typeof(AiToolExecution) }) Assert.True(typeof(IAppendOnly).IsAssignableFrom(t), t.Name);
+        string[] forbidden = ["System.Threading.Timer", "new Timer(", "PeriodicTimer", "Quartz", "BackgroundService", "IHostedService", "Thread.Sleep", "new Thread(", "Task.Run("];
+        var offenders = AiFiles("LeadPilot.Infrastructure").Where(f => f.Replace('\\', '/').Contains("/Agents/")).SelectMany(f => forbidden.Where(File.ReadAllText(f).Contains).Select(x => $"{Path.GetFileName(f)}: {x}")).ToList();
+        Assert.Empty(offenders);
+    }
+
+    [Fact]
+    public void The_phase_10_ports_have_no_fake_implementation_in_the_product_and_report_not_connected()
+    {
+        foreach (var port in new[] { typeof(IDemoScheduler), typeof(ITrialProvisioner), typeof(IPaymentRequestGateway) })
+        {
+            var impl = Infrastructure.GetTypes().Single(t => port.IsAssignableFrom(t) && !t.IsInterface);
+            Assert.StartsWith("Unavailable", impl.Name);
+        }
+        var source = File.ReadAllText(Sources("LeadPilot.Infrastructure").Single(f => f.EndsWith("UnavailablePorts.cs")));
+        Assert.DoesNotContain("PortResult<TrialInfo>.Ok", source); Assert.DoesNotContain(".Ok(", source.Replace("NotConnected", ""));
+    }
+
     [Fact]
     public void The_conversation_suggestion_actions_are_post_only_and_need_reply_permission()
     {

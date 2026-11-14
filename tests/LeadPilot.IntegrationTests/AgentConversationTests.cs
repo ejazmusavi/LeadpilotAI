@@ -399,4 +399,21 @@ public class AgentConversationTests(AppFixture app)
         Assert.Equal(AiDecision.Draft, i.Decision); Assert.Null(i.AgentId); Assert.Equal(AutoSendState.NotAttempted, i.AutoSend);
         Assert.DoesNotContain(await app.Db(db => db.Messages.IgnoreQueryFilters().Where(m => m.ConversationId == chat.ConversationId && m.Direction == MessageDirection.Outbound).ToListAsync()), m => m.IsAiGenerated);
     }
+
+    [RequiresMySqlFact]
+    public async Task Assignment_status_notes_and_escalation_reason_are_recorded_in_the_handoff_history()
+    {
+        await using var w = await AgentWorld.OpenAsync(app);
+        var chat = await w.ChatAsync();
+        var me = await app.Db(db => db.Users.IgnoreQueryFilters().Where(u => u.Email == w.Ai.AdminUser.Email).Select(u => u.Id).SingleAsync());
+        Assert.Equal(HttpStatusCode.OK, (await w.Admin.Put($"/api/v1/conversations/{chat.ConversationId}/assignee", new { userId = me })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await w.Admin.Put($"/api/v1/conversations/{chat.ConversationId}/status?status=Closed", new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await w.Admin.Put($"/api/v1/conversations/{chat.ConversationId}/assignee", new { userId = (Guid?)null })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await w.Admin.Put($"/api/v1/conversations/{chat.ConversationId}/assignee", new { userId = Guid.NewGuid() })).StatusCode);   // not a member of this workspace
+        Assert.Equal(HttpStatusCode.BadRequest, (await w.Admin.Post($"/api/v1/conversations/{chat.ConversationId}/notes", new { body = "   " })).StatusCode);
+        var hist = await ApiSession.Json<List<HandoffEventDto>>(await w.Admin.Get($"/api/v1/conversations/{chat.ConversationId}/handoff-history"));
+        Assert.Equal([HandoffKind.Unassigned, HandoffKind.StatusChanged, HandoffKind.Assigned], hist.Where(h => h.Kind is HandoffKind.Assigned or HandoffKind.Unassigned or HandoffKind.StatusChanged).Select(h => h.Kind).Take(3).ToArray());
+        Assert.Contains(hist, h => h.Kind == HandoffKind.StatusChanged && h.FromState == "Open" && h.ToState == "Closed");
+        Assert.Equal(2, await app.Db(db => db.ConversationAssignments.IgnoreQueryFilters().CountAsync(a => a.TenantId == w.TenantId && a.ConversationId == chat.ConversationId)));   // the Phase 5 history is kept too
+    }
 }

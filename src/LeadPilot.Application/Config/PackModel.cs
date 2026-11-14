@@ -14,9 +14,9 @@ public sealed record PackCustomField(string Key, string Entity, string Label, st
 public sealed record PackScoringRule(string Dimension, string Target, int Points, string? Description);
 public sealed record PackTemplate(string Key, string Name, string Body, string Category);
 public sealed record PackQuestion(string Key, string Question, string Type, IReadOnlyList<string> Choices, bool Required);
-public sealed record PackAgent(string Key, string Name, string? Description, string Instructions, string? OffTopicReply, IReadOnlyList<PackQuestion> Questions);
+public sealed record PackAgent(string Key, string Name, string? Description, string Instructions, string? OffTopicReply, IReadOnlyList<string> Tools, IReadOnlyList<PackQuestion> Questions);
 public sealed record PackPlan(string Key, string Name, decimal? Price, string Currency, string? Period, string? Details);
-public sealed record PackProduct(string Key, string Kind, string Name, string? Summary, IReadOnlyList<string> Features, IReadOnlyList<PackPlan> Plans);
+public sealed record PackProduct(string Key, string Kind, string Name, string? Summary, IReadOnlyList<string> Features, string? DemoProcess, string? TrialProcess, IReadOnlyList<PackPlan> Plans);
 public sealed record PackKnowledge(string Key, string Name);
 public sealed record PackStep(string Key, string Type, string Name, JsonElement? Config, JsonElement? Condition, string OnFailure, int MaxRetries);
 public sealed record PackWorkflow(string Key, string Name, string? Description, string TriggerEvent, JsonElement? TriggerCondition, int? InactiveDays, IReadOnlyList<PackStep> Steps, string ReEntry, int CooldownHours, int MaxStartsPer30Days);

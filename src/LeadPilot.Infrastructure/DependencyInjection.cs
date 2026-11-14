@@ -1,3 +1,4 @@
+using LeadPilot.Infrastructure.Config;
 using LeadPilot.Infrastructure.Billing;
 using LeadPilot.Application.Abstractions;
 using LeadPilot.Application.Contracts;
@@ -99,6 +100,7 @@ public static class DependencyInjection
         services.AddAnalytics(config);
         services.AddBilling();
         services.AddBillingAdministration();
+        services.AddIndustryConfig();
         return services;
     }
 

@@ -92,7 +92,7 @@ internal sealed class PackEngine(CrmContext crm, IWorkflowService workflows)
                 new() { ["points"] = r.Points.ToString(CultureInfo.InvariantCulture), ["description"] = r.Description ?? "", ["enabled"] = "true" }, r));
         foreach (var a in d.Agents)
         {
-            items.Add(new(PackTypes.Agent, a.Key, PackHash.Low(a.Name), a.Name, null, null, new() { ["description"] = a.Description ?? "", ["instructions"] = a.Instructions, ["offTopicReply"] = a.OffTopicReply ?? DefaultOffTopic }, a));
+            items.Add(new(PackTypes.Agent, a.Key, PackHash.Low(a.Name), a.Name, null, null, new() { ["description"] = a.Description ?? "", ["instructions"] = a.Instructions, ["offTopicReply"] = a.OffTopicReply ?? DefaultOffTopic, ["tools"] = PackHash.Lines(a.Tools) }, a));
             var order = 0;
             foreach (var q in a.Questions)
                 items.Add(new(PackTypes.Question, a.Key + "/" + q.Key, PackHash.Low(a.Name) + "/" + q.Key, q.Question, a.Key, PackTypes.Agent,
@@ -100,7 +100,7 @@ internal sealed class PackEngine(CrmContext crm, IWorkflowService workflows)
         }
         foreach (var p in d.Catalog)
         {
-            items.Add(new(PackTypes.Product, p.Key, PackHash.Low(p.Name), p.Name, null, null, new() { ["kind"] = p.Kind, ["summary"] = p.Summary ?? "", ["features"] = PackHash.Lines(p.Features) }, p));
+            items.Add(new(PackTypes.Product, p.Key, PackHash.Low(p.Name), p.Name, null, null, new() { ["kind"] = p.Kind, ["summary"] = p.Summary ?? "", ["features"] = PackHash.Lines(p.Features), ["demo"] = p.DemoProcess ?? "", ["trial"] = p.TrialProcess ?? "" }, p));
             foreach (var pl in p.Plans)
                 items.Add(new(PackTypes.Plan, p.Key + "/" + pl.Key, PackHash.Low(p.Name) + "/" + PackHash.Low(pl.Name), pl.Name, p.Key, PackTypes.Product,
                     new() { ["price"] = PackHash.Num(pl.Price), ["currency"] = pl.Currency, ["period"] = pl.Period ?? "", ["details"] = pl.Details ?? "" }, pl));
@@ -202,7 +202,7 @@ internal sealed class PackEngine(CrmContext crm, IWorkflowService workflows)
                     .Select(r => new Existing(r.Id, r.Dimension + "|" + PackHash.Low(r.Target), new() { ["points"] = r.Points.ToString(CultureInfo.InvariantCulture), ["description"] = r.Description ?? "", ["enabled"] = Bool(r.IsEnabled) })).ToList();
             }
             case PackTypes.Agent:
-                return (await Db.SalesAgents.AsNoTracking().Where(a => a.TenantId == tenantId).ToListAsync(ct)).Select(a => new Existing(a.Id, PackHash.Low(a.Name), new() { ["description"] = a.Description ?? "", ["instructions"] = a.Instructions, ["offTopicReply"] = a.OffTopicReply })).ToList();
+                return (await Db.SalesAgents.AsNoTracking().Where(a => a.TenantId == tenantId).ToListAsync(ct)).Select(a => new Existing(a.Id, PackHash.Low(a.Name), new() { ["description"] = a.Description ?? "", ["instructions"] = a.Instructions, ["offTopicReply"] = a.OffTopicReply, ["tools"] = PackHash.Lines(a.EnabledTools.OrderBy(t => t, StringComparer.Ordinal)) })).ToList();
             case PackTypes.Question:
             {
                 var agents = await Db.SalesAgents.AsNoTracking().Where(a => a.TenantId == tenantId).ToDictionaryAsync(a => a.Id, a => a.Name, ct);
@@ -210,7 +210,7 @@ internal sealed class PackEngine(CrmContext crm, IWorkflowService workflows)
                     .Select(q => new Existing(q.Id, PackHash.Low(agents.GetValueOrDefault(q.AgentId, "")) + "/" + q.Key, new() { ["question"] = q.Question, ["type"] = q.AnswerType.ToString(), ["choices"] = PackHash.Lines(q.Choices), ["required"] = Bool(q.Required) })).ToList();
             }
             case PackTypes.Product:
-                return (await Db.CatalogProducts.AsNoTracking().Where(p => p.TenantId == tenantId).ToListAsync(ct)).Select(p => new Existing(p.Id, PackHash.Low(p.Name), new() { ["kind"] = p.Kind.ToString(), ["summary"] = p.Summary ?? "", ["features"] = PackHash.Lines(p.FeatureList) })).ToList();
+                return (await Db.CatalogProducts.AsNoTracking().Where(p => p.TenantId == tenantId).ToListAsync(ct)).Select(p => new Existing(p.Id, PackHash.Low(p.Name), new() { ["kind"] = p.Kind.ToString(), ["summary"] = p.Summary ?? "", ["features"] = PackHash.Lines(p.FeatureList), ["demo"] = p.DemoProcess ?? "", ["trial"] = p.TrialProcess ?? "" })).ToList();
             case PackTypes.Plan:
             {
                 var products = await Db.CatalogProducts.AsNoTracking().Where(p => p.TenantId == tenantId).ToDictionaryAsync(p => p.Id, p => p.Name, ct);
@@ -433,7 +433,7 @@ internal sealed class PackEngine(CrmContext crm, IWorkflowService workflows)
                 var a = (PackAgent)i.Source;
                 var hasDefault = await Db.SalesAgents.AnyAsync(x => x.TenantId == tenantId && x.IsDefault && x.IsActive, ct);
                 var agent = SalesAgent.Create(tenantId, a.Name, a.Instructions, !hasDefault, doc.Sample, now, crm.Actor);
-                agent.Update(a.Name, a.Description, a.Instructions, null, null, [], a.OffTopicReply ?? DefaultOffTopic, now, crm.Actor, keepSampleFlag: true);
+                agent.Update(a.Name, a.Description, a.Instructions, null, null, a.Tools, a.OffTopicReply ?? DefaultOffTopic, now, crm.Actor, keepSampleFlag: true);
                 Db.SalesAgents.Add(agent); return agent.Id;
             }
             case PackTypes.Question:
@@ -444,7 +444,7 @@ internal sealed class PackEngine(CrmContext crm, IWorkflowService workflows)
             case PackTypes.Product:
             {
                 var p = (PackProduct)i.Source;
-                var prod = CatalogProduct.Create(tenantId, p.Name, p.Summary, PackHash.Lines(p.Features), null, null, false, doc.Sample, now, crm.Actor, Enum.Parse<CatalogItemKind>(p.Kind)); Db.CatalogProducts.Add(prod); return prod.Id;
+                var prod = CatalogProduct.Create(tenantId, p.Name, p.Summary, PackHash.Lines(p.Features), p.DemoProcess, p.TrialProcess, false, doc.Sample, now, crm.Actor, Enum.Parse<CatalogItemKind>(p.Kind)); Db.CatalogProducts.Add(prod); return prod.Id;
             }
             case PackTypes.Plan:
             {
@@ -512,7 +512,7 @@ internal sealed class PackEngine(CrmContext crm, IWorkflowService workflows)
             {
                 var a = (PackAgent)i.Source;
                 var agent = await Db.SalesAgents.FirstAsync(x => x.Id == id && x.TenantId == tenantId, ct);
-                agent.Update(a.Name, a.Description, a.Instructions, agent.ChatModel, agent.MinConfidence, agent.EnabledTools, a.OffTopicReply ?? DefaultOffTopic, now, crm.Actor, keepSampleFlag: agent.IsSample); break;
+                agent.Update(a.Name, a.Description, a.Instructions, agent.ChatModel, agent.MinConfidence, a.Tools, a.OffTopicReply ?? DefaultOffTopic, now, crm.Actor, keepSampleFlag: agent.IsSample); break;
             }
             case PackTypes.Question:
             {
@@ -527,7 +527,7 @@ internal sealed class PackEngine(CrmContext crm, IWorkflowService workflows)
                 var p = (PackProduct)i.Source;
                 var prod = await Db.CatalogProducts.FirstAsync(x => x.Id == id && x.TenantId == tenantId, ct);
                 // changed facts are never silently trusted: the product is unconfirmed again until a person confirms it
-                prod.Update(p.Name, p.Summary, PackHash.Lines(p.Features), prod.DemoProcess, prod.TrialProcess, false, prod.IsActive, now, crm.Actor, Enum.Parse<CatalogItemKind>(p.Kind)); break;
+                prod.Update(p.Name, p.Summary, PackHash.Lines(p.Features), p.DemoProcess, p.TrialProcess, false, prod.IsActive, now, crm.Actor, Enum.Parse<CatalogItemKind>(p.Kind)); break;
             }
             case PackTypes.Plan:
             {

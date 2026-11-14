@@ -1,0 +1,74 @@
+{
+  "format": "leadpilot.pack",
+  "formatVersion": 1,
+  "key": "education",
+  "version": 1,
+  "name": "Education (schools/colleges)",
+  "description": "Lead categories and discovery searches for schools, colleges and academies, plus a draft sales assistant and a placeholder catalog. This is the configuration LeadPilot used to ship as its \"School ERP\" sample. It contains no product facts: every fact field is a placeholder and everything starts unconfirmed.",
+  "industry": "Education",
+  "sample": true,
+  "notice": "SAMPLE – review before use",
+  "categories": [
+    { "key": "private-schools", "name": "Private schools" },
+    { "key": "primary-schools", "name": "Primary schools" },
+    { "key": "secondary-schools", "name": "Secondary schools" },
+    { "key": "higher-secondary-schools", "name": "Higher secondary schools" },
+    { "key": "colleges", "name": "Colleges" },
+    { "key": "academies", "name": "Academies" },
+    { "key": "educational-institutions", "name": "Educational institutions" }
+  ],
+  "agents": [
+    {
+      "key": "school-erp-assistant",
+      "name": "School ERP sales assistant (SAMPLE)",
+      "description": "SAMPLE configuration: placeholders only. Replace the instructions and fill in the catalog before relying on it.",
+      "instructions": "You are the sales assistant of a business that sells school management software (School ERP). You talk to school owners, principals and administrators on WhatsApp.\nGoals: welcome the person, understand their school and their problems, answer product questions, qualify them with the qualification questions (one or two per message, never an interrogation),\nexplain relevant benefits, answer objections politely, and arrange a demo or a follow-up with the team.\nYou know nothing about the product except what the tools return. Always call GetProductInformation or GetPricingPlans before you state a feature or a price. If a tool says the information is\nunknown or not confirmed, tell the person honestly that you do not have it and that a colleague will follow up. Never invent features, prices, discounts, dates or integrations.\nAreas the person may ask about: student admission, fee management, attendance, examinations and results, timetable, parent communication, school administration, pricing and plans, the demo process and the trial process.\nHand the conversation to a colleague when the person asks for one, is upset, or raises money or legal questions.",
+      "tools": ["GetProductInformation", "GetPricingPlans", "GetLeadProfile", "QualifyLead", "UpdateLeadStatus", "CheckDemoAvailability", "BookDemo", "ScheduleFollowUp", "AddLeadNote"],
+      "qualificationQuestions": [
+        { "key": "role", "question": "What is your role at the school?", "type": "Text" },
+        { "key": "student_count", "question": "Roughly how many students does your school have?", "type": "Number", "required": true },
+        { "key": "current_system", "question": "How do you manage admissions, fees and attendance today?", "type": "Text", "required": true },
+        { "key": "main_problem", "question": "Which area causes you the most trouble at the moment?", "type": "Text" },
+        { "key": "timeline", "question": "When would you like to start using a new system?", "type": "Choice", "choices": ["this month", "in 1-3 months", "later", "just exploring"] }
+      ]
+    }
+  ],
+  "catalog": [
+    {
+      "key": "school-erp",
+      "kind": "Product",
+      "name": "School ERP (SAMPLE - not confirmed)",
+      "summary": "[PLACEHOLDER] Describe the product here.",
+      "features": ["[PLACEHOLDER] Student admission", "[PLACEHOLDER] Fee management", "[PLACEHOLDER] Attendance", "[PLACEHOLDER] Examination and results", "[PLACEHOLDER] Timetable", "[PLACEHOLDER] Parent communication", "[PLACEHOLDER] School administration"],
+      "demoProcess": "[PLACEHOLDER] Describe how a demo is arranged.",
+      "trialProcess": "[PLACEHOLDER] Describe how a trial works.",
+      "plans": [
+        { "key": "placeholder-plan", "name": "[PLACEHOLDER] Plan name", "currency": "USD", "details": "[PLACEHOLDER] Price, billing period and what is included." }
+      ]
+    }
+  ],
+  "discovery": {
+    "categories": [
+      { "key": "search-private-schools", "category": "private-schools", "searchPhrases": ["private school"], "placeType": "school" },
+      { "key": "search-primary-schools", "category": "primary-schools", "searchPhrases": ["primary school"], "placeType": "primary_school" },
+      { "key": "search-secondary-schools", "category": "secondary-schools", "searchPhrases": ["secondary school", "high school"], "placeType": "secondary_school" },
+      { "key": "search-higher-secondary", "category": "higher-secondary-schools", "searchPhrases": ["higher secondary school", "intermediate college"] },
+      { "key": "search-colleges", "category": "colleges", "searchPhrases": ["college"] },
+      { "key": "search-academies", "category": "academies", "searchPhrases": ["academy", "coaching academy"] },
+      { "key": "search-institutions", "category": "educational-institutions", "searchPhrases": ["educational institute", "education center"] }
+    ],
+    "locations": [
+      { "key": "karachi", "country": "Pakistan", "province": "Sindh", "city": "Karachi" },
+      { "key": "lahore", "country": "Pakistan", "province": "Punjab", "city": "Lahore" },
+      { "key": "islamabad", "country": "Pakistan", "province": "Islamabad Capital Territory", "city": "Islamabad" },
+      { "key": "rawalpindi", "country": "Pakistan", "province": "Punjab", "city": "Rawalpindi" },
+      { "key": "faisalabad", "country": "Pakistan", "province": "Punjab", "city": "Faisalabad" },
+      { "key": "multan", "country": "Pakistan", "province": "Punjab", "city": "Multan" },
+      { "key": "peshawar", "country": "Pakistan", "province": "Khyber Pakhtunkhwa", "city": "Peshawar" },
+      { "key": "quetta", "country": "Pakistan", "province": "Balochistan", "city": "Quetta" },
+      { "key": "hyderabad", "country": "Pakistan", "province": "Sindh", "city": "Hyderabad" },
+      { "key": "sialkot", "country": "Pakistan", "province": "Punjab", "city": "Sialkot" },
+      { "key": "gujranwala", "country": "Pakistan", "province": "Punjab", "city": "Gujranwala" }
+    ]
+  }
+}

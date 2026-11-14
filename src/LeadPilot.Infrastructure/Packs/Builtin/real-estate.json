@@ -1,0 +1,89 @@
+{
+  "format": "leadpilot.pack",
+  "formatVersion": 1,
+  "key": "real-estate",
+  "version": 1,
+  "name": "Real estate",
+  "description": "A small, generic starting point for property sales and rentals: category tree, a property pipeline, typed lead fields, scoring rules on custom fields, a viewing template, a draft assistant and a catalog skeleton. It contains no prices, listings or facts.",
+  "industry": "Real estate",
+  "sample": true,
+  "notice": "SAMPLE – review before use",
+  "categories": [
+    { "key": "residential", "name": "Residential" },
+    { "key": "apartments", "name": "Apartments", "parent": "residential" },
+    { "key": "houses", "name": "Houses", "parent": "residential" },
+    { "key": "commercial", "name": "Commercial" },
+    { "key": "offices", "name": "Offices", "parent": "commercial" },
+    { "key": "retail-spaces", "name": "Retail spaces", "parent": "commercial" },
+    { "key": "land", "name": "Land" }
+  ],
+  "pipelines": [
+    {
+      "key": "property-sales",
+      "name": "Property enquiries",
+      "stages": [
+        { "name": "New enquiry", "kind": "Open" },
+        { "name": "Contacted", "kind": "Open" },
+        { "name": "Viewing booked", "kind": "Open" },
+        { "name": "Offer made", "kind": "Open" },
+        { "name": "Closed won", "kind": "Won" },
+        { "name": "Closed lost", "kind": "Lost" }
+      ]
+    }
+  ],
+  "customFields": [
+    { "key": "listing_type", "entity": "Lead", "label": "Looking to", "type": "Select", "options": ["Buy", "Rent", "Invest", "Sell", "Let out"], "filterable": true },
+    { "key": "budget_max", "entity": "Lead", "label": "Maximum budget", "type": "Number", "min": 0, "filterable": true, "help": "In the currency you quote in." },
+    { "key": "preferred_area", "entity": "Lead", "label": "Preferred area", "type": "Text", "max": 200, "filterable": true },
+    { "key": "move_in_date", "entity": "Lead", "label": "Wanted move-in date", "type": "Date", "filterable": true }
+  ],
+  "scoringRules": [
+    { "dimension": "CustomField", "target": "budget_max is_not_empty", "points": 10, "description": "SAMPLE rule: the lead stated a budget." },
+    { "dimension": "CustomField", "target": "listing_type eq Buy", "points": 5, "description": "SAMPLE rule: wants to buy. Adjust to your business." }
+  ],
+  "messageTemplates": [
+    { "key": "viewing-follow-up", "name": "Viewing follow-up (SAMPLE)", "body": "Hello {{first_name}}, thank you for your interest. Would you like to arrange a viewing? Let us know which days suit you.", "category": "Service" }
+  ],
+  "agents": [
+    {
+      "key": "real-estate-assistant",
+      "name": "Real estate assistant (SAMPLE)",
+      "description": "SAMPLE configuration: review the instructions and fill in the catalog before relying on it.",
+      "instructions": "You are the assistant of a real estate business. You talk to people who want to buy, rent, sell or let out a property.\nGoals: welcome the person, understand what they are looking for, answer questions, qualify them with the qualification questions (one or two per message), and arrange a viewing or a follow-up with the team.\nYou know nothing about listings, prices or availability except what the tools return. Always call GetProductInformation or GetPricingPlans before you state a fact or a price. If a tool says the information is unknown or not confirmed, say so honestly and offer a follow-up. Never invent listings, prices, discounts or dates.\nHand the conversation to a colleague when the person asks for one, is upset, or raises money or legal questions.",
+      "tools": ["GetProductInformation", "GetPricingPlans", "GetLeadProfile", "QualifyLead", "ScheduleFollowUp", "AddLeadNote"],
+      "qualificationQuestions": [
+        { "key": "intent", "question": "Are you looking to buy, rent, invest, sell or let out?", "type": "Choice", "choices": ["buy", "rent", "invest", "sell", "let out"], "required": true },
+        { "key": "area", "question": "Which area are you interested in?", "type": "Text" },
+        { "key": "budget", "question": "What budget do you have in mind?", "type": "Text" },
+        { "key": "timeline", "question": "When would you like to move?", "type": "Text" }
+      ]
+    }
+  ],
+  "catalog": [
+    {
+      "key": "property-services",
+      "kind": "Service",
+      "name": "[PLACEHOLDER] Property services",
+      "summary": "[PLACEHOLDER] Describe what you offer.",
+      "features": ["[PLACEHOLDER] Sales", "[PLACEHOLDER] Rentals", "[PLACEHOLDER] Property management"],
+      "plans": [
+        { "key": "placeholder-fee", "name": "[PLACEHOLDER] Fee or commission", "currency": "USD", "details": "[PLACEHOLDER] How you charge and what is included." }
+      ]
+    }
+  ],
+  "knowledgeBase": [
+    { "key": "listings-info", "name": "Listings and areas (add your documents)" }
+  ],
+  "workflows": [
+    {
+      "key": "new-enquiry-task",
+      "name": "New enquiry: call task (SAMPLE)",
+      "description": "Draft. Creates a task for the owner when a lead is created. Review it, then activate it yourself.",
+      "trigger": { "event": "lead.created" },
+      "steps": [
+        { "key": "task", "type": "CreateFollowUp", "name": "Create call task", "config": { "dueInHours": 24, "note": "Call the new enquiry {{name}} and ask what they are looking for.", "assignToOwner": true } }
+      ],
+      "reEntry": "Once"
+    }
+  ]
+}

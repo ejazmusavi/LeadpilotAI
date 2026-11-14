@@ -143,9 +143,13 @@ public static class PackParser
 
     private static PackAgent? ReadAgent(Reader r, JsonElement e, string p)
     {
-        if (!r.Obj(e, p, "key", "name", "description", "instructions", "offTopicReply", "qualificationQuestions")) return null;
+        if (!r.Obj(e, p, "key", "name", "description", "instructions", "offTopicReply", "tools", "qualificationQuestions")) return null;
         var key = r.Key(e, p); var name = r.Str(e, p, "name", true, 100); var desc = r.Str(e, p, "description", false, 500);
         var instr = r.Str(e, p, "instructions", true, 8000, multiline: true); var off = r.Str(e, p, "offTopicReply", false, 500, multiline: true);
+        var tools = r.StrList(e, p, "tools", 20, 40);
+        foreach (var t in tools)
+            if (Agents.AgentToolCatalog.All.All(d => d.Name != t) || t is Agents.AgentTools.CreateTrialAccount or Agents.AgentTools.CreatePaymentRequest)
+                r.Problems.Add(new(p + ".tools", $"'{Cut(t, 40)}' is not a tool a pack may enable (trials and payment requests are switched on by a person)."));
         var qs = r.List(e, "qualificationQuestions", 20, (q, qp) =>
         {
             if (!r.Obj(q, qp, "key", "question", "type", "choices", "required")) return null;
@@ -158,14 +162,14 @@ public static class PackParser
             return new PackQuestion(k.ToLowerInvariant(), text, t, choices, req);
         }, p);
         if (qs.Select(q => q.Key).Distinct().Count() != qs.Count) r.Problems.Add(new(p + ".qualificationQuestions", "Question keys must be different from each other."));
-        return key is null || name is null || instr is null ? null : new(key, name, desc, instr, off, qs);
+        return key is null || name is null || instr is null ? null : new(key, name, desc, instr, off, tools.Distinct().OrderBy(t => t, StringComparer.Ordinal).ToList(), qs);
     }
 
     private static PackProduct? ReadProduct(Reader r, JsonElement e, string p)
     {
-        if (!r.Obj(e, p, "key", "kind", "name", "summary", "features", "plans")) return null;
+        if (!r.Obj(e, p, "key", "kind", "name", "summary", "features", "demoProcess", "trialProcess", "plans")) return null;
         var key = r.Key(e, p); var kind = r.Str(e, p, "kind", true, 20); var name = r.Str(e, p, "name", true, 150); var summary = r.Str(e, p, "summary", false, 1000, multiline: true);
-        var features = r.StrList(e, p, "features", 60, 200);
+        var features = r.StrList(e, p, "features", 60, 200); var demo = r.Str(e, p, "demoProcess", false, 2000, multiline: true); var trial = r.Str(e, p, "trialProcess", false, 2000, multiline: true);
         if (kind is not null && (!Enum.TryParse<CatalogItemKind>(kind, false, out var ck) || !Enum.IsDefined(ck))) { r.Problems.Add(new(p + ".kind", "Kind is Product or Service.")); return null; }
         var plans = r.List(e, "plans", 10, (pl, pp) =>
         {
@@ -177,7 +181,7 @@ public static class PackParser
             return k is null || n is null ? null : new PackPlan(k, n, price, cur.ToUpperInvariant(), period, details);
         }, p);
         if (plans.Select(x => x.Key).Distinct().Count() != plans.Count) r.Problems.Add(new(p + ".plans", "Plan keys must be different from each other."));
-        return key is null || kind is null || name is null ? null : new(key, kind, name, summary, features, plans);
+        return key is null || kind is null || name is null ? null : new(key, kind, name, summary, features, demo, trial, plans);
     }
 
     private static PackKnowledge? ReadKnowledge(Reader r, JsonElement e, string p)

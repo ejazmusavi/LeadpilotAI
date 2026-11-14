@@ -15,7 +15,7 @@ namespace LeadPilot.Infrastructure.Config;
 /// Writes the active workspace's configuration as a pack. It only reads configuration tables: never people (leads, contacts, conversations, users), credentials, API keys, channel accounts, webhooks or settings.
 /// Free text is scanned for e-mail addresses and phone-like numbers, which are replaced and reported. The result is checked by the same parser that imports it.
 /// </summary>
-internal sealed partial class PackExporter(CrmContext crm)
+public sealed partial class PackExporter(CrmContext crm)
 {
     [GeneratedRegex(@"[A-Za-z0-9._%+\-]+@[A-Za-z0-9\-]+(\.[A-Za-z0-9\-]+)+")] private static partial Regex Email();
     [GeneratedRegex(@"(?<![\w])\+?\d[\d\s().\-]{6,}\d(?![\w])")] private static partial Regex Phone();
@@ -98,6 +98,7 @@ internal sealed partial class PackExporter(CrmContext crm)
             root["agents"] = Arr(agents.Select(a => (JsonNode?)new JsonObject
             {
                 ["key"] = Unique(Slug(a.Name), k), ["name"] = SN(a.Name), ["description"] = SN(a.Description), ["instructions"] = SN(a.Instructions), ["offTopicReply"] = SN(a.OffTopicReply),
+                ["tools"] = Arr(a.EnabledTools.Where(t => t is not (Application.Agents.AgentTools.CreateTrialAccount or Application.Agents.AgentTools.CreatePaymentRequest) && Application.Agents.AgentToolCatalog.All.Any(d => d.Name == t)).OrderBy(t => t, StringComparer.Ordinal).Select(t => (JsonNode?)JsonValue.Create(t))),
                 ["qualificationQuestions"] = Arr(qs[a.Id].OrderBy(q => q.SortOrder).Select(q => (JsonNode?)new JsonObject { ["key"] = q.Key, ["question"] = SN(q.Question), ["type"] = q.AnswerType.ToString(), ["choices"] = q.Choices.Count == 0 ? null : Arr(q.Choices.Select(c => SN(c))), ["required"] = q.Required })),
             }));
             counts["agents"] = agents.Count;
@@ -113,7 +114,7 @@ internal sealed partial class PackExporter(CrmContext crm)
                 var pk = new HashSet<string>();
                 return (JsonNode?)new JsonObject
                 {
-                    ["key"] = Unique(Slug(p.Name), k), ["kind"] = p.Kind.ToString(), ["name"] = SN(p.Name), ["summary"] = SN(p.Summary), ["features"] = p.FeatureList.Count == 0 ? null : Arr(p.FeatureList.Select(f => SN(f))),
+                    ["key"] = Unique(Slug(p.Name), k), ["kind"] = p.Kind.ToString(), ["name"] = SN(p.Name), ["summary"] = SN(p.Summary), ["features"] = p.FeatureList.Count == 0 ? null : Arr(p.FeatureList.Select(f => SN(f))), ["demoProcess"] = SN(p.DemoProcess), ["trialProcess"] = SN(p.TrialProcess),
                     ["plans"] = Arr(plans[p.Id].OrderBy(x => x.Name).Select(x => (JsonNode?)new JsonObject { ["key"] = Unique(Slug(x.Name), pk), ["name"] = SN(x.Name), ["price"] = x.Price, ["currency"] = x.Currency, ["period"] = SN(x.BillingPeriod), ["details"] = SN(x.Details) })),
                 };
             }));

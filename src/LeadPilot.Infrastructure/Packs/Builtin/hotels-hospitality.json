@@ -1,0 +1,99 @@
+{
+  "format": "leadpilot.pack",
+  "formatVersion": 1,
+  "key": "hotels-hospitality",
+  "version": 1,
+  "name": "Hotels & hospitality",
+  "description": "A small, generic starting point for selling to or for accommodation businesses: category tree, a bookings pipeline, typed lead fields, one scoring rule on a custom field, a follow-up template, a draft assistant, a catalog skeleton, empty knowledge sources and two draft workflows. It contains no prices, no features and no facts about your business.",
+  "industry": "Hospitality",
+  "sample": true,
+  "notice": "SAMPLE – review before use",
+  "categories": [
+    { "key": "accommodation", "name": "Accommodation" },
+    { "key": "hotels", "name": "Hotels", "parent": "accommodation" },
+    { "key": "guest-houses", "name": "Guest houses", "parent": "accommodation" },
+    { "key": "serviced-apartments", "name": "Serviced apartments", "parent": "accommodation" },
+    { "key": "event-venues", "name": "Event venues" }
+  ],
+  "pipelines": [
+    {
+      "key": "bookings",
+      "name": "Bookings & group sales",
+      "stages": [
+        { "name": "New enquiry", "kind": "Open" },
+        { "name": "Qualified", "kind": "Open" },
+        { "name": "Proposal sent", "kind": "Open" },
+        { "name": "Negotiation", "kind": "Open" },
+        { "name": "Booked", "kind": "Won" },
+        { "name": "Lost", "kind": "Lost" }
+      ]
+    }
+  ],
+  "customFields": [
+    { "key": "property_type", "entity": "Lead", "label": "Property type", "type": "Select", "options": ["Hotel", "Resort", "Guest house", "Serviced apartment", "Other"], "filterable": true },
+    { "key": "room_count", "entity": "Lead", "label": "Number of rooms", "type": "Number", "min": 0, "filterable": true, "help": "Approximate number of rooms or units." },
+    { "key": "has_event_space", "entity": "Lead", "label": "Has event or conference space", "type": "Bool", "filterable": true },
+    { "key": "amenities", "entity": "Lead", "label": "Amenities", "type": "MultiSelect", "options": ["Restaurant", "Pool", "Spa", "Parking", "Airport transfer"] }
+  ],
+  "scoringRules": [
+    { "dimension": "CustomField", "target": "has_event_space eq true", "points": 10, "description": "SAMPLE rule: has event or conference space. Adjust the points to your needs." }
+  ],
+  "messageTemplates": [
+    { "key": "enquiry-follow-up", "name": "Enquiry follow-up (SAMPLE)", "body": "Hello {{first_name}}, thank you for getting in touch with {{business_name}}. Could you tell us a little about what you are looking for? We will reply as soon as we can.", "category": "Service" }
+  ],
+  "agents": [
+    {
+      "key": "hospitality-assistant",
+      "name": "Hospitality sales assistant (SAMPLE)",
+      "description": "SAMPLE configuration: review the instructions and fill in the catalog before relying on it.",
+      "instructions": "You are the sales assistant of a business in the hospitality industry. You talk to people who ask about accommodation, group bookings or events.\nGoals: welcome the person, understand what they need, answer questions, qualify them with the qualification questions (one or two per message), and arrange a follow-up with the team.\nYou know nothing about the business except what the tools return. Always call GetProductInformation or GetPricingPlans before you state an offer, a feature or a price. If a tool says the information is unknown or not confirmed, say so honestly and offer a follow-up. Never invent availability, prices, discounts or dates.\nHand the conversation to a colleague when the person asks for one, is upset, or raises money or legal questions.",
+      "tools": ["GetProductInformation", "GetPricingPlans", "GetLeadProfile", "QualifyLead", "ScheduleFollowUp", "AddLeadNote"],
+      "qualificationQuestions": [
+        { "key": "stay_purpose", "question": "What is the occasion or purpose of the stay or event?", "type": "Text" },
+        { "key": "group_size", "question": "How many guests are you planning for?", "type": "Number", "required": true },
+        { "key": "dates", "question": "Which dates are you considering?", "type": "Text" },
+        { "key": "decision_time", "question": "When do you need to decide?", "type": "Choice", "choices": ["this week", "this month", "later", "just exploring"] }
+      ]
+    }
+  ],
+  "catalog": [
+    {
+      "key": "rooms-and-stays",
+      "kind": "Service",
+      "name": "[PLACEHOLDER] Rooms and stays",
+      "summary": "[PLACEHOLDER] Describe what you offer.",
+      "features": ["[PLACEHOLDER] Room types", "[PLACEHOLDER] Meeting and event spaces", "[PLACEHOLDER] Dining"],
+      "plans": [
+        { "key": "placeholder-rate", "name": "[PLACEHOLDER] Rate name", "currency": "USD", "details": "[PLACEHOLDER] Price, period and what is included." }
+      ]
+    }
+  ],
+  "knowledgeBase": [
+    { "key": "property-facts", "name": "Property facts (add your documents)" },
+    { "key": "policies-faq", "name": "Policies and FAQs (add your documents)" }
+  ],
+  "workflows": [
+    {
+      "key": "new-enquiry-task",
+      "name": "New enquiry: follow-up task (SAMPLE)",
+      "description": "Draft. Creates a task for the owner when a lead is created. Review it, then activate it yourself.",
+      "trigger": { "event": "lead.created" },
+      "steps": [
+        { "key": "task", "type": "CreateFollowUp", "name": "Create follow-up task", "config": { "dueInHours": 24, "note": "Contact the new lead {{name}} and ask what they need.", "assignToOwner": true } },
+        { "key": "event_task", "type": "CreateFollowUp", "name": "Task for event space leads", "config": { "dueInHours": 48, "note": "{{name}} has event space: ask about events and group stays.", "assignToOwner": true }, "condition": { "field": "lead.cf.has_event_space", "op": "eq", "value": true } }
+      ],
+      "reEntry": "Once"
+    },
+    {
+      "key": "quiet-lead-reminder",
+      "name": "Quiet lead: remind the owner (SAMPLE)",
+      "description": "Draft. Notifies the owner when a lead has had no activity for 14 days.",
+      "trigger": { "event": "lead.inactive", "inactiveDays": 14 },
+      "steps": [
+        { "key": "notify", "type": "NotifyUser", "name": "Notify the owner", "config": { "target": "owner", "title": "Quiet lead", "message": "{{name}} has had no activity for 14 days." } }
+      ],
+      "reEntry": "AfterCompletion",
+      "cooldownHours": 168
+    }
+  ]
+}

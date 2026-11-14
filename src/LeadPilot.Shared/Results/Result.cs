@@ -8,6 +8,9 @@ public sealed record Error(string Code, string Message)
     public static Error Validation(string message) => new("validation", message);
     public static Error Forbidden(string message = "You do not have permission to perform this action.") => new("forbidden", message);
     public static Error Conflict(string message) => new("conflict", message);
+    /// <summary>The request would create a record that probably already exists (HTTP 409). The caller may resend with an explicit override.</summary>
+    public static Error Duplicate(string message) => new("duplicate", message);
+    public static Error TooLarge(string message) => new("too_large", message);
 }
 
 public class Result

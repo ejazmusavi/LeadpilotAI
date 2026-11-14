@@ -173,7 +173,7 @@ public class TenantInvitation : AuditableEntity, ITenantOwned
 }
 
 /// <summary>Append-only record of security-relevant actions. TenantId is the tenant the action concerns.</summary>
-public class AuditLog : Entity, ITenantOwned
+public class AuditLog : Entity, ITenantOwned, IAppendOnly
 {
     private AuditLog() { }
     public Guid TenantId { get; private set; }

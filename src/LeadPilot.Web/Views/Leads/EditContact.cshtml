@@ -1,0 +1,20 @@
+@model ContactFormModel
+@using LeadPilot.Domain.Crm
+@{ ViewData["Title"] = "Edit contact"; }
+<h1 class="h3 mb-3">Edit contact</h1>
+<form asp-action="EditContact" asp-route-id="@Model.LeadId" asp-route-contactId="@Model.Id" method="post" data-loading-form novalidate class="card card-body">
+    <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-md-6 col-xl-3"><label asp-for="Name" class="form-label"></label><input asp-for="Name" class="form-control" /></div>
+        <div class="col-12 col-md-6 col-xl-3"><label asp-for="Role" class="form-label"></label><input asp-for="Role" class="form-control" /></div>
+        <div class="col-12 col-md-6 col-xl-3"><label asp-for="Phone" class="form-label"></label><input asp-for="Phone" class="form-control" /></div>
+        <div class="col-12 col-md-6 col-xl-3"><label asp-for="Email" class="form-label"></label><input asp-for="Email" class="form-control" /></div>
+        <div class="col-12 col-md-6 col-xl-3"><label asp-for="DataOrigin" class="form-label"></label><select asp-for="DataOrigin" class="form-select" asp-items="Html.GetEnumSelectList<DataOrigin>()"></select></div>
+        <div class="col-12 col-md-6 col-xl-3 d-flex align-items-end"><div class="form-check"><input asp-for="IsPrimary" class="form-check-input" /><label asp-for="IsPrimary" class="form-check-label"></label></div></div>
+    </div>
+    <div class="alert alert-info small">If you change the phone number or e-mail address, consent that was recorded for the old one is revoked automatically: it does not carry over to a new number.</div>
+    <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary"><span class="spinner-border spinner-border-sm d-none" aria-hidden="true"></span> Save contact</button>
+        <a asp-action="Details" asp-route-id="@Model.LeadId" asp-route-tab="contacts" class="btn btn-outline-secondary">Cancel</a>
+    </div>
+</form>

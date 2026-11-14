@@ -3,6 +3,8 @@ using LeadPilot.Application.Contracts;
 using LeadPilot.Infrastructure.Persistence;
 using LeadPilot.Infrastructure.Services;
 using LeadPilot.Infrastructure.Services.Tenancy;
+using LeadPilot.Infrastructure.Services.Crm;
+using LeadPilot.Application.Crm;
 using LeadPilot.Infrastructure.Tenancy;
 using LeadPilot.Infrastructure.Web;
 using Microsoft.AspNetCore.Authorization;
@@ -77,6 +79,34 @@ public static class DependencyInjection
         services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
         services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
         services.AddScoped<RejectSpoofedTenantFilter>();
+        services.AddCrmServices(config);
+        return services;
+    }
+
+    /// <summary>CRM use cases (leads, contacts, consent, suppression, pipelines, scoring, import/export). Needs the tenancy services registered first.</summary>
+    public static IServiceCollection AddCrmServices(this IServiceCollection services, IConfiguration config)
+    {
+        services.Configure<CrmOptions>(config.GetSection(CrmOptions.Section));
+        services.AddScoped<CrmContext>();
+        services.AddScoped<DuplicateDetector>();
+        services.AddScoped(sp => new Lazy<ILeadService>(() => sp.GetRequiredService<ILeadService>()));
+        services.AddScoped<ScoringService>();
+        services.AddScoped<IScoringService>(sp => sp.GetRequiredService<ScoringService>());
+        services.AddScoped<ILeadScorer>(sp => sp.GetRequiredService<ScoringService>());
+        services.AddScoped<ILeadService, LeadService>();
+        services.AddScoped<IContactService, ContactService>();
+        services.AddScoped<IConsentService, ConsentService>();
+        services.AddScoped<ISuppressionService, SuppressionService>();
+        services.AddScoped<IContactEligibilityService, ContactEligibilityService>();
+        services.AddScoped<INoteService, NoteService>();
+        services.AddScoped<ITagService, TagService>();
+        services.AddScoped<IPipelineService, PipelineService>();
+        services.AddScoped<ILeadCatalogService, LeadCatalogService>();
+        services.AddScoped<IOpportunityService, OpportunityService>();
+        services.AddScoped<ILeadImportService, LeadImportService>();
+        services.AddScoped<ILeadExportService, LeadExportService>();
+        services.AddSingleton<ITabularFileReader, TabularFileReader>();
+        services.AddScoped<ITenantFileStore, LocalTenantFileStore>();
         return services;
     }
 

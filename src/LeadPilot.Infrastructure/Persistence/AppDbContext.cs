@@ -1,6 +1,7 @@
 using System.Reflection;
 using LeadPilot.Application.Abstractions;
 using LeadPilot.Domain.Common;
+using LeadPilot.Domain.Crm;
 using LeadPilot.Domain.Tenancy;
 using LeadPilot.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -30,6 +31,28 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
     public DbSet<TenantInvitation> TenantInvitations => Set<TenantInvitation>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+
+    // CRM (Phase 3)
+    public DbSet<LeadCategory> LeadCategories => Set<LeadCategory>();
+    public DbSet<LeadStatus> LeadStatuses => Set<LeadStatus>();
+    public DbSet<Pipeline> Pipelines => Set<Pipeline>();
+    public DbSet<PipelineStage> PipelineStages => Set<PipelineStage>();
+    public DbSet<Lead> Leads => Set<Lead>();
+    public DbSet<LeadSource> LeadSources => Set<LeadSource>();
+    public DbSet<Contact> Contacts => Set<Contact>();
+    public DbSet<ConsentRecord> ConsentRecords => Set<ConsentRecord>();
+    public DbSet<SuppressionEntry> SuppressionEntries => Set<SuppressionEntry>();
+    public DbSet<LeadActivity> LeadActivities => Set<LeadActivity>();
+    public DbSet<LeadNote> LeadNotes => Set<LeadNote>();
+    public DbSet<LeadTag> LeadTags => Set<LeadTag>();
+    public DbSet<LeadTagMap> LeadTagMaps => Set<LeadTagMap>();
+    public DbSet<LeadScore> LeadScores => Set<LeadScore>();
+    public DbSet<ScoringRuleSet> ScoringRuleSets => Set<ScoringRuleSet>();
+    public DbSet<ScoringRule> ScoringRules => Set<ScoringRule>();
+    public DbSet<Opportunity> Opportunities => Set<Opportunity>();
+    public DbSet<OpportunityActivity> OpportunityActivities => Set<OpportunityActivity>();
+    public DbSet<ImportJob> ImportJobs => Set<ImportJob>();
+    public DbSet<ImportRowError> ImportRowErrors => Set<ImportRowError>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -170,6 +193,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
             b.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
             b.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
         });
+
+        CrmModel.Configure(builder);
 
         // Every tenant-owned entity: mandatory FK to Tenant (restrict), indexed TenantId and the global tenant filter.
         foreach (var type in builder.Model.GetEntityTypes().Select(e => e.ClrType).Where(t => typeof(ITenantOwned).IsAssignableFrom(t)).ToList())

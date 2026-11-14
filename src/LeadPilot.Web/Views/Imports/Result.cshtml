@@ -1,0 +1,56 @@
+@model ImportResultViewModel
+@using LeadPilot.Domain.Crm
+@{
+    var j = Model.Job;
+    ViewData["Title"] = j.FileName;
+    string Tab(ImportErrorKind? k) => Model.Kind == k ? "nav-link active" : "nav-link";
+}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <h1 class="h3 mb-0">@j.FileName <span class="badge @(j.Status == ImportStatus.Completed ? "text-bg-success" : j.Status == ImportStatus.Failed ? "text-bg-danger" : "text-bg-secondary") align-middle fs-6">@j.Status</span></h1>
+    <div class="d-flex gap-2">
+        @if (j.Status == ImportStatus.Uploaded) { <a asp-action="Map" asp-route-id="@j.Id" class="btn btn-primary">Map columns and run</a> }
+        @if (j.ErrorCount + j.SkippedDuplicateCount + j.PendingDuplicateCount > 0) { <a asp-action="ErrorReport" asp-route-id="@j.Id" class="btn btn-outline-secondary">Download error report (CSV)</a> }
+        <a asp-controller="Leads" asp-action="Index" class="btn btn-outline-primary">View leads</a>
+    </div>
+</div>
+@if (j.FailureReason is not null) { <div class="alert alert-danger">@j.FailureReason</div> }
+<div class="row g-3 mb-3">
+    <div class="col-6 col-md-3 col-xl-2"><div class="card card-body text-center"><div class="h4 mb-0">@j.TotalRows</div><div class="small text-muted">Rows in file</div></div></div>
+    <div class="col-6 col-md-3 col-xl-2"><div class="card card-body text-center"><div class="h4 mb-0 text-success">@j.CreatedCount</div><div class="small text-muted">Leads created</div></div></div>
+    <div class="col-6 col-md-3 col-xl-2"><div class="card card-body text-center"><div class="h4 mb-0">@j.MergedCount</div><div class="small text-muted">Merged</div></div></div>
+    <div class="col-6 col-md-3 col-xl-2"><div class="card card-body text-center"><div class="h4 mb-0">@j.SkippedDuplicateCount</div><div class="small text-muted">Duplicates skipped</div></div></div>
+    <div class="col-6 col-md-3 col-xl-2"><div class="card card-body text-center"><div class="h4 mb-0 text-warning">@j.PendingDuplicateCount</div><div class="small text-muted">Awaiting review</div></div></div>
+    <div class="col-6 col-md-3 col-xl-2"><div class="card card-body text-center"><div class="h4 mb-0 text-danger">@j.ErrorCount</div><div class="small text-muted">Rows with errors</div></div></div>
+</div>
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item"><a class="@Tab(null)" asp-action="Result" asp-route-id="@j.Id">All rows not imported</a></li>
+    <li class="nav-item"><a class="@Tab(ImportErrorKind.Validation)" asp-action="Result" asp-route-id="@j.Id" asp-route-kind="@ImportErrorKind.Validation">Errors</a></li>
+    <li class="nav-item"><a class="@Tab(ImportErrorKind.Duplicate)" asp-action="Result" asp-route-id="@j.Id" asp-route-kind="@ImportErrorKind.Duplicate">Duplicates</a></li>
+</ul>
+@if (Model.Errors.Items.Count == 0)
+{
+    <div class="card"><partial name="_EmptyState" model='("Nothing to show", j.Status == ImportStatus.Completed ? "Every row was imported without problems." : "This import has not produced a report yet.")' /></div>
+}
+else
+{
+    <div class="card"><div class="table-responsive"><table class="table align-middle mb-0">
+        <thead><tr><th>Row</th><th>Type</th><th>Column</th><th>Problem</th><th>Existing lead</th><th>Decision</th></tr></thead>
+        <tbody>
+        @foreach (var e in Model.Errors.Items)
+        {
+            <tr>
+                <td>@e.RowNumber</td><td><span class="badge @(e.Kind == ImportErrorKind.Validation ? "text-bg-danger" : "text-bg-warning")">@e.Kind</span></td><td>@(e.Column ?? "—")</td><td>@e.Message</td>
+                <td>@if (e.DuplicateLeadId is not null) { <a asp-controller="Leads" asp-action="Details" asp-route-id="@e.DuplicateLeadId">@(e.DuplicateLeadName ?? "open")</a> } else { <span>—</span> }</td>
+                <td class="text-nowrap">
+                    @if (e.Resolution == DuplicateResolution.Pending)
+                    {
+                        <form asp-action="ResolveDuplicate" asp-route-id="@j.Id" asp-route-errorId="@e.Id" method="post" class="d-inline"><input type="hidden" name="merge" value="true" /><button type="submit" class="btn btn-sm btn-outline-primary" data-confirm="Merge this row into the existing lead? Blank fields are filled; nothing is overwritten." data-confirm-label="Merge">Merge</button></form>
+                        <form asp-action="ResolveDuplicate" asp-route-id="@j.Id" asp-route-errorId="@e.Id" method="post" class="d-inline"><input type="hidden" name="merge" value="false" /><button type="submit" class="btn btn-sm btn-outline-secondary">Skip</button></form>
+                    }
+                    else if (e.Resolution is not null) { <span class="badge text-bg-light border">@e.Resolution</span> }
+                </td>
+            </tr>
+        }
+        </tbody></table></div></div>
+    <partial name="_Pager" model='new PagerModel(Model.Errors.Page, Model.Errors.TotalPages, Model.Errors.TotalCount, "Result", new Dictionary<string, string?> { ["id"] = j.Id.ToString(), ["kind"] = Model.Kind?.ToString() })' />
+}

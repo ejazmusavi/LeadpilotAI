@@ -20,3 +20,6 @@ public abstract class AuditableEntity : Entity
 }
 
 public class DomainException(string message) : Exception(message);
+
+/// <summary>Rows that may only ever be inserted (audit trail, consent history, score history). The persistence guard rejects updates and deletes.</summary>
+public interface IAppendOnly;

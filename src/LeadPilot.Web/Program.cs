@@ -105,7 +105,7 @@ app.UseAuthentication();
 app.UseTenantResolution();
 app.UseAuthorization();
 
-app.MapStaticAssets();
+app.MapStaticAssets().AllowAnonymous(); // CSS/JS are public; without this the authenticated-by-default fallback policy redirected them to the login page, leaving the login page unstyled
 app.MapHealthChecks("/health/live", new() { Predicate = _ => false }).AllowAnonymous();
 app.MapHealthChecks("/health/ready", new() { Predicate = c => c.Tags.Contains("ready") }).AllowAnonymous();
 app.MapControllerRoute("default", "{controller=Home}/{action=Index}/{id?}").WithStaticAssets();

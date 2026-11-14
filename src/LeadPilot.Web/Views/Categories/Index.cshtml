@@ -1,0 +1,44 @@
+@model CategoriesViewModel
+@{ ViewData["Title"] = "Categories & statuses"; }
+<h1 class="h3 mb-1">Categories &amp; statuses</h1>
+<p class="text-muted">Categories describe what kind of organization a lead is (school, clinic, restaurant, …) and are entirely yours to define. Statuses describe the lifecycle of the lead record and are separate from the pipeline stage.</p>
+<div class="row g-3">
+    <div class="col-12 col-xl-6">
+        <div class="card"><div class="card-header">Categories</div>
+            <div class="card-body border-bottom"><form asp-action="CreateCategory" method="post" class="d-flex gap-2"><input name="name" class="form-control" placeholder="New category" aria-label="New category" maxlength="100" required /><button type="submit" class="btn btn-primary">Add</button></form></div>
+            @if (Model.Categories.Count == 0) { <partial name="_EmptyState" model='("No categories yet", "Create the categories you sell to.")' /> }
+            else
+            {
+                <ul class="list-group list-group-flush">
+                @foreach (var c in Model.Categories)
+                {
+                    <li class="list-group-item d-flex flex-wrap gap-2 justify-content-between align-items-center @(c.IsActive ? "" : "text-muted")">
+                        <form asp-action="RenameCategory" asp-route-id="@c.Id" method="post" class="d-flex gap-1"><input name="name" value="@c.Name" class="form-control form-control-sm" aria-label="Category name" maxlength="100" required /><button type="submit" class="btn btn-sm btn-outline-secondary">Rename</button></form>
+                        <div class="d-flex gap-2 align-items-center"><a asp-controller="Leads" asp-action="Index" asp-route-categoryId="@c.Id" class="small">@c.LeadCount lead(s)</a>
+                            <form asp-action="SetCategoryActive" asp-route-id="@c.Id" method="post"><input type="hidden" name="active" value="@((!c.IsActive).ToString().ToLowerInvariant())" /><button type="submit" class="btn btn-sm btn-outline-warning">@(c.IsActive ? "Deactivate" : "Activate")</button></form></div>
+                    </li>
+                }
+                </ul>
+            }
+        </div>
+    </div>
+    <div class="col-12 col-xl-6">
+        <div class="card"><div class="card-header">Lead statuses</div>
+            <div class="card-body border-bottom"><form asp-action="CreateStatus" method="post" class="d-flex flex-wrap gap-2 align-items-center"><input name="name" class="form-control w-auto flex-grow-1" placeholder="New status" aria-label="New status" maxlength="100" required /><div class="form-check"><input class="form-check-input" type="checkbox" name="isClosed" value="true" id="new-closed" /><label class="form-check-label small" for="new-closed">Closed</label></div><button type="submit" class="btn btn-primary">Add</button></form></div>
+            <ul class="list-group list-group-flush">
+            @foreach (var s in Model.Statuses)
+            {
+                <li class="list-group-item d-flex flex-wrap gap-2 justify-content-between align-items-center @(s.IsActive ? "" : "text-muted")">
+                    <form asp-action="UpdateStatus" asp-route-id="@s.Id" method="post" class="d-flex flex-wrap gap-1 align-items-center">
+                        <input name="name" value="@s.Name" class="form-control form-control-sm w-auto" aria-label="Status name" maxlength="100" required />
+                        <div class="form-check"><input class="form-check-input" type="checkbox" name="isClosed" value="true" id="closed-@s.Id" checked="@s.IsClosed" /><label class="form-check-label small" for="closed-@s.Id">Closed</label></div>
+                        <button type="submit" class="btn btn-sm btn-outline-secondary">Save</button>
+                    </form>
+                    <div class="d-flex gap-2 align-items-center"><span class="small">@s.LeadCount lead(s)</span>@if (s.IsDefault) { <span class="badge text-bg-primary">default</span> }
+                        else { <form asp-action="SetStatusActive" asp-route-id="@s.Id" method="post"><input type="hidden" name="active" value="@((!s.IsActive).ToString().ToLowerInvariant())" /><button type="submit" class="btn btn-sm btn-outline-warning">@(s.IsActive ? "Deactivate" : "Activate")</button></form> }</div>
+                </li>
+            }
+            </ul>
+        </div>
+    </div>
+</div>

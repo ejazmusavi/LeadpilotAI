@@ -6,6 +6,13 @@ public static class PermissionCodes
     public const string LeadsCreate = "Leads.Create";
     public const string LeadsUpdate = "Leads.Update";
     public const string LeadsDelete = "Leads.Delete";
+    public const string LeadsImport = "Leads.Import";
+    public const string LeadsExport = "Leads.Export";
+    public const string LeadsAssign = "Leads.Assign";
+    public const string ConsentManage = "Consent.Manage";
+    public const string SuppressionManage = "Suppression.Manage";
+    public const string PipelinesManage = "Pipelines.Manage";
+    public const string ScoringManage = "Scoring.Manage";
     public const string CampaignsView = "Campaigns.View";
     public const string CampaignsCreate = "Campaigns.Create";
     public const string CampaignsExecute = "Campaigns.Execute";
@@ -31,7 +38,14 @@ public static class PermissionCatalog
         new(PermissionCodes.LeadsView, "View leads", "Leads", "See leads and their details."),
         new(PermissionCodes.LeadsCreate, "Create leads", "Leads", "Add and import leads."),
         new(PermissionCodes.LeadsUpdate, "Update leads", "Leads", "Edit leads, notes and pipeline stage."),
-        new(PermissionCodes.LeadsDelete, "Delete leads", "Leads", "Archive or delete leads."),
+        new(PermissionCodes.LeadsDelete, "Delete leads", "Leads", "Archive, restore and delete leads, notes and tags."),
+        new(PermissionCodes.LeadsImport, "Import leads", "Leads", "Upload CSV/Excel files and review duplicates."),
+        new(PermissionCodes.LeadsExport, "Export leads", "Leads", "Download lead data (audited)."),
+        new(PermissionCodes.LeadsAssign, "Assign leads", "Leads", "Assign leads to team members."),
+        new(PermissionCodes.ConsentManage, "Manage consent", "Compliance", "Record consent grants and revocations."),
+        new(PermissionCodes.SuppressionManage, "Manage suppression list", "Compliance", "View, add and remove suppression entries."),
+        new(PermissionCodes.PipelinesManage, "Manage pipelines and categories", "CRM setup", "Configure pipelines, stages, lead categories and statuses."),
+        new(PermissionCodes.ScoringManage, "Manage lead scoring", "CRM setup", "Edit scoring rules and recalculate scores."),
         new(PermissionCodes.CampaignsView, "View campaigns", "Campaigns", "See campaigns and their results."),
         new(PermissionCodes.CampaignsCreate, "Create campaigns", "Campaigns", "Create and edit campaigns."),
         new(PermissionCodes.CampaignsExecute, "Run campaigns", "Campaigns", "Start, pause and stop campaigns."),
@@ -85,7 +99,9 @@ public static class SystemRoles
         new(SalesManager, "Manages the sales team, leads and conversations.", false,
         [
             PermissionCodes.LeadsView, PermissionCodes.LeadsCreate, PermissionCodes.LeadsUpdate, PermissionCodes.LeadsDelete, PermissionCodes.CampaignsView,
-            PermissionCodes.ConversationsView, PermissionCodes.ConversationsReply, PermissionCodes.ReportsView
+            PermissionCodes.ConversationsView, PermissionCodes.ConversationsReply, PermissionCodes.ReportsView,
+            PermissionCodes.LeadsImport, PermissionCodes.LeadsExport, PermissionCodes.LeadsAssign, PermissionCodes.ConsentManage,
+            PermissionCodes.SuppressionManage, PermissionCodes.PipelinesManage, PermissionCodes.ScoringManage
         ]),
         new(SalesAgent, "Works leads and conversations.", false,
         [
@@ -94,7 +110,8 @@ public static class SystemRoles
         new(MarketingManager, "Plans and runs campaigns.", false,
         [
             PermissionCodes.LeadsView, PermissionCodes.CampaignsView, PermissionCodes.CampaignsCreate, PermissionCodes.CampaignsExecute,
-            PermissionCodes.ConversationsView, PermissionCodes.ReportsView
+            PermissionCodes.ConversationsView, PermissionCodes.ReportsView,
+            PermissionCodes.LeadsExport, PermissionCodes.ConsentManage, PermissionCodes.SuppressionManage
         ]),
         new(ReadOnly, "Can view everything operational but change nothing.", false,
         [

@@ -96,3 +96,21 @@ Structured logging (Serilog, JSON, with TenantId/CorrelationId enrichment), glob
 | Self-registration no longer yields a usable account on its own | An account is not a workspace; the user lands on a "no workspace" page until invited. Registration stays off by default. |
 | Secret tenant settings use ASP.NET Data Protection (`ISecretProtector`) with a persisted key ring (`DataProtection:KeysPath`) | Needed now (secret flag); the same protector will encrypt gateway/API credentials in Phases 4-5. No new dependency. |
 | `Microsoft.AspNetCore.Authentication.JwtBearer` package added to Infrastructure (token creation) | It already shipped in the Api; same version. |
+
+## Phase 3 decisions (CRM)
+| Decision | Reason |
+|---|---|
+| Module layout: `Domain/Crm` (entities, enums, `Normalizer`), `Application/Crm` (DTOs, service interfaces, **pure logic**: `LeadScoringEngine`, `ScoringRuleParser`, `EligibilityRules`, `CsvReader`, `ImportRowMapper`, `SpreadsheetSafe`), `Infrastructure/Services/Crm` (EF-based services, file store, XLSX reader/writer) | Everything with rules worth testing in isolation is a pure function with unit tests; EF stays in Infrastructure (architecture tests). Web and Api call the same service interfaces, so MVC and REST enforce identical rules. |
+| `CrmContext` (scoped) bundles db, active tenant, acting user, audit/activity helpers and membership checks; services never read a tenant from a request | One place for the tenancy conventions of Phase 2 (explicit `TenantId ==` predicate on top of the global filter, 404 for foreign ids). |
+| **Eligibility** is one rule (`EligibilityRules`, pure) used by `IContactEligibilityService.CheckAsync`, and the same predicate is expressed as one SQL query for `QueryAudienceAsync`; an integration test proves both agree across the whole matrix | The gate described under "Compliance in the architecture" now exists. Phase 6 must call it when building audiences **and** immediately before every send. |
+| Consent history is **append-only** (`IAppendOnly`, rejected by the SaveChanges guard); the effective state is the latest record by occurrence time, a revocation winning a tie | Auditable and tamper-resistant in code; no update/delete surface in services, API or UI (architecture test). |
+| Scoring rules are tenant data, **versioned** (`ScoringRuleSet` v1, v2, …, one active); every `LeadScore` stores rule version + breakdown JSON; recalculation is explicit | Reproducible scores, no silent re-ranking. |
+| Pipelines/stages are per tenant; a lead stores `PipelineId` + `PipelineStageId` and may only move within its pipeline; stage *kinds* (Open/Won/Lost/Suppressed) carry the meaning, not stage names | Tenants can rename/add stages freely; "Suppressed" kind excludes a lead from every audience. |
+| Imports: upload (validate + store) → map columns → run (row by row, 50-row batches, duplicate check against the database, flush before an in-file duplicate) → report. Rows needing a human decision are persisted (`ImportRowError` with the mapped row as JSON) | Review policy needs the row later; no separate staging table. Runs in-request for now (limits 5 000 rows / 5 MB), Hangfire in Phase 6. |
+| Files: `ITenantFileStore` (local disk, `tenants/{tenantId}/{area}/{guid}.ext`, keys must belong to the active tenant, no client paths) | The tenant file-path helper from Phase 2 finally has a consumer; swap for object storage later without touching callers. |
+| Spreadsheet libraries: **ClosedXML** (writing) and **DocumentFormat.OpenXml** (reading, never evaluates formulas); CSV is an in-house RFC 4180 reader | No formula engine on the read path; no CSV dependency to audit. |
+| `Contact.PhoneUniqueKey` / `EmailUniqueKey` = value while live, `NULL` when removed, unique with `(TenantId, LeadId)` | The database enforces "one phone per lead" yet a removed contact can be re-added. |
+| No `AppDbContext` in Web/Api; new controllers are covered by the architecture permission/verb rules | Same edge discipline as Phase 2. |
+
+### Request flow reminder
+`Request → authentication → TenantResolutionMiddleware (membership re-validated) → authorization policy (permission code) → controller → service (ownership predicate, domain rules, audit, activity) → SaveChanges guard (tenant stamp, FK same-tenant, append-only)`.

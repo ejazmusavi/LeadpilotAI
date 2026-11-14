@@ -54,9 +54,12 @@ public sealed class AppFixture : IAsyncLifetime
         Environment.SetEnvironmentVariable("Seed__AdminEmail", AdminEmail);
         Environment.SetEnvironmentVariable("Seed__AdminPassword", AdminPassword);
         Environment.SetEnvironmentVariable("Registration__AllowSelfRegistration", "true");
+        Environment.SetEnvironmentVariable("RateLimiting__ApiPermitLimit", "100000"); // all test clients share one IP
         Environment.SetEnvironmentVariable("RateLimiting__AuthPermitLimit", "1000"); // the shared test client IP would otherwise trip the 20/min limit
 
         Environment.SetEnvironmentVariable("App__PublicWebUrl", "http://localhost");
+        Environment.SetEnvironmentVariable("Crm__StorageRoot", Path.Combine(Path.GetTempPath(), "leadpilot-test-files-" + _dbName));
+        Environment.SetEnvironmentVariable("Crm__MaxExportRows", "100");
         // Re-validate the security stamp (and rebuild the principal) on EVERY request, so tests prove the active-tenant claim survives that refresh.
         Environment.SetEnvironmentVariable("Security__StampValidationMinutes", "0");
 

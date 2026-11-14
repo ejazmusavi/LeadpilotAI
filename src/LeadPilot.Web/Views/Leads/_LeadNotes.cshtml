@@ -1,0 +1,28 @@
+@model LeadDetailsViewModel
+@{ var n = Model.Notes!; var can = Model.Can; }
+@if (can.Update)
+{
+    <form asp-action="AddNote" asp-route-id="@Model.Lead.Id" method="post" data-loading-form novalidate class="card card-body mb-3">
+        <label asp-for="NoteForm.Body" class="form-label"></label>
+        <textarea asp-for="NoteForm.Body" class="form-control" rows="3" maxlength="4000" required></textarea>
+        <div class="mt-2"><button type="submit" class="btn btn-primary"><span class="spinner-border spinner-border-sm d-none" aria-hidden="true"></span> Add note</button></div>
+    </form>
+}
+@if (n.Items.Count == 0)
+{
+    <div class="card"><partial name="_EmptyState" model='("No notes yet", "Notes added by your team appear here.")' /></div>
+}
+else
+{
+    <div class="card"><ul class="list-group list-group-flush">
+        @foreach (var x in n.Items)
+        {
+            <li class="list-group-item">
+                <div class="d-flex justify-content-between"><span class="small text-muted">@(x.AuthorName ?? "Someone") · @x.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm") UTC</span>
+                    @if (can.Delete) { <form asp-action="DeleteNote" asp-route-id="@Model.Lead.Id" asp-route-noteId="@x.Id" method="post"><button type="submit" class="btn btn-sm btn-outline-danger" data-confirm="Delete this note?" data-confirm-label="Delete">Delete</button></form> }</div>
+                <div style="white-space:pre-wrap">@x.Body</div>
+            </li>
+        }
+    </ul></div>
+    <partial name="_Pager" model='new PagerModel(n.Page, n.TotalPages, n.TotalCount, "Details", new Dictionary<string, string?> { ["id"] = Model.Lead.Id.ToString(), ["tab"] = "notes" })' />
+}

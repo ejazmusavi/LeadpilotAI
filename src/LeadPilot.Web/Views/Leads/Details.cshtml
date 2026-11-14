@@ -1,0 +1,47 @@
+@model LeadDetailsViewModel
+@using LeadPilot.Domain.Crm
+@{
+    var l = Model.Lead; var can = Model.Can;
+    ViewData["Title"] = l.Name;
+    string TabClass(string t) => Model.Tab == t ? "nav-link active" : "nav-link";
+}
+<div class="d-flex flex-wrap justify-content-between align-items-start mb-3 gap-2">
+    <div>
+        <h1 class="h3 mb-1">@l.Name @if (l.IsArchived) { <span class="badge text-bg-warning align-middle fs-6">archived</span> }</h1>
+        <div class="text-muted">
+            <span class="badge @(l.StageKind == StageKind.Won ? "text-bg-success" : l.StageKind == StageKind.Lost ? "text-bg-danger" : l.StageKind == StageKind.Suppressed ? "text-bg-dark" : "text-bg-info")">@l.StageName</span>
+            <span class="badge text-bg-light border">@l.StatusName</span>
+            Score <partial name="_ScoreBadge" model="l.Score" />
+            @if (l.CategoryName is not null) { <span class="ms-2">@l.CategoryName</span> }
+            @if (l.City is not null) { <span class="ms-2">@l.City</span> }
+        </div>
+    </div>
+    <div class="d-flex gap-2">
+        @if (can.Update && !l.IsArchived) { <a asp-action="Edit" asp-route-id="@l.Id" class="btn btn-outline-primary">Edit</a> }
+        @if (can.Delete && !l.IsArchived)
+        {
+            <form asp-action="Archive" asp-route-id="@l.Id" method="post"><button type="submit" class="btn btn-outline-danger" data-confirm="Archive @l.Name? It disappears from lists and can never be contacted until restored. History is kept." data-confirm-label="Archive">Archive</button></form>
+        }
+        @if (can.Delete && l.IsArchived)
+        {
+            <form asp-action="Restore" asp-route-id="@l.Id" method="post"><button type="submit" class="btn btn-outline-primary">Restore</button></form>
+        }
+    </div>
+</div>
+
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item"><a class="@TabClass("overview")" asp-action="Details" asp-route-id="@l.Id" asp-route-tab="overview">Overview</a></li>
+    <li class="nav-item"><a class="@TabClass("contacts")" asp-action="Details" asp-route-id="@l.Id" asp-route-tab="contacts">Contacts <span class="badge text-bg-light border">@l.ContactCount</span></a></li>
+    <li class="nav-item"><a class="@TabClass("activity")" asp-action="Details" asp-route-id="@l.Id" asp-route-tab="activity">Activity</a></li>
+    <li class="nav-item"><a class="@TabClass("notes")" asp-action="Details" asp-route-id="@l.Id" asp-route-tab="notes">Notes</a></li>
+    <li class="nav-item"><a class="@TabClass("consent")" asp-action="Details" asp-route-id="@l.Id" asp-route-tab="consent">Consent</a></li>
+</ul>
+
+@switch (Model.Tab)
+{
+    case "contacts": <partial name="_LeadContacts" model="Model" /> break;
+    case "activity": <partial name="_LeadActivity" model="Model" /> break;
+    case "notes": <partial name="_LeadNotes" model="Model" /> break;
+    case "consent": <partial name="_LeadConsent" model="Model" /> break;
+    default: <partial name="_LeadOverview" model="Model" /> break;
+}

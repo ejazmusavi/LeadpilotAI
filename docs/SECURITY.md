@@ -45,3 +45,12 @@ No production secrets in git; `.env.example` only; user-secrets in development; 
 
 ## Threats considered (initial)
 Cross-tenant data leakage (IDOR, filter bypass, cache/vector leakage) · credential stuffing · webhook spoofing/replay · prompt injection / data exfiltration through AI · CSV injection · duplicate sends on retry · mass messaging abuse / account ban · SSRF through website-crawling enrichment (block private IP ranges, redirect limits) · privilege escalation through tenant switching.
+
+## Phase 3 controls (CRM) — implemented
+- **Consent**: append-only records (source required, optional evidence reference, no future dates); consent is bound to the phone number/e-mail it was given for (changing the value revokes it); granting consent for a suppressed value is refused. Every grant/revocation is audited (without the raw number).
+- **Suppression**: unique per tenant+channel+normalised value, `Any` blocks every channel, add/remove audited with masked values, requires `Suppression.Manage` (the list itself is sensitive).
+- **Eligibility gate**: consent AND not suppressed AND valid value (AND lead not archived / not in a *Suppressed* stage). Lead score is not an input (structurally absent; unit-tested).
+- **Import**: `.csv`/`.xlsx` only, 5 MB / 5 000 rows / 100 columns / 10 000-char cells, magic-byte sniffing both ways, XLSX zip-bomb check (uncompressed size and entry count), formulas never evaluated, files stored under the tenant folder with generated names, imports permission-gated (`Leads.Import`), owner assignment inside a file needs `Leads.Assign`, imported contacts never carry consent.
+- **Export**: permission-gated (`Leads.Export`), audited, capped at 10 000 rows (refuses instead of truncating), CSV `'`-prefix / XLSX quote-prefix neutralisation of `= + - @ TAB CR LF`, never includes another tenant's rows.
+- **Web**: every state-changing MVC action is POST + antiforgery, destructive ones behind a confirm dialog; output HTML-encoded (tested with a hostile lead name and note); `returnQuery` redirects are restricted to same-site query strings.
+- **Static assets** are served anonymously on purpose (the login page needs them); every application page still requires authentication.

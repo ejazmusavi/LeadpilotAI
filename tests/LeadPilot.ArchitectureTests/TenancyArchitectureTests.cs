@@ -113,7 +113,7 @@ public class TenancyArchitectureTests
     public void Tenant_controllers_authorize_every_action_explicitly()
     {
         string[] tenantControllers = ["TenantsController", "UsersController", "RolesController", "InvitationsController", "SettingsController", "AuditController",
-            "AuditLogsController", "PermissionsController", "WorkspaceController", "AuthController"];
+            "AuditLogsController", "PermissionsController", "WorkspaceController", "AuthController", .. CrmArchitectureTests.CrmControllers];
         var unprotected = new List<string>();
         foreach (var asm in new[] { typeof(LeadPilot.Web.Models.ErrorViewModel).Assembly, typeof(LeadPilot.Api.Controllers.AuthController).Assembly })
             foreach (var c in Controllers(asm).Where(c => tenantControllers.Contains(c.Name)))
@@ -131,7 +131,7 @@ public class TenancyArchitectureTests
     [Fact]
     public void Administrative_controllers_require_a_permission_policy_that_exists_in_the_catalog()
     {
-        string[] administrative = ["TenantsController", "UsersController", "RolesController", "SettingsController", "AuditController", "AuditLogsController", "PermissionsController"];
+        string[] administrative = ["TenantsController", "UsersController", "RolesController", "SettingsController", "AuditController", "AuditLogsController", "PermissionsController", .. CrmArchitectureTests.CrmControllers];
         foreach (var asm in new[] { typeof(LeadPilot.Web.Models.ErrorViewModel).Assembly, typeof(LeadPilot.Api.Controllers.AuthController).Assembly })
             foreach (var c in Controllers(asm).Where(c => administrative.Contains(c.Name)))
             {

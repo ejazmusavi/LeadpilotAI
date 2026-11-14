@@ -8,7 +8,7 @@ Rule: implement one phase at a time; no phase starts until the previous meets it
 | 0 | Requirements, architecture, docs | — | Owner review/approval |
 | 1 | Solution, Identity auth, EF/MySQL, logging, Swagger, health, Docker, MVC shell | 0 | .NET 10 SDK + Docker available — **code done; Docker run unverified** |
 | 2 | Tenancy, users, roles, permissions, audit, isolation tests | 1 | — **built and verified on MySQL 8; see PROGRESS.md** |
-| 3 | CRM: leads, contacts, pipeline, import/export, scoring, consent, suppression | 2 | — |
+| 3 | CRM: leads, contacts, pipeline, import/export, scoring, consent, suppression | 2 | — **built and verified on MySQL 8; see PROGRESS.md** (import/rescoring still synchronous until Phase 6) |
 | 4 | Discovery & enrichment (Google Places, websites, imports) | 3 | Google Places key |
 | 5 | WhatsApp gateway adapter, conversations, webhooks, outbox/RabbitMQ | 3 | WAHA docs + deployment details |
 | 6 | Campaigns, eligibility at send time, Hangfire scheduling | 3, 5 | — |

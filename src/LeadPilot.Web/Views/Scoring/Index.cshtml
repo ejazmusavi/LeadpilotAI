@@ -1,0 +1,45 @@
+@model ScoringViewModel
+@using LeadPilot.Domain.Crm
+@{ ViewData["Title"] = "Scoring rules"; var a = Model.Active; }
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <div><h1 class="h3 mb-0">Scoring rules</h1><div class="text-muted small">Active version @a.Version · published @a.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm") UTC @(a.Note is null ? "" : "· " + a.Note)</div></div>
+    <form asp-action="Rescore" method="post"><button type="submit" class="btn btn-outline-primary" data-confirm="Recalculate the score of every lead with version @a.Version?" data-confirm-label="Recalculate">Recalculate all scores</button></form>
+</div>
+<div class="alert alert-info small">Rules are your data: each change publishes a new version and keeps the old one. Existing scores change only when you recalculate. A score ranks sales potential; it can never override missing consent or the suppression list.</div>
+@if (a.Rules.Count == 0)
+{
+    <div class="card mb-3"><partial name="_EmptyState" model='("No rules", "Every lead scores 0 until you add a rule.")' /></div>
+}
+else
+{
+    <div class="card mb-3"><div class="table-responsive"><table class="table align-middle mb-0">
+        <thead><tr><th>Signal</th><th>Target</th><th>Points</th><th>Description</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+        @foreach (var r in a.Rules)
+        {
+            <tr class="@(r.IsEnabled ? "" : "text-muted")">
+                <td>@r.Dimension</td><td><code>@r.Target</code></td><td class="fw-semibold">@(r.Points > 0 ? "+" : "")@r.Points</td><td>@r.Description</td>
+                <td><span class="badge @(r.IsEnabled ? "text-bg-success" : "text-bg-secondary")">@(r.IsEnabled ? "On" : "Off")</span></td>
+                <td class="text-end table-actions">
+                    <form asp-action="ToggleRule" asp-route-ruleId="@r.Id" method="post"><button type="submit" class="btn btn-sm btn-outline-secondary">@(r.IsEnabled ? "Turn off" : "Turn on")</button></form>
+                    <form asp-action="DeleteRule" asp-route-ruleId="@r.Id" method="post"><button type="submit" class="btn btn-sm btn-outline-danger" data-confirm="Delete this rule? A new version is published without it." data-confirm-label="Delete">Delete</button></form>
+                </td>
+            </tr>
+        }
+        </tbody></table></div></div>
+}
+<form asp-action="AddRule" method="post" data-loading-form novalidate class="card card-body mb-3">
+    <h2 class="h6">Add a rule</h2>
+    <div class="row g-3">
+        <div class="col-12 col-md-6 col-xl-3"><label asp-for="Form.Dimension" class="form-label">Signal</label><select asp-for="Form.Dimension" class="form-select" asp-items="Html.GetEnumSelectList<ScoreDimension>()"></select></div>
+        <div class="col-12 col-md-6 col-xl-3"><label asp-for="Form.Target" class="form-label"></label><input asp-for="Form.Target" class="form-control" required /></div>
+        <div class="col-6 col-md-3 col-xl-2"><label asp-for="Form.Points" class="form-label"></label><input asp-for="Form.Points" type="number" min="-100" max="100" class="form-control" /></div>
+        <div class="col-12 col-md-6 col-xl-4"><label asp-for="Form.Description" class="form-label"></label><input asp-for="Form.Description" class="form-control" /></div>
+    </div>
+    <details class="mt-3 small"><summary>What can I enter as target?</summary>
+        <ul class="mb-0 mt-2">@foreach (var d in Enum.GetValues<ScoreDimension>()) { <li><strong>@d</strong>: @LeadPilot.Application.Crm.ScoringRuleParser.Describe(d)</li> }</ul></details>
+    <div class="mt-3"><button type="submit" class="btn btn-primary"><span class="spinner-border spinner-border-sm d-none" aria-hidden="true"></span> Publish new version</button></div>
+</form>
+<div class="card"><div class="card-header">Version history</div><ul class="list-group list-group-flush">
+    @foreach (var v in Model.Versions) { <li class="list-group-item d-flex justify-content-between"><span>Version @v.Version @if (v.IsActive) { <span class="badge text-bg-success">active</span> } <span class="text-muted small">@v.Rules.Count rule(s) @(v.Note is null ? "" : "· " + v.Note)</span></span><span class="small text-muted">@v.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm") @(v.CreatedBy is null ? "" : "· " + v.CreatedBy)</span></li> }
+</ul></div>

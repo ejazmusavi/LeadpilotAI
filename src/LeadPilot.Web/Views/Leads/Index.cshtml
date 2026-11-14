@@ -1,0 +1,133 @@
+@model LeadListViewModel
+@using LeadPilot.Domain.Crm
+@{
+    ViewData["Title"] = "Leads";
+    var q = Model.Query; var lk = Model.Lookups; var can = Model.Can;
+    var hasFilter = Model.QueryValues.Keys.Any(k => k is not ("sort" or "descending" or "pageSize"));
+    var bulk = can.Update || can.Assign || can.Delete;
+    var returnQuery = Context.Request.QueryString.Value ?? "";
+    string SortLink(LeadSort s)
+    {
+        var v = Model.QueryValues.ToDictionary(k => k.Key, k => (object?)k.Value);
+        v["sort"] = s.ToString(); v["descending"] = (q.Sort == s && q.Descending) ? "false" : "true";
+        return Url.Action("Index", new Microsoft.AspNetCore.Routing.RouteValueDictionary(v))!;
+    }
+    string Arrow(LeadSort s) => q.Sort == s ? (q.Descending ? " ▼" : " ▲") : "";
+    string ExportLink(string format)
+    {
+        var v = Model.QueryValues.ToDictionary(k => k.Key, k => (object?)k.Value); v["format"] = format;
+        return Url.Action("Export", new Microsoft.AspNetCore.Routing.RouteValueDictionary(v))!;
+    }
+}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <h1 class="h3 mb-0">Leads</h1>
+    <div class="d-flex flex-wrap gap-2">
+        @if (can.Export)
+        {
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">Export</button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item" href="@ExportLink("Csv")">CSV (current filters)</a></li>
+                    <li><a class="dropdown-item" href="@ExportLink("Xlsx")">Excel (current filters)</a></li>
+                </ul>
+            </div>
+        }
+        @if (can.Import) { <a asp-controller="Imports" asp-action="New" class="btn btn-outline-primary">Import</a> }
+        @if (can.Create) { <a asp-action="Create" class="btn btn-primary">New lead</a> }
+    </div>
+</div>
+
+<form method="get" asp-action="Index" class="card card-body mb-3">
+    <div class="row g-3 align-items-end">
+        <div class="col-12 col-md-6 col-xl-3"><label class="form-label" for="search">Search</label><input id="search" name="search" value="@q.Search" class="form-control" placeholder="Name, city, website, contact, phone" /></div>
+        <div class="col-12 col-md-6 col-xl-3"><label class="form-label" for="categoryId">Category</label>
+            <select id="categoryId" name="categoryId" class="form-select"><option value="">All</option>@foreach (var c in lk.Categories) { <option value="@c.Id" selected="@(q.CategoryId == c.Id)">@c.Name</option> }</select></div>
+        <div class="col-12 col-md-6 col-xl-3"><label class="form-label" for="stageId">Stage</label>
+            <select id="stageId" name="stageId" class="form-select"><option value="">All</option>@if (lk.DefaultPipeline is { } dp) { foreach (var s in dp.Stages) { <option value="@s.Id" selected="@(q.StageId == s.Id)">@s.Name (@s.LeadCount)</option> } }</select></div>
+        <div class="col-12 col-md-6 col-xl-3"><label class="form-label" for="statusId">Status</label>
+            <select id="statusId" name="statusId" class="form-select"><option value="">All</option>@foreach (var s in lk.Statuses) { <option value="@s.Id" selected="@(q.StatusId == s.Id)">@s.Name</option> }</select></div>
+        <div class="col-12 col-md-6 col-xl-3"><label class="form-label" for="ownerUserId">Owner</label>
+            <select id="ownerUserId" name="ownerUserId" class="form-select"><option value="">Anyone</option>@foreach (var o in lk.Owners) { <option value="@o.UserId" selected="@(q.OwnerUserId == o.UserId)">@o.DisplayName</option> }</select>
+            <div class="form-check mt-1"><input class="form-check-input" type="checkbox" id="unassigned" name="unassigned" value="true" checked="@q.Unassigned" /><label class="form-check-label small" for="unassigned">Unassigned only</label></div></div>
+        <div class="col-12 col-md-6 col-xl-3"><label class="form-label" for="tagId">Tag</label>
+            <select id="tagId" name="tagId" class="form-select"><option value="">Any</option>@foreach (var t in lk.Tags) { <option value="@t.Id" selected="@(q.TagId == t.Id)">@t.Name</option> }</select></div>
+        <div class="col-12 col-md-6 col-xl-3"><label class="form-label" for="city">City</label><input id="city" name="city" value="@q.City" class="form-control" /></div>
+        <div class="col-6 col-md-3 col-xl-2"><label class="form-label" for="minScore">Min score</label><input id="minScore" name="minScore" type="number" min="0" max="100" value="@q.MinScore" class="form-control" /></div>
+        <div class="col-6 col-md-3 col-xl-2"><label class="form-label" for="maxScore">Max score</label><input id="maxScore" name="maxScore" type="number" min="0" max="100" value="@q.MaxScore" class="form-control" /></div>
+        <div class="col-12 col-md-6 col-xl-2"><label class="form-label" for="archived">Show</label>
+            <select id="archived" name="archived" class="form-select"><option value="Active" selected="@(q.Archived == ArchivedFilter.Active)">Active leads</option><option value="Archived" selected="@(q.Archived == ArchivedFilter.Archived)">Archived</option><option value="All" selected="@(q.Archived == ArchivedFilter.All)">All</option></select></div>
+        <div class="col-12 col-md-6 col-xl-2 d-flex gap-2"><button type="submit" class="btn btn-outline-primary">Apply</button>@if (hasFilter) { <a asp-action="Index" class="btn btn-link">Clear</a> }</div>
+    </div>
+</form>
+
+@if (Model.Result.Items.Count == 0)
+{
+    <div class="card"><partial name="_EmptyState" model='(hasFilter ? "No leads match these filters" : "No leads yet", hasFilter ? "Try fewer filters or clear them." : "Add a lead by hand or import a CSV/Excel file. Nothing here is sample data.")' /></div>
+}
+else
+{
+    <form method="post" asp-action="BulkAssign" id="bulk-form">
+        <input type="hidden" name="returnQuery" value="@returnQuery" />
+        @if (bulk)
+        {
+            <div class="card card-body mb-2 py-2" id="bulk-bar">
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <span class="small text-muted"><span id="bulk-count">0</span> selected</span>
+                    @if (can.Assign)
+                    {
+                        <select name="ownerUserId" class="form-select form-select-sm w-auto" aria-label="Owner"><option value="">Unassign</option>@foreach (var o in lk.Owners) { <option value="@o.UserId">@o.DisplayName</option> }</select>
+                        <button type="submit" class="btn btn-sm btn-outline-secondary" formaction="@Url.Action("BulkAssign")" data-confirm="Change the owner of the selected leads?" data-confirm-label="Assign">Assign</button>
+                    }
+                    @if (can.Update)
+                    {
+                        <select name="stageId" class="form-select form-select-sm w-auto" aria-label="Stage"><option value="">Stage…</option>@if (lk.DefaultPipeline is { } p2) { foreach (var s in p2.Stages) { <option value="@s.Id">@s.Name</option> } }</select>
+                        <button type="submit" class="btn btn-sm btn-outline-secondary" formaction="@Url.Action("BulkStage")" data-confirm="Move the selected leads to the chosen stage?" data-confirm-label="Move">Move</button>
+                        <select name="tagId" class="form-select form-select-sm w-auto" aria-label="Tag"><option value="">Tag…</option>@foreach (var t in lk.Tags) { <option value="@t.Id">@t.Name</option> }</select>
+                        <button type="submit" class="btn btn-sm btn-outline-secondary" formaction="@Url.Action("BulkTag")" data-confirm="Add the chosen tag to the selected leads?" data-confirm-label="Add tag">Add tag</button>
+                        <button type="submit" class="btn btn-sm btn-outline-secondary" formaction="@Url.Action("BulkTag", new { remove = true })" data-confirm="Remove the chosen tag from the selected leads?" data-confirm-label="Remove tag">Remove tag</button>
+                    }
+                    @if (can.Delete)
+                    {
+                        @if (q.Archived == ArchivedFilter.Archived)
+                        {
+                            <button type="submit" class="btn btn-sm btn-outline-secondary" formaction="@Url.Action("BulkArchive", new { restore = true })" data-confirm="Restore the selected leads?" data-confirm-label="Restore">Restore</button>
+                        }
+                        else
+                        {
+                            <button type="submit" class="btn btn-sm btn-outline-danger" formaction="@Url.Action("BulkArchive")" data-confirm="Archive the selected leads? They disappear from lists and can never be contacted until restored." data-confirm-label="Archive">Archive</button>
+                        }
+                    }
+                </div>
+            </div>
+        }
+        <div class="card"><div class="table-responsive"><table class="table align-middle mb-0 table-hover">
+            <thead><tr>
+                @if (bulk) { <th style="width:2rem"><input type="checkbox" class="form-check-input" id="select-all" aria-label="Select all leads on this page" /></th> }
+                <th><a href="@SortLink(LeadSort.Name)" class="text-decoration-none text-reset">Lead@(Arrow(LeadSort.Name))</a></th>
+                <th><a href="@SortLink(LeadSort.Stage)" class="text-decoration-none text-reset">Stage@(Arrow(LeadSort.Stage))</a></th>
+                <th>Owner</th>
+                <th><a href="@SortLink(LeadSort.Score)" class="text-decoration-none text-reset">Score@(Arrow(LeadSort.Score))</a></th>
+                <th>Primary contact</th>
+                <th><a href="@SortLink(LeadSort.Created)" class="text-decoration-none text-reset">Created@(Arrow(LeadSort.Created))</a></th>
+            </tr></thead>
+            <tbody>
+            @foreach (var l in Model.Result.Items)
+            {
+                <tr>
+                    @if (bulk) { <td><input type="checkbox" class="form-check-input lead-check" name="ids" value="@l.Id" aria-label="Select @l.Name" /></td> }
+                    <td>
+                        <a asp-action="Details" asp-route-id="@l.Id" class="fw-semibold text-decoration-none">@l.Name</a> @if (l.IsArchived) { <span class="badge text-bg-warning">archived</span> }
+                        <div class="text-muted small">@(string.Join(" · ", new[] { l.Category, l.City, l.Country }.Where(x => !string.IsNullOrWhiteSpace(x))))</div>
+                        @foreach (var t in l.Tags) { <span class="badge text-bg-light border me-1">@t</span> }
+                    </td>
+                    <td><span class="badge @(l.StageKind == StageKind.Won ? "text-bg-success" : l.StageKind == StageKind.Lost ? "text-bg-danger" : l.StageKind == StageKind.Suppressed ? "text-bg-dark" : "text-bg-info")">@l.Stage</span><div class="small text-muted">@l.Status</div></td>
+                    <td>@(l.OwnerName ?? "—")</td>
+                    <td><partial name="_ScoreBadge" model="l.Score" /></td>
+                    <td>@if (l.PrimaryContactName is not null || l.PrimaryPhone is not null || l.PrimaryEmail is not null) { <div>@l.PrimaryContactName</div><div class="small text-muted">@(l.PrimaryPhone ?? l.PrimaryEmail)</div> } else { <span class="text-muted">—</span> }</td>
+                    <td class="small text-muted">@l.CreatedAtUtc.ToString("yyyy-MM-dd")</td>
+                </tr>
+            }
+            </tbody></table></div></div>
+    </form>
+    <partial name="_Pager" model='new PagerModel(Model.Result.Page, Model.Result.TotalPages, Model.Result.TotalCount, "Index", Model.QueryValues)' />
+}

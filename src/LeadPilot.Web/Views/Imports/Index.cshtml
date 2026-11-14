@@ -1,0 +1,27 @@
+@model ImportListViewModel
+@using LeadPilot.Domain.Crm
+@{ ViewData["Title"] = "Imports"; }
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <h1 class="h3 mb-0">Imports</h1>
+    <a asp-action="New" class="btn btn-primary">New import</a>
+</div>
+@if (Model.Result.Items.Count == 0)
+{
+    <div class="card"><partial name="_EmptyState" model='("No imports yet", "Upload a CSV or Excel file to add many leads at once.")' /></div>
+}
+else
+{
+    <div class="card"><div class="table-responsive"><table class="table align-middle mb-0">
+        <thead><tr><th>File</th><th>Status</th><th>Rows</th><th>Created</th><th>Merged</th><th>Skipped</th><th>Review</th><th>Errors</th><th>When</th></tr></thead>
+        <tbody>
+        @foreach (var j in Model.Result.Items)
+        {
+            <tr>
+                <td><a asp-action="@(j.Status == ImportStatus.Uploaded ? "Map" : "Result")" asp-route-id="@j.Id" class="text-decoration-none">@j.FileName</a><div class="small text-muted">@j.CreatedBy</div></td>
+                <td><span class="badge @(j.Status == ImportStatus.Completed ? "text-bg-success" : j.Status == ImportStatus.Failed ? "text-bg-danger" : "text-bg-secondary")">@j.Status</span></td>
+                <td>@j.TotalRows</td><td>@j.CreatedCount</td><td>@j.MergedCount</td><td>@j.SkippedDuplicateCount</td><td>@j.PendingDuplicateCount</td><td>@j.ErrorCount</td><td class="small text-muted">@j.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm")</td>
+            </tr>
+        }
+        </tbody></table></div></div>
+    <partial name="_Pager" model='new PagerModel(Model.Result.Page, Model.Result.TotalPages, Model.Result.TotalCount, "Index", new Dictionary<string, string?>())' />
+}

@@ -32,7 +32,9 @@ services:
       App__PublicWebUrl: ${PUBLIC_WEB_URL:-http://localhost:8080}
       # Shared key ring so encrypted tenant secrets can be read by every app.
       DataProtection__KeysPath: /keys
-    volumes: [dp-keys:/keys]
+      # Uploaded import files (shared so a file uploaded in the dashboard can be run through the API and vice versa).
+      Crm__StorageRoot: /data/files
+    volumes: [dp-keys:/keys, crm-files:/data/files]
     ports: ["8080:8080"]
 
   api:
@@ -43,7 +45,7 @@ services:
       <<: *appenv
       Swagger__Enabled: ${SWAGGER_ENABLED:-true}
       Jwt__SigningKey: ${JWT_SIGNING_KEY:?set a random key of at least 32 characters in docker/.env (required outside Development)}
-    volumes: [dp-keys:/keys]
+    volumes: [dp-keys:/keys, crm-files:/data/files]
     ports: ["8081:8080"]
 
   worker:
@@ -56,3 +58,4 @@ services:
 volumes:
   mysql-data:
   dp-keys:
+  crm-files:

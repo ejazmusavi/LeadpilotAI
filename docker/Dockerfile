@@ -14,7 +14,8 @@ ENV PROJECT_DLL=${PROJECT}.dll
 WORKDIR /app
 COPY --from=build /app/publish .
 # /keys holds the shared Data Protection key ring (mounted as a volume by docker-compose); it must be writable by the non-root user.
-RUN useradd --system --uid 10001 appuser && mkdir -p /keys && chown -R appuser /app /keys
+# /data/files holds uploaded import files (tenant-scoped sub folders), also a shared volume.
+RUN useradd --system --uid 10001 appuser && mkdir -p /keys /data/files && chown -R appuser /app /keys /data/files
 USER appuser
 ENV ASPNETCORE_URLS=http://+:8080
 EXPOSE 8080

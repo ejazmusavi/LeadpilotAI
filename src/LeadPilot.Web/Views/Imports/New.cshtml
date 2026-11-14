@@ -1,0 +1,24 @@
+@model ImportListViewModel
+@{ ViewData["Title"] = "New import"; }
+<h1 class="h3 mb-3">New import</h1>
+<div class="row g-3">
+    <div class="col-12 col-xl-7">
+        <form asp-action="Upload" method="post" enctype="multipart/form-data" data-loading-form class="card card-body">
+            <h2 class="h6">1. Choose a file</h2>
+            <input type="file" name="file" class="form-control" accept=".csv,.xlsx" required aria-label="CSV or Excel file" />
+            <div class="form-text">.csv (UTF-8) or .xlsx, first row = column headers, up to @Model.MaxRows rows and @(Model.MaxBytes / (1024 * 1024)) MB. Nothing is imported until you confirm the column mapping.</div>
+            <div class="mt-3"><button type="submit" class="btn btn-primary"><span class="spinner-border spinner-border-sm d-none" aria-hidden="true"></span> Upload and continue</button> <a asp-action="Index" class="btn btn-outline-secondary">Cancel</a></div>
+        </form>
+    </div>
+    <div class="col-12 col-xl-5">
+        <div class="card card-body small">
+            <h2 class="h6">What happens next</h2>
+            <ol class="mb-0 ps-3">
+                <li>We read the file and suggest which column is the name, city, phone and so on. You can change every choice.</li>
+                <li>Pick what to do with duplicates (same name and city, same website domain or same phone): skip them, merge new details into the existing lead, or hold them for your review.</li>
+                <li>Rows with problems are not imported. You get a per-row error report you can download.</li>
+                <li>Imported contacts have <strong>no consent</strong>. They cannot be messaged until consent is recorded.</li>
+            </ol>
+        </div>
+    </div>
+</div>

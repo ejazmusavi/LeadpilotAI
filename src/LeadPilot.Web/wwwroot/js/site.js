@@ -17,6 +17,16 @@
     if (e.persisted) document.querySelectorAll('form[data-loading-form] button[type=submit]').forEach(function (b) { b.disabled = false; });
   });
 
+  // Bulk selection on list pages: select-all + live counter
+  var selectAll = document.getElementById('select-all');
+  if (selectAll) {
+    var checks = function () { return Array.prototype.slice.call(document.querySelectorAll('.lead-check')); };
+    var counter = document.getElementById('bulk-count');
+    var refresh = function () { if (counter) counter.textContent = checks().filter(function (c) { return c.checked; }).length; };
+    selectAll.addEventListener('change', function () { checks().forEach(function (c) { c.checked = selectAll.checked; }); refresh(); });
+    document.addEventListener('change', function (e) { if (e.target.classList && e.target.classList.contains('lead-check')) refresh(); });
+  }
+
   // Confirmation dialog for destructive actions: <button data-confirm="message" data-confirm-label="Delete">
   var modalEl = document.getElementById('confirm-modal');
   if (modalEl && window.bootstrap) {

@@ -1,0 +1,20 @@
+@model PlatformInvoiceViewModel
+@using LeadPilot.Domain.Billing
+@using LeadPilot.Domain.Conversion
+@{ ViewData["Title"] = "Invoice " + Model.Invoice.Number; var i = Model.Invoice; }
+<h1 class="h3 mb-3">Invoice @i.Number <span class="badge bg-secondary fs-6">@i.Status</span></h1>
+<partial name="_InvoiceBody" model="i" />
+@if (i.Status == InvoiceStatus.Issued)
+{
+<div class="row g-3 mt-1"><div class="col-lg-8"><div class="card"><div class="card-header">Verify the payment</div><div class="card-body">
+<p class="small text-muted">Record the evidence of a payment you confirmed (bank statement, receipt). Amount and currency must equal the invoice exactly; the same receipt cannot verify two payments. Verifying activates or renews the subscription@(" ")and lifts a non-payment suspension.</p>
+<form asp-action="Verify" asp-route-id="@i.Id" method="post"><input type="hidden" asp-for="Form.ForTenant" /><div class="row g-3">
+<div class="col-md-3"><label class="form-label" asp-for="Form.Amount">Amount</label><input asp-for="Form.Amount" type="number" step="0.01" class="form-control" /></div>
+<div class="col-md-2"><label class="form-label" asp-for="Form.Currency">Currency</label><input asp-for="Form.Currency" class="form-control" maxlength="3" /></div>
+<div class="col-md-3"><label class="form-label" asp-for="Form.Method">Method</label><select asp-for="Form.Method" class="form-select"><option value="BankTransfer">Bank transfer</option><option value="Cash">Cash</option><option value="Other">Other</option></select></div>
+<div class="col-md-4"><label class="form-label" asp-for="Form.PaidAt">Paid on</label><input asp-for="Form.PaidAt" type="date" class="form-control" /></div>
+<div class="col-md-6"><label class="form-label" asp-for="Form.EvidenceReference">Evidence reference</label><input asp-for="Form.EvidenceReference" class="form-control" required /></div>
+<div class="col-md-6"><label class="form-label" asp-for="Form.Notes">Notes</label><input asp-for="Form.Notes" class="form-control" /></div>
+<div class="col-12"><button class="btn btn-success">Verify payment</button></div></div></form></div></div></div>
+<div class="col-lg-4"><div class="card border-danger"><div class="card-header">Void invoice</div><div class="card-body"><form asp-action="Void" method="post"><input type="hidden" name="forTenant" value="@Model.Form.ForTenant" /><input type="hidden" name="id" value="@i.Id" /><input name="reason" class="form-control mb-2" placeholder="Reason" required /><button class="btn btn-outline-danger">Void</button></form></div></div></div></div>
+}

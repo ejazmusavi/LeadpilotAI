@@ -1,0 +1,51 @@
+@model CustomerDetailsViewModel
+@using LeadPilot.Domain.Conversion
+@{ var c = Model.Customer; ViewData["Title"] = c.Name; }
+<div class="d-flex flex-wrap justify-content-between gap-2 mb-2"><h1 class="h3 mb-0">@c.Code · @c.Name</h1><span class="badge text-bg-secondary fs-6 align-self-center">@c.Status</span></div>
+<p class="text-muted">Converted @c.ConvertedAtUtc.ToString("yyyy-MM-dd") UTC@(c.ConvertedByName is null ? "" : " by " + c.ConvertedByName) · <a asp-controller="Leads" asp-action="Details" asp-route-id="@c.LeadId">open the lead</a> (its notes, messages and opportunities stay there).</p>
+<div class="row g-3"><div class="col-lg-7">
+<div class="card mb-3"><div class="card-header">Subscriptions</div><ul class="list-group list-group-flush">
+@foreach (var s in c.Subscriptions)
+{
+    var ag = c.Agreements.FirstOrDefault(a => a.SubscriptionId == s.Id); var open = c.PaymentRequests.FirstOrDefault(p => p.SubscriptionId == s.Id && p.Status == PaymentRequestStatus.Open);
+    <li class="list-group-item"><div class="d-flex justify-content-between"><strong>@s.PlanName</strong><span class="badge @(s.Status == SubscriptionStatus.Active ? "text-bg-success" : s.Status == SubscriptionStatus.Pending ? "text-bg-warning" : "text-bg-secondary")">@s.Status</span></div>
+        @if (ag is not null) { <div class="small">@ag.Price.ToString("0.00") @ag.Currency · @ag.BillingCycle@(ag.DiscountPercent is { } d ? $" · {d}% below list price" : "") · approved by @ag.ApprovedByName on @ag.ApprovedAtUtc.ToString("yyyy-MM-dd")</div><details class="small mt-1"><summary>Agreed terms</summary><div style="white-space:pre-wrap">@ag.Terms</div></details> }
+        @if (s.Status == SubscriptionStatus.Pending)
+        {
+            <div class="small text-muted mt-1">Pending: activates only after a verified payment.</div>
+            @if (open is null && Model.CanRequest) { <form asp-controller="Payments" asp-action="Create" method="post" class="mt-2"><input type="hidden" name="customerId" value="@c.Id" /><input type="hidden" name="subscriptionId" value="@s.Id" /><button class="btn btn-outline-primary btn-sm" type="submit" data-confirm="Create a payment request for @(ag?.Price.ToString("0.00")) @ag?.Currency? Nothing is charged." data-confirm-label="Create request">Create payment request</button></form> }
+        }
+        @if (s.Status == SubscriptionStatus.Active) { <div class="small text-success">Active since @s.ActivatedAtUtc?.ToString("yyyy-MM-dd") UTC (verified payment).</div> }
+        @if (Model.CanManage && s.Status != SubscriptionStatus.Cancelled) { <form asp-action="CancelSubscription" method="post" class="mt-2"><input type="hidden" name="id" value="@c.Id" /><input type="hidden" name="subscriptionId" value="@s.Id" /><input type="hidden" name="reason" value="Cancelled by a team member" /><button class="btn btn-outline-danger btn-sm" type="submit" data-confirm="Cancel this subscription? An open payment request is cancelled too." data-confirm-label="Cancel subscription">Cancel subscription</button></form> }
+    </li>
+}
+</ul></div>
+<div class="card mb-3"><div class="card-header">Payment requests</div>
+@if (c.PaymentRequests.Count == 0) { <partial name="_EmptyState" model='("No payment requests", "Create one for a pending subscription.")' /> }
+else
+{
+    <ul class="list-group list-group-flush">@foreach (var p in c.PaymentRequests)
+    {
+        <li class="list-group-item"><div class="d-flex justify-content-between"><span><strong>@p.Reference</strong> · @p.Amount.ToString("0.00") @p.Currency · @p.PlanName</span><span class="badge text-bg-light border">@p.Status</span></div>
+            <div class="small text-muted">Created @p.CreatedAtUtc.ToString("yyyy-MM-dd") (@p.RequestedVia)@(p.DueAtUtc is { } du ? $" · due {du:yyyy-MM-dd}" : "")</div>
+            @if (p.Payment is { } pay) { <div class="small text-success">Verified @pay.VerifiedAtUtc.ToString("yyyy-MM-dd HH:mm") UTC by @(pay.VerifiedByName ?? "provider") — evidence: @pay.EvidenceReference (@pay.Method)</div> }
+            @if (p.Status == PaymentRequestStatus.Open)
+            {
+                @if (Model.CanVerify)
+                {
+                    <form asp-controller="Payments" asp-action="Verify" method="post" class="row g-2 mt-1"><input type="hidden" name="id" value="@p.Id" /><input type="hidden" name="customerId" value="@c.Id" />
+                        <div class="col-6 col-md-2"><label class="form-label small" for="a@(p.Id)">Amount</label><input id="a@(p.Id)" name="amount" class="form-control form-control-sm" value="@p.Amount.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)" /></div>
+                        <div class="col-6 col-md-2"><label class="form-label small" for="c@(p.Id)">Currency</label><input id="c@(p.Id)" name="currency" class="form-control form-control-sm" value="@p.Currency" maxlength="3" /></div>
+                        <div class="col-6 col-md-3"><label class="form-label small" for="m@(p.Id)">Method</label><select id="m@(p.Id)" name="method" class="form-select form-select-sm"><option value="BankTransfer">Bank transfer</option><option value="Cash">Cash</option><option value="Other">Other</option></select></div>
+                        <div class="col-6 col-md-3"><label class="form-label small" for="e@(p.Id)">Evidence (receipt / transfer id)</label><input id="e@(p.Id)" name="evidenceReference" class="form-control form-control-sm" required /></div>
+                        <div class="col-12 col-md-2 align-self-end"><button class="btn btn-success btn-sm" type="submit" data-confirm="I have checked the evidence: the money arrived. This verifies the payment and activates the subscription." data-confirm-label="Verify payment">Verify payment</button></div></form>
+                }
+                @if (Model.CanRequest) { <form asp-controller="Payments" asp-action="Cancel" method="post" class="mt-1"><input type="hidden" name="id" value="@p.Id" /><input type="hidden" name="customerId" value="@c.Id" /><input type="hidden" name="reason" value="Cancelled by a team member" /><button class="btn btn-outline-danger btn-sm" type="submit" data-confirm="Cancel this payment request?" data-confirm-label="Cancel request">Cancel request</button></form> }
+            }
+        </li>
+    }</ul>
+}
+</div>
+@if (Model.CanManage) { <form asp-action="Account" asp-route-id="@c.Id" method="post" class="card card-body"><h2 class="h6">Product account (entered by staff)</h2><div class="row g-2"><div class="col-md-5"><label class="form-label" for="accountReference">Account reference</label><input id="accountReference" name="accountReference" class="form-control" value="@c.AccountReference" /></div><div class="col-md-5"><label class="form-label" for="accountNotes">Notes</label><input id="accountNotes" name="accountNotes" class="form-control" value="@c.AccountNotes" /></div><div class="col-md-2 align-self-end"><button class="btn btn-outline-primary" type="submit">Save</button></div></div></form> }
+</div>
+<div class="col-lg-5"><div class="card"><div class="card-header">History (lead, opportunity, demos, trials, payments)</div><ul class="list-group list-group-flush small">@foreach (var i in c.Timeline) { <li class="list-group-item"><span class="badge text-bg-light border">@i.Kind</span> <span class="text-muted">@i.AtUtc.ToString("yyyy-MM-dd HH:mm") UTC@(i.Actor is null ? "" : " · " + i.Actor)</span><br />@i.Summary</li> }</ul></div></div></div>

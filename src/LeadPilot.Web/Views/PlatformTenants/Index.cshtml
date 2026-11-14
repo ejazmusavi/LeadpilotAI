@@ -1,0 +1,17 @@
+@model PlatformTenantsViewModel
+@using LeadPilot.Web.Models
+@{ ViewData["Title"] = "Subscriptions"; }
+<h1 class="h3 mb-3">Tenant subscriptions</h1>
+<form method="get" class="card card-body mb-3"><div class="row g-3 align-items-end"><div class="col-md-5"><label class="form-label" for="q">Search</label><input id="q" name="q" class="form-control" value="@Model.Query" /></div>
+<div class="col-6 col-md-3"><label class="form-label" for="status">Status</label><select id="status" name="status" class="form-select"><option value="">All</option>@foreach (var s in new[] { "Active", "Suspended" }) { <option value="@s" selected="@(Model.Status == s)">@s</option> }</select></div><div class="col-md-3"><button class="btn btn-outline-primary">Filter</button></div></div></form>
+<div class="card"><div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Tenant</th><th>Plan</th><th>Subscription</th><th>Users</th><th>Leads</th><th>Status</th><th></th></tr></thead><tbody>
+@foreach (var t in Model.Result.Items)
+{
+    <tr><td>@t.Name<div class="small text-muted">@t.Slug@if (t.SelfRegistered) { <span> · self-registered@(t.EmailVerified ? "" : ", e-mail unverified")</span> }</div></td><td>@(t.PlanName ?? "—")</td>
+    <td>@if (t.State is { } st) { <span class="badge @BillingFormat.StateBadge(st)">@st</span> <span class="small text-muted">until @t.PeriodEndUtc?.ToString("yyyy-MM-dd")</span> }</td>
+    <td>@t.Users@(t.UserLimit is { } ul ? " / " + ul : "")</td><td>@t.Leads.ToString("N0")@(t.LeadLimit is { } ll ? " / " + ll.ToString("N0") : "")</td>
+    <td><span class="badge @(t.Status == LeadPilot.Domain.Tenancy.TenantStatus.Active ? "bg-success" : "bg-danger")">@t.Status</span>@if (t.SuspensionKind is { } k) { <span class="small text-muted"> (@k)</span> }</td>
+    <td class="text-end"><a class="btn btn-outline-primary btn-sm" asp-action="Details" asp-route-id="@t.Id">Manage</a></td></tr>
+}
+</tbody></table></div></div>
+<partial name="_Pager" model='new PagerModel(Model.Result.Page, Model.Result.TotalPages, Model.Result.TotalCount, "Index", new Dictionary<string, string?> { ["q"] = Model.Query, ["status"] = Model.Status })' />

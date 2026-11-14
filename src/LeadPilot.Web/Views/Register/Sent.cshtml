@@ -1,0 +1,3 @@
+@{ Layout = "_AuthLayout"; ViewData["Title"] = "Check your inbox"; }
+<div class="alert alert-success" role="alert">If the address can be used, a confirmation link is on its way. Open it to unlock all features.</div>
+<a asp-controller="Account" asp-action="Login" class="btn btn-primary">Sign in</a> <a asp-action="Resend" class="btn btn-link">Send the link again</a>

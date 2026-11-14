@@ -1,0 +1,62 @@
+@model KnowledgeIndexViewModel
+@using LeadPilot.Domain.Ai
+@{ ViewData["Title"] = "Knowledge base"; var q = Model.Query; }
+<div class="d-flex flex-wrap justify-content-between align-items-start mb-3 gap-2">
+    <div><h1 class="h3 mb-1">Knowledge base</h1><p class="text-muted mb-0">What the AI is allowed to say. It answers only from these documents, and only from this workspace's own.</p></div>
+    @if (Model.CanManage) { <a asp-action="Add" class="btn btn-primary">Add knowledge</a> }
+</div>
+@if (Model.Ai.CanSeeSettings && (!Model.Ai.HasEmbeddingKey || !Model.Ai.HasKey))
+{
+    <div class="alert alert-warning" role="alert"><strong>The AI is not set up yet.</strong> Documents can be saved, but they are only indexed (and answers only given) once the provider keys are saved under <a asp-controller="AiSettings" asp-action="Index">AI settings</a>.</div>
+}
+@if (Model.Ai.NeedingReindex > 0 && Model.CanManage)
+{
+    <div class="alert alert-info d-flex flex-wrap justify-content-between align-items-center gap-2" role="alert"><span><strong>@Model.Ai.NeedingReindex document version(s)</strong> were indexed with a different embedding model than the one in the settings. Re-index them or the AI will not find them.</span>
+        <form asp-action="ReindexAll" method="post"><button class="btn btn-sm btn-primary" type="submit" data-confirm="Re-index every document with the current embedding model? This uses embedding tokens." data-confirm-label="Re-index all">Re-index all</button></form></div>
+}
+@if (Model.Sources.Count > 0)
+{
+    <div class="card mb-3"><div class="card-header">Sources</div><div class="table-responsive"><table class="table align-middle mb-0">
+        <thead><tr><th>Name</th><th>Type</th><th class="text-end">Documents</th><th>Last sync</th><th></th></tr></thead><tbody>
+        @foreach (var s in Model.Sources)
+        {
+            <tr>
+                <td><a asp-action="Index" asp-route-sourceId="@s.Id" class="fw-semibold text-decoration-none">@s.Name</a>@if (s.Url is not null) { <div class="small text-muted text-break">@s.Url</div> }</td>
+                <td>@s.Type</td><td class="text-end">@s.DocumentCount</td>
+                <td class="small">@(s.Type == KnowledgeSourceType.Website ? (s.LastSyncAtUtc is { } t ? t.ToString("yyyy-MM-dd HH:mm") + " UTC" : "queued") : "–")@if (s.LastSyncError is not null) { <div class="text-danger">@s.LastSyncError</div> }</td>
+                <td class="text-end text-nowrap">
+                    @if (Model.CanManage)
+                    {
+                        @if (s.Type == KnowledgeSourceType.Website) { <form asp-action="SyncSource" asp-route-id="@s.Id" method="post" class="d-inline"><button class="btn btn-sm btn-outline-secondary" type="submit">Sync now</button></form> }
+                        <form asp-action="DeleteSource" asp-route-id="@s.Id" method="post" class="d-inline"><button class="btn btn-sm btn-outline-danger" type="submit" data-confirm="Delete this source with its @s.DocumentCount document(s), all versions, passages and vectors? This cannot be undone." data-confirm-label="Delete source">Delete</button></form>
+                    }
+                </td>
+            </tr>
+        }
+        </tbody></table></div></div>
+}
+<form method="get" asp-action="Index" class="card card-body mb-3"><div class="row g-3 align-items-end">
+    <div class="col-12 col-md-4"><label class="form-label" for="search">Search title</label><input id="search" name="search" value="@q.Search" class="form-control" /></div>
+    <div class="col-6 col-md-3"><label class="form-label" for="kind">Kind</label><select id="kind" name="kind" class="form-select"><option value="">All</option>@foreach (var k in Enum.GetValues<DocumentKind>()) { <option value="@k" selected="@(q.Kind == k)">@k</option> }</select></div>
+    <div class="col-6 col-md-3"><label class="form-label" for="status">Status</label><select id="status" name="status" class="form-select"><option value="">All</option>@foreach (var k in Enum.GetValues<IndexStatus>()) { <option value="@k" selected="@(q.Status == k)">@k</option> }</select></div>
+    <div class="col-12 col-md-2"><input type="hidden" name="sourceId" value="@q.SourceId" /><button type="submit" class="btn btn-outline-primary">Filter</button> <a asp-action="Index" class="btn btn-link">Clear</a></div>
+</div></form>
+@if (Model.Result.Items.Count == 0)
+{
+    <div class="card"><partial name="_EmptyState" model='("No documents yet", Model.CanManage ? "Add product descriptions, pricing, FAQs, policies or your website. The AI will not answer anything that is not written here." : "No documents match.")' /></div>
+}
+else
+{
+    <div class="card"><div class="table-responsive"><table class="table align-middle mb-0">
+        <thead><tr><th>Title</th><th>Kind</th><th>Source</th><th>Status</th><th class="text-end">Passages</th><th class="text-end">Version</th><th>Updated</th></tr></thead><tbody>
+        @foreach (var d in Model.Result.Items)
+        {
+            <tr class="@(d.IsEnabled ? "" : "text-muted")">
+                <td><a asp-action="Document" asp-route-id="@d.Id" class="fw-semibold text-decoration-none">@d.Title</a>@if (!d.IsEnabled) { <span class="badge text-bg-secondary ms-1">disabled</span> }@if (d.Error is not null && d.Status == IndexStatus.Failed) { <div class="small text-danger">@d.Error</div> }</td>
+                <td>@d.Kind</td><td class="small">@d.SourceName</td><td><partial name="_IndexStatus" model="d.Status" /></td>
+                <td class="text-end">@d.ChunkCount</td><td class="text-end">v@(d.LatestVersion)</td><td class="small text-nowrap">@d.UpdatedAtUtc.ToString("yyyy-MM-dd HH:mm")</td>
+            </tr>
+        }
+        </tbody></table></div></div>
+    <partial name="_Pager" model='new PagerModel(Model.Result.Page, Model.Result.TotalPages, Model.Result.TotalCount, "Index", Model.QueryValues)' />
+}

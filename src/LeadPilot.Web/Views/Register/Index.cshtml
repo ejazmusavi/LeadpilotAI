@@ -1,0 +1,17 @@
+@model SignUpViewModel
+@{ Layout = "_AuthLayout"; ViewData["Title"] = "Create a workspace"; var open = (bool)(ViewData["Open"] ?? false); }
+@if (!open) { <div class="alert alert-info" role="alert">Sign-up is currently closed. Contact the platform owner for an invitation.</div><a asp-controller="Account" asp-action="Login">Back to sign in</a> }
+else
+{
+<form asp-action="Index" method="post" data-loading-form novalidate>
+    <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+    <div class="mb-3"><label asp-for="WorkspaceName" class="form-label">Workspace (company) name</label><input asp-for="WorkspaceName" class="form-control" autofocus /><span asp-validation-for="WorkspaceName" class="text-danger small"></span></div>
+    <div class="mb-3"><label asp-for="DisplayName" class="form-label">Your name</label><input asp-for="DisplayName" class="form-control" /><span asp-validation-for="DisplayName" class="text-danger small"></span></div>
+    <div class="mb-3"><label asp-for="Email" class="form-label">Work e-mail</label><input asp-for="Email" class="form-control" autocomplete="username" /><span asp-validation-for="Email" class="text-danger small"></span></div>
+    <div class="mb-3"><label asp-for="Password" class="form-label"></label><input asp-for="Password" class="form-control" autocomplete="new-password" /><span asp-validation-for="Password" class="text-danger small"></span></div>
+    <div style="position:absolute;left:-10000px" aria-hidden="true"><label>Leave this empty<input asp-for="Website" tabindex="-1" autocomplete="off" /></label></div>
+    <button type="submit" class="btn btn-primary w-100">Create workspace</button>
+    <p class="small text-muted mt-3 mb-0">We will send a link to confirm your e-mail address. Until you confirm it, messaging, AI, discovery, campaigns and workflows stay locked.</p>
+    <div class="mt-2 small"><a asp-controller="Account" asp-action="Login">Already have an account? Sign in</a></div>
+</form>
+}

@@ -1,0 +1,12 @@
+@model InvoiceListViewModel
+@using LeadPilot.Web.Models
+@{ ViewData["Title"] = "Invoices"; }
+<h1 class="h3 mb-3">Invoices</h1>
+@if (Model.Result.Items.Count == 0) { <div class="card"><partial name="_EmptyState" model='("No invoices yet", "Invoices appear here when a paid plan renews or you upgrade.")' /></div> }
+else
+{
+<div class="card"><div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Number</th><th>Issued</th><th>Period</th><th class="text-end">Total</th><th>Status</th><th></th></tr></thead><tbody>
+@foreach (var i in Model.Result.Items) { <tr><td>@i.Number</td><td>@i.IssuedAtUtc?.ToString("yyyy-MM-dd")</td><td class="small">@i.PeriodStartUtc.ToString("yyyy-MM-dd") → @i.PeriodEndUtc.ToString("yyyy-MM-dd")</td><td class="text-end">@BillingFormat.Money(i.Total, i.Currency)</td><td>@i.Status</td><td class="text-end"><a class="btn btn-outline-primary btn-sm" asp-action="Invoice" asp-route-id="@i.Id">Open</a></td></tr> }
+</tbody></table></div></div>
+<partial name="_Pager" model='new PagerModel(Model.Result.Page, Model.Result.TotalPages, Model.Result.TotalCount, "Invoices", new Dictionary<string, string?>())' />
+}

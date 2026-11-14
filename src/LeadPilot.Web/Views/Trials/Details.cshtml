@@ -1,0 +1,36 @@
+@model TrialDetailsViewModel
+@using LeadPilot.Domain.Conversion
+@{ var t = Model.Trial; ViewData["Title"] = "Trial"; var live = t.Status is TrialStatus.Active or TrialStatus.Expired; }
+<div class="d-flex flex-wrap justify-content-between gap-2 mb-2"><h1 class="h3 mb-0">Trial · <a asp-controller="Leads" asp-action="Details" asp-route-id="@t.LeadId" class="text-decoration-none">@t.LeadName</a></h1><span class="badge text-bg-secondary fs-6 align-self-center">@t.Status</span></div>
+@if (t.ProvisioningRequiresStaff) { <div class="alert alert-warning">@t.ProvisioningMessage</div> }
+<div class="row g-3"><div class="col-lg-7">
+<div class="card mb-3"><div class="card-body"><dl class="row mb-0">
+    <dt class="col-sm-4">Plan</dt><dd class="col-sm-8">@(t.PlanName ?? "—") @(t.ProductName is null ? "" : $"({t.ProductName})")</dd>
+    <dt class="col-sm-4">Length</dt><dd class="col-sm-8">@t.DurationDays days</dd>
+    <dt class="col-sm-4">Started</dt><dd class="col-sm-8">@(t.StartedAtUtc?.ToString("yyyy-MM-dd HH:mm") ?? "not yet") UTC</dd>
+    <dt class="col-sm-4">Ends</dt><dd class="col-sm-8">@(t.ExpiresAtUtc?.ToString("yyyy-MM-dd HH:mm") ?? "not yet") UTC</dd>
+    <dt class="col-sm-4">Product account</dt><dd class="col-sm-8">@(t.ExternalAccountRef ?? "—") @if (t.LoginUrl is not null) { <a href="@t.LoginUrl" rel="noopener noreferrer" target="_blank">login</a> }</dd>
+    <dt class="col-sm-4">Usage (recorded)</dt><dd class="col-sm-8">@t.LoginCount logins · @t.ActiveUsers active users · last activity @(t.LastActivityAtUtc?.ToString("yyyy-MM-dd HH:mm") ?? "unknown") @if (t.UsageNotes is not null) { <div class="text-muted">@t.UsageNotes</div> }</dd>
+    @if (t.EndReason is not null) { <dt class="col-sm-4">Ended</dt><dd class="col-sm-8">@t.EndReason</dd> }
+    @if (t.ConvertedCustomerId is { } cid) { <dt class="col-sm-4">Customer</dt><dd class="col-sm-8"><a asp-controller="Customers" asp-action="Details" asp-route-id="@cid">Open customer</a></dd> }
+</dl></div></div>
+@if (Model.CanManage)
+{
+    @if (t.Status == TrialStatus.PendingProvisioning)
+    {
+        <form asp-action="Provisioned" asp-route-id="@t.Id" method="post" class="card card-body mb-3"><h2 class="h6">Mark as provisioned</h2><div class="row g-2"><div class="col-md-4"><label class="form-label" for="externalAccountRef">Account reference in the product</label><input id="externalAccountRef" name="externalAccountRef" class="form-control" /></div><div class="col-md-5"><label class="form-label" for="loginUrl">Login address (https)</label><input id="loginUrl" name="loginUrl" class="form-control" /></div><div class="col-md-3 align-self-end"><button class="btn btn-primary" type="submit" data-confirm="Confirm that the account exists in the product. The trial period starts now." data-confirm-label="Start trial">Start trial</button></div></div></form>
+    }
+    @if (live)
+    {
+        <div class="d-flex flex-wrap gap-2 mb-3">
+            <form asp-action="Extend" asp-route-id="@t.Id" method="post" class="d-flex gap-2"><label class="visually-hidden" for="days">Days</label><input id="days" name="days" type="number" value="7" class="form-control" style="width:6rem" /><button class="btn btn-outline-primary" type="submit" data-confirm="Extend this trial?" data-confirm-label="Extend">Extend</button></form>
+            <a class="btn btn-success" asp-controller="Customers" asp-action="Index">Convert (choose the won opportunity)</a>
+        </div>
+        <form asp-action="Usage" asp-route-id="@t.Id" method="post" class="card card-body mb-3"><h2 class="h6">Record usage (manual update)</h2><div class="row g-2"><div class="col-md-4"><label class="form-label" for="lastActivityUtc">Last activity (UTC)</label><input id="lastActivityUtc" name="lastActivityUtc" type="datetime-local" class="form-control" /></div><div class="col-6 col-md-2"><label class="form-label" for="loginCount">Logins</label><input id="loginCount" name="loginCount" type="number" class="form-control" value="@t.LoginCount" /></div><div class="col-6 col-md-2"><label class="form-label" for="activeUsers">Active users</label><input id="activeUsers" name="activeUsers" type="number" class="form-control" value="@t.ActiveUsers" /></div><div class="col-md-4"><label class="form-label" for="notes">Notes</label><input id="notes" name="notes" class="form-control" /></div></div><div class="mt-2"><button class="btn btn-outline-primary btn-sm" type="submit">Save usage</button></div></form>
+    }
+    @if (t.Status is TrialStatus.PendingProvisioning or TrialStatus.Active or TrialStatus.Expired)
+    {
+        <form asp-action="Cancel" asp-route-id="@t.Id" method="post"><input type="hidden" name="reason" value="Cancelled by a team member" /><button class="btn btn-outline-danger" type="submit" data-confirm="Cancel this trial?" data-confirm-label="Cancel trial">Cancel trial</button></form>
+    }
+}
+</div><div class="col-lg-5"><div class="card"><div class="card-header">History</div><ul class="list-group list-group-flush small">@foreach (var e in t.Events.OrderByDescending(x => x.OccurredAtUtc)) { <li class="list-group-item"><span class="text-muted">@e.OccurredAtUtc.ToString("yyyy-MM-dd HH:mm") UTC</span><br />@e.Summary</li> }</ul></div></div></div>

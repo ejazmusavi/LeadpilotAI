@@ -1,0 +1,19 @@
+@model LeadDetailsViewModel
+@{ var a = Model.Activities!; }
+@if (a.Items.Count == 0)
+{
+    <div class="card"><partial name="_EmptyState" model='("No activity yet", "Changes to this lead appear here.")' /></div>
+}
+else
+{
+    <div class="card"><ul class="list-group list-group-flush">
+        @foreach (var x in a.Items)
+        {
+            <li class="list-group-item d-flex justify-content-between gap-3">
+                <div><span class="badge text-bg-light border me-2">@x.Type</span>@x.Summary @if (x.ActorName is not null) { <span class="text-muted small">· @x.ActorName</span> }</div>
+                <span class="text-muted small text-nowrap">@x.OccurredAtUtc.ToString("yyyy-MM-dd HH:mm") UTC</span>
+            </li>
+        }
+    </ul></div>
+    <partial name="_Pager" model='new PagerModel(a.Page, a.TotalPages, a.TotalCount, "Details", new Dictionary<string, string?> { ["id"] = Model.Lead.Id.ToString(), ["tab"] = "activity" })' />
+}

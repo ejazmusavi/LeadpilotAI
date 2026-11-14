@@ -1,0 +1,14 @@
+@model LeadPilot.Application.Billing.EntitlementOverview
+@using LeadPilot.Web.Models
+<div class="card mb-3"><div class="card-header">Usage against plan limits</div><div class="card-body">
+@foreach (var l in Model.Usage)
+{
+    <div class="mb-3" data-usage="@l.Dimension">
+        <div class="d-flex justify-content-between flex-wrap small"><span>@l.Label @if (l.IsPeriodic) { <span class="text-muted">(this period)</span> } @if (l.Source == LeadPilot.Application.Billing.LimitSource.Override) { <span class="badge bg-info text-dark" title="@l.OverrideReason">override</span> }</span><span>@BillingFormat.Used(l) / @BillingFormat.Limit(l)</span></div>
+        <div class="progress" role="progressbar" aria-label="@l.Label" aria-valuenow="@(l.Percent ?? 0)" aria-valuemin="0" aria-valuemax="100" style="height:.6rem"><div class="progress-bar @BillingFormat.Bar(l)" style="width:@(Math.Min(100, l.Percent ?? 0).ToString("0", System.Globalization.CultureInfo.InvariantCulture))%"></div></div>
+    </div>
+}
+</div></div>
+<div class="card mb-3"><div class="card-header">Features</div><ul class="list-group list-group-flush">
+@foreach (var f in Model.Features) { <li class="list-group-item d-flex justify-content-between"><span>@f.Label</span><span class="badge @(f.Enabled ? "bg-success" : "bg-secondary")">@(f.Enabled ? "Included" : "Not included")@(f.Overridden ? " (override)" : "")</span></li> }
+</ul></div>

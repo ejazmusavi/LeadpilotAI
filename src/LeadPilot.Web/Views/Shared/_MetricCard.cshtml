@@ -1,0 +1,38 @@
+@model MetricValueDto
+@{
+    var cmp = Model.Unit == "percent" ? " pts" : "%";
+}
+<div class="col-6 col-md-4 col-xl-3">
+    <div class="card h-100 metric-card" data-metric="@Model.Key">
+        <div class="card-body p-3">
+            <div class="d-flex justify-content-between align-items-start gap-2">
+                <div class="small text-muted">@Model.Name</div>
+                <span class="badge @AnalyticsFormat.KindClass(Model.Kind)" title="@Model.Kind: @Model.Definition">@Model.Kind</span>
+            </div>
+            @if (!Model.Available)
+            {
+                <div class="h5 mb-0 mt-1 text-muted">Team only</div>
+                <div class="small text-muted">Needs the Reports.Team permission; not shown as zero.</div>
+            }
+            else if (Model.Unit == "money")
+            {
+                if (Model.Money is null || Model.Money.Count == 0) { <div class="h5 mb-0 mt-1">No verified payments</div> }
+                else { foreach (var m in Model.Money) { <div class="h5 mb-0 mt-1">@m.Currency @m.Amount.ToString("N2", System.Globalization.CultureInfo.InvariantCulture)@if (m.Previous is not null) { <span class="small text-muted fw-normal"> (prev. @m.Previous.Value.ToString("N2", System.Globalization.CultureInfo.InvariantCulture))</span> }</div> } }
+            }
+            else
+            {
+                <div class="h3 mb-0 mt-1 metric-value">@AnalyticsFormat.Value(Model)</div>
+                @if (Model.Value is null && Model.Unit == "percent") { <div class="small text-muted">No rate: nothing in the denominator.</div> }
+                else if (Model.Snapshot) { <div class="small text-muted">Current state</div> }
+                else if (Model.Previous is not null)
+                {
+                    if (Model.ChangePercent is { } ch) { <div class="small @(ch > 0 ? "text-success" : ch < 0 ? "text-danger" : "text-muted")">@(ch > 0 ? "▲" : ch < 0 ? "▼" : "•") @Math.Abs(ch).ToString("0.0")@cmp vs previous (@(Model.Unit == "percent" ? Model.Previous.Value.ToString("0.0") + "%" : Model.Previous.Value.ToString("N0")))</div> }
+                    else { <div class="small text-muted">Previous: @(Model.Unit == "percent" ? Model.Previous.Value.ToString("0.0") + "%" : Model.Previous.Value.ToString("N0")) — no comparison</div> }
+                }
+                else if (Model.Unit == "percent" && Model.Numerator is not null) { <div class="small text-muted">@Model.Numerator.Value.ToString("N0") of @Model.Denominator?.ToString("N0")</div> }
+            }
+            @if (Model.DrillDownUrl is not null) { <a class="small" href="@Model.DrillDownUrl">@(Model.DrillDownUrl.Contains('?') ? "View records" : "Open list (not date-filtered)")</a> }
+            <details class="small mt-1"><summary class="text-muted">Definition</summary><div class="mt-1">@Model.Definition</div>@if (Model.Formula is not null) { <div class="mt-1"><strong>Formula:</strong> @Model.Formula</div> }<div class="mt-1 text-muted"><strong>Source:</strong> @Model.Sources</div></details>
+        </div>
+    </div>
+</div>

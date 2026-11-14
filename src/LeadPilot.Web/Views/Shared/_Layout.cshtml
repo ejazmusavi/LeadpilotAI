@@ -1,0 +1,218 @@
+@using LeadPilot.Application.Security
+@using LeadPilot.Infrastructure.Web
+@inject LeadPilot.Application.Contracts.IPermissionEvaluator Permissions
+@{
+    var path = Context.Request.Path.Value ?? "/";
+    var perms = await Permissions.GetCurrentAsync();
+    var tenantName = Context.Items[TenantResolutionMiddleware.TenantNameItem] as string;
+    var viaPlatform = Context.Items[TenantResolutionMiddleware.PlatformAccessItem] as bool? == true;
+    bool Nav(string prefix) => path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+    var crumbs = ViewData["Breadcrumbs"] as IEnumerable<(string Title, string? Url)> ?? Enumerable.Empty<(string, string?)>();
+    var title = ViewData["Title"] as string ?? "LeadPilot AI";
+    var name = User.Identity?.Name ?? "";
+    var initial = name.Length > 0 ? name[..1].ToUpperInvariant() : "?";
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@title · LeadPilot AI</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body class="app-shell">
+<div id="page-loading" class="page-loading" hidden><div class="progress" style="height:3px"><div class="progress-bar progress-bar-striped progress-bar-animated w-100"></div></div></div>
+
+<aside class="offcanvas-lg offcanvas-start sidebar" tabindex="-1" id="sidebar" aria-label="Main navigation">
+    <div class="sidebar-brand">
+        <a asp-controller="Home" asp-action="Index" class="text-decoration-none"><span class="brand-mark">LP</span> LeadPilot AI</a>
+        <button type="button" class="btn-close btn-close-white d-lg-none" data-bs-dismiss="offcanvas" data-bs-target="#sidebar" aria-label="Close"></button>
+    </div>
+    <nav class="nav flex-column px-2">
+        <a class="nav-link @(path == "/" || Nav("/Home") ? "active" : "")" asp-controller="Home" asp-action="Index">Dashboard</a>
+    </nav>
+    @if (perms.Has(PermissionCodes.LeadsView))
+    {
+        <div class="nav-section">Leads</div>
+        <nav class="nav flex-column px-2">
+            <a class="nav-link @(Nav("/Leads") && !Nav("/Leads/Board") ? "active" : "")" asp-controller="Leads" asp-action="Index">All leads</a>
+            <a class="nav-link @(Nav("/Leads/Board") ? "active" : "")" asp-controller="Leads" asp-action="Board">Pipeline board</a>
+            @if (perms.Has(PermissionCodes.LeadsImport)) { <a class="nav-link @(Nav("/Imports") ? "active" : "")" asp-controller="Imports" asp-action="Index">Imports</a> }
+            <a class="nav-link @(Nav("/Tags") ? "active" : "")" asp-controller="Tags" asp-action="Index">Tags</a>
+        </nav>
+    }
+    @if (perms.Has(PermissionCodes.DiscoveryView))
+    {
+        <div class="nav-section">Discovery</div>
+        <nav class="nav flex-column px-2">
+            <a class="nav-link @(Nav("/Discovery/History") ? "active" : Nav("/Discovery") && !Nav("/DiscoveryResults") && !Nav("/DiscoverySetup") ? "active" : "")" asp-controller="Discovery" asp-action="Index">Searches</a>
+            <a class="nav-link @(Nav("/DiscoveryResults") ? "active" : "")" asp-controller="DiscoveryResults" asp-action="Index">Review results</a>
+            <a class="nav-link @(Nav("/Discovery/History") ? "active" : "")" asp-controller="Discovery" asp-action="History">Search history</a>
+            <a class="nav-link @(Nav("/DiscoverySetup") ? "active" : "")" asp-controller="DiscoverySetup" asp-action="Index">Categories &amp; locations</a>
+            @if (perms.Has(PermissionCodes.IntegrationsManage)) { <a class="nav-link @(Nav("/Connectors") ? "active" : "")" asp-controller="Connectors" asp-action="Index">Connectors &amp; usage</a> }
+        </nav>
+    }
+    @if (perms.Has(PermissionCodes.ConversationsView) || perms.Has(PermissionCodes.ChannelsView) || perms.Has(PermissionCodes.WebhooksView))
+    {
+        <div class="nav-section">Messaging</div>
+        <nav class="nav flex-column px-2">
+            @if (perms.Has(PermissionCodes.ConversationsView))
+            {
+                <a class="nav-link @(Nav("/Conversations") ? "active" : "")" asp-controller="Conversations" asp-action="Index">Conversations</a>
+                <a class="nav-link @(Nav("/Templates") ? "active" : "")" asp-controller="Templates" asp-action="Index">Message templates</a>
+            }
+            @if (perms.Has(PermissionCodes.ChannelsView)) { <a class="nav-link @(Nav("/Channels") ? "active" : "")" asp-controller="Channels" asp-action="Index">WhatsApp accounts</a> }
+            @if (perms.Has(PermissionCodes.WebhooksView)) { <a class="nav-link @(Nav("/Webhooks") ? "active" : "")" asp-controller="Webhooks" asp-action="Index">Webhook events</a> }
+        </nav>
+    }
+    @if (perms.Has(PermissionCodes.WorkflowsView))
+    {
+        <div class="nav-section">Automation</div>
+        <nav class="nav flex-column px-2">
+            <a class="nav-link @(Nav("/Workflows") ? "active" : "")" asp-controller="Workflows" asp-action="Index">Workflows</a>
+            <a class="nav-link @(Nav("/WorkflowExecutions") ? "active" : "")" asp-controller="WorkflowExecutions" asp-action="Index">Workflow runs</a>
+            <a class="nav-link @(Nav("/WorkflowNotifications") ? "active" : "")" asp-controller="WorkflowNotifications" asp-action="Index">My notices</a>
+        </nav>
+    }
+    @if (perms.Has(PermissionCodes.ReportsView))
+    {
+        <div class="nav-section">Analytics</div>
+        <nav class="nav flex-column px-2">
+            <a class="nav-link @(Nav("/Reports") && !Nav("/Reports/Metrics") ? "active" : "")" asp-controller="Reports" asp-action="Index">Reports</a>
+            <a class="nav-link @(Nav("/Reports/Metrics") ? "active" : "")" asp-controller="Reports" asp-action="Metrics">Metric definitions</a>
+        </nav>
+    }
+    @if (perms.Has(PermissionCodes.DemosView) || perms.Has(PermissionCodes.TrialsView) || perms.Has(PermissionCodes.CustomersView))
+    {
+        <div class="nav-section">Sales conversion</div>
+        <nav class="nav flex-column px-2">
+            @if (perms.Has(PermissionCodes.DemosView)) { <a class="nav-link @(Nav("/Demos") ? "active" : "")" asp-controller="Demos" asp-action="Index">Demo calendar</a><a class="nav-link @(Nav("/DemoSettings") ? "active" : "")" asp-controller="DemoSettings" asp-action="Index">Demo &amp; trial settings</a> }
+            @if (perms.Has(PermissionCodes.TrialsView)) { <a class="nav-link @(Nav("/Trials") ? "active" : "")" asp-controller="Trials" asp-action="Index">Trials</a> }
+            @if (perms.Has(PermissionCodes.CustomersView)) { <a class="nav-link @(Nav("/Customers") ? "active" : "")" asp-controller="Customers" asp-action="Index">Customers</a><a class="nav-link @(Nav("/Payments") ? "active" : "")" asp-controller="Payments" asp-action="Index">Payments</a> }
+        </nav>
+    }
+    @if (perms.Has(PermissionCodes.CampaignsView))
+    {
+        <div class="nav-section">Campaigns</div>
+        <nav class="nav flex-column px-2">
+            <a class="nav-link @(Nav("/Campaigns") && !Nav("/CampaignSettings") ? "active" : "")" asp-controller="Campaigns" asp-action="Index">Campaigns</a>
+            <a class="nav-link @(Nav("/CampaignSettings") ? "active" : "")" asp-controller="CampaignSettings" asp-action="Index">Campaign settings</a>
+        </nav>
+    }
+    @if (perms.Has(PermissionCodes.KnowledgeView) || perms.Has(PermissionCodes.AiTest) || perms.Has(PermissionCodes.AiView) || perms.Has(PermissionCodes.AiSettings) || perms.Has(PermissionCodes.AgentsView) || perms.Has(PermissionCodes.CatalogView) || perms.Has(PermissionCodes.ApprovalsView))
+    {
+        <div class="nav-section">AI</div>
+        <nav class="nav flex-column px-2">
+            @if (perms.Has(PermissionCodes.KnowledgeView)) { <a class="nav-link @(Nav("/Knowledge") ? "active" : "")" asp-controller="Knowledge" asp-action="Index">Knowledge base</a> }
+            @if (perms.Has(PermissionCodes.AiTest)) { <a class="nav-link @(Nav("/AiTester") ? "active" : "")" asp-controller="AiTester" asp-action="Index">Retrieval tester</a> }
+            @if (perms.Has(PermissionCodes.AiView)) { <a class="nav-link @(Nav("/Ai/Activity") ? "active" : "")" asp-controller="Ai" asp-action="Activity">AI activity</a><a class="nav-link @(Nav("/Ai/Usage") ? "active" : "")" asp-controller="Ai" asp-action="Usage">AI usage</a> }
+            @if (perms.Has(PermissionCodes.AgentsView)) { <a class="nav-link @(Nav("/Agents") ? "active" : "")" asp-controller="Agents" asp-action="Index">Sales agent</a> }
+            @if (perms.Has(PermissionCodes.CatalogView)) { <a class="nav-link @(Nav("/Catalog") ? "active" : "")" asp-controller="Catalog" asp-action="Index">Product catalog</a> }
+            @if (perms.Has(PermissionCodes.ApprovalsView)) { <a class="nav-link @(Nav("/Approvals") ? "active" : "")" asp-controller="Approvals" asp-action="Index">Approvals</a> }
+            @if (perms.Has(PermissionCodes.LeadsView)) { <a class="nav-link @(Nav("/FollowUps") ? "active" : "")" asp-controller="FollowUps" asp-action="Index">Follow-ups</a> }
+            @if (perms.Has(PermissionCodes.AiSettings)) { <a class="nav-link @(Nav("/AiSettings") ? "active" : "")" asp-controller="AiSettings" asp-action="Index">AI settings</a> }
+        </nav>
+    }
+    @if (perms.Has(PermissionCodes.SuppressionManage))
+    {
+        <div class="nav-section">Compliance</div>
+        <nav class="nav flex-column px-2">
+            <a class="nav-link @(Nav("/Suppression") ? "active" : "")" asp-controller="Suppression" asp-action="Index">Suppression list</a>
+        </nav>
+    }
+    @if (perms.Has(PermissionCodes.PipelinesManage) || perms.Has(PermissionCodes.ScoringManage))
+    {
+        <div class="nav-section">CRM setup</div>
+        <nav class="nav flex-column px-2">
+            @if (perms.Has(PermissionCodes.PipelinesManage))
+            {
+                <a class="nav-link @(Nav("/Pipelines") ? "active" : "")" asp-controller="Pipelines" asp-action="Index">Pipelines</a>
+                <a class="nav-link @(Nav("/Categories") ? "active" : "")" asp-controller="Categories" asp-action="Index">Categories &amp; statuses</a>
+            }
+            @if (perms.Has(PermissionCodes.ScoringManage)) { <a class="nav-link @(Nav("/Scoring") ? "active" : "")" asp-controller="Scoring" asp-action="Index">Scoring rules</a> }
+        </nav>
+    }
+    @if (perms.Has(PermissionCodes.UsersManage) || perms.Has(PermissionCodes.SettingsManage) || perms.Has(PermissionCodes.AuditView))
+    {
+        <div class="nav-section">Administration</div>
+        <nav class="nav flex-column px-2">
+            @if (perms.Has(PermissionCodes.UsersManage))
+            {
+                <a class="nav-link @(Nav("/Users") ? "active" : "")" asp-controller="Users" asp-action="Index">Users</a>
+                <a class="nav-link @(Nav("/Invitations") ? "active" : "")" asp-controller="Invitations" asp-action="Index">Invitations</a>
+                <a class="nav-link @(Nav("/Roles") ? "active" : "")" asp-controller="Roles" asp-action="Index">Roles &amp; permissions</a>
+            }
+            @if (perms.Has(PermissionCodes.SettingsManage)) { <a class="nav-link @(Nav("/Onboarding") ? "active" : "")" asp-controller="Onboarding" asp-action="Index">Getting started</a><a class="nav-link @(Nav("/Settings") ? "active" : "")" asp-controller="Settings" asp-action="Index">Settings</a> }
+            @if (perms.Has(PermissionCodes.BillingView)) { <a class="nav-link @(Nav("/Billing") ? "active" : "")" asp-controller="Billing" asp-action="Index">Plan &amp; billing</a> }
+            @if (perms.Has(PermissionCodes.AuditView)) { <a class="nav-link @(Nav("/Audit") ? "active" : "")" asp-controller="Audit" asp-action="Index">Audit log</a> }
+        </nav>
+    }
+    @if (perms.Has(PermissionCodes.TenantsManage) || perms.Has(PermissionCodes.PlatformTenantsManage) || perms.Has(PermissionCodes.PlatformPlansManage) || perms.Has(PermissionCodes.PlatformBillingVerify) || perms.Has(PermissionCodes.PlatformSettingsManage) || perms.Has(PermissionCodes.PlatformAuditView))
+    {
+        <div class="nav-section">Platform</div>
+        <nav class="nav flex-column px-2">
+            @if (perms.Has(PermissionCodes.TenantsManage)) { <a class="nav-link @(Nav("/Tenants") && !Nav("/Tenants/Switch") ? "active" : "")" asp-controller="Tenants" asp-action="Index">Tenants</a> }
+            @if (perms.Has(PermissionCodes.PlatformTenantsManage)) { <a class="nav-link @(Nav("/PlatformTenants") ? "active" : "")" asp-controller="PlatformTenants" asp-action="Index">Subscriptions</a> }
+            @if (perms.Has(PermissionCodes.PlatformPlansManage)) { <a class="nav-link @(Nav("/PlatformPlans") ? "active" : "")" asp-controller="PlatformPlans" asp-action="Index">Plans</a> }
+            @if (perms.Has(PermissionCodes.PlatformBillingVerify)) { <a class="nav-link @(Nav("/PlatformPayments") ? "active" : "")" asp-controller="PlatformPayments" asp-action="Index">Payment verification</a><a class="nav-link @(Nav("/PlatformPayments/Invoices") ? "active" : "")" asp-controller="PlatformPayments" asp-action="Invoices">All invoices</a> }
+            @if (perms.Has(PermissionCodes.PlatformSettingsManage)) { <a class="nav-link @(Nav("/PlatformSettings") ? "active" : "")" asp-controller="PlatformSettings" asp-action="Index">Platform settings</a> }
+            @if (perms.Has(PermissionCodes.PlatformAuditView)) { <a class="nav-link @(Nav("/PlatformAudit") ? "active" : "")" asp-controller="PlatformAudit" asp-action="Index">Platform audit</a> }
+            <a class="nav-link @(Nav("/DeadLetters") ? "active" : "")" asp-controller="DeadLetters" asp-action="Index">Dead-letter queues</a>
+            <a class="nav-link" href="/hangfire" target="_blank" rel="noopener">Background jobs</a>
+        </nav>
+    }
+    <div class="sidebar-footer small">Discover. Engage. Convert.</div>
+</aside>
+
+<div class="main-col">
+    <header class="topbar">
+        <button class="btn btn-outline-secondary d-lg-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebar" aria-controls="sidebar" aria-label="Open navigation">☰</button>
+        @if (tenantName is not null)
+        {
+            <a asp-controller="Tenants" asp-action="Switch" class="tenant-badge text-decoration-none" title="Switch workspace">
+                <span class="fw-semibold">@tenantName</span>
+                @if (viaPlatform) { <span class="badge text-bg-warning ms-1">platform access</span> }
+            </a>
+        }
+        <div class="ms-auto d-flex align-items-center gap-2">
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary position-relative" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-label="Notifications" aria-expanded="false">🔔</button>
+                <div class="dropdown-menu dropdown-menu-end p-0" style="min-width:18rem" id="notification-area">
+                    <div class="px-3 py-2 border-bottom fw-semibold">Notifications</div>
+                    <partial name="_EmptyState" model='("No notifications", "You are all caught up.")' />
+                </div>
+            </div>
+            <div class="dropdown">
+                <button class="btn btn-light d-flex align-items-center gap-2" data-bs-toggle="dropdown" aria-expanded="false">
+                    <span class="avatar">@initial</span><span class="d-none d-md-inline">@name</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><span class="dropdown-item-text small text-muted">Signed in as<br />@name</span></li>
+                    <li><a class="dropdown-item" href="/Profile">My profile</a></li>
+                    <li><a class="dropdown-item" asp-controller="Tenants" asp-action="Switch">Switch workspace</a></li>
+                    <li><hr class="dropdown-divider" /></li>
+                    <li>
+                        <form asp-controller="Account" asp-action="Logout" method="post" class="px-3">
+                            <button type="submit" class="btn btn-sm btn-outline-danger w-100">Sign out</button>
+                        </form>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </header>
+
+    <main class="content container-fluid py-4">
+        <partial name="_Breadcrumbs" model="crumbs" />
+        <partial name="_Toasts" />
+        @RenderBody()
+    </main>
+</div>
+
+<partial name="_ConfirmModal" />
+<script src="~/lib/jquery/dist/jquery.min.js"></script>
+<script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+<script src="~/js/site.js" asp-append-version="true"></script>
+@await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

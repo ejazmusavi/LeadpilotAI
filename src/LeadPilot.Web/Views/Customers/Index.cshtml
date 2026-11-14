@@ -1,0 +1,19 @@
+@model CustomersViewModel
+@using LeadPilot.Domain.Conversion
+@{ ViewData["Title"] = "Customers"; var q = Model.Query; }
+<h1 class="h3 mb-3">Customers</h1>
+@if (Model.Won.Count > 0)
+{
+    <div class="card mb-3 border-success"><div class="card-header">Won opportunities waiting to become customers</div><ul class="list-group list-group-flush">
+    @foreach (var w in Model.Won) { <li class="list-group-item d-flex flex-wrap justify-content-between gap-2"><span><a asp-controller="Leads" asp-action="Details" asp-route-id="@w.LeadId">@w.LeadName</a> · @w.Name · @w.Value.ToString("0.00") @w.Currency</span>@if (Model.CanManage) { <a class="btn btn-success btn-sm" asp-action="Convert" asp-route-opportunityId="@w.OpportunityId">Convert to customer</a> }</li> }
+    </ul></div>
+}
+<form method="get" class="card card-body mb-3"><div class="row g-3 align-items-end"><div class="col-12 col-md-4"><label class="form-label" for="search">Search</label><input id="search" name="search" class="form-control" value="@q.Search" /></div><div class="col-6 col-md-3"><label class="form-label" for="status">Status</label><select id="status" name="status" class="form-select"><option value="">All</option>@foreach (var d in Enum.GetValues<CustomerStatus>()) { <option value="@d" selected="@(q.Status == d)">@d</option> }</select></div><div class="col-12 col-md-3"><button class="btn btn-outline-primary" type="submit">Filter</button> <a asp-action="Index" class="btn btn-link">Clear</a></div></div></form>
+@if (Model.Result.Items.Count == 0) { <div class="card"><partial name="_EmptyState" model='("No customers yet", "When an opportunity is Won, convert it here: the customer keeps the whole history of the lead.")' /></div> }
+else
+{
+    <div class="card"><div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>No.</th><th>Customer</th><th>Status</th><th>Active plan</th><th>Pending</th><th>Since</th></tr></thead><tbody>
+    @foreach (var c in Model.Result.Items) { <tr><td>@c.Code</td><td><a asp-action="Details" asp-route-id="@c.Id" class="text-decoration-none">@c.Name</a></td><td>@c.Status</td><td>@(c.ActivePlan ?? "—")</td><td>@c.PendingSubscriptions</td><td class="small">@c.ConvertedAtUtc.ToString("yyyy-MM-dd")</td></tr> }
+    </tbody></table></div></div>
+    <partial name="_Pager" model='new PagerModel(Model.Result.Page, Model.Result.TotalPages, Model.Result.TotalCount, "Index", Model.QueryValues)' />
+}

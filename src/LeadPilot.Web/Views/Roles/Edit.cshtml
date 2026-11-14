@@ -1,0 +1,28 @@
+@model RoleFormModel
+@{ ViewData["Title"] = Model.Id is null ? "New role" : Model.Name; var ro = Model.IsSystem; }
+<h1 class="h3 mb-3">@(Model.Id is null ? "New role" : Model.Name)</h1>
+@if (ro) { <div class="alert alert-info">System roles are fixed. Create a custom role to use a different combination of permissions.</div> }
+<form asp-action="@(Model.Id is null ? "Create" : "Edit")" asp-route-id="@Model.Id" method="post" data-loading-form novalidate class="card card-body">
+    <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-md-6 col-xl-3"><label asp-for="Name" class="form-label"></label><input asp-for="Name" class="form-control" disabled="@ro" /><span asp-validation-for="Name" class="text-danger small"></span></div>
+        <div class="col-12 col-md-6"><label asp-for="Description" class="form-label"></label><input asp-for="Description" class="form-control" disabled="@ro" /></div>
+    </div>
+    <h2 class="h6">Permissions</h2>
+    <div class="row g-3">
+        @foreach (var g in Model.Catalog.GroupBy(p => p.Group))
+        {
+            <div class="col-12 col-md-6 col-xl-3"><fieldset class="perm-group"><legend>@g.Key</legend>
+                @foreach (var p in g)
+                {
+                    <div class="form-check"><input class="form-check-input" type="checkbox" name="Permissions" value="@p.Code" id="p-@p.Code" checked="@Model.Permissions.Contains(p.Code)" disabled="@ro" />
+                        <label class="form-check-label" for="p-@p.Code" title="@p.Description">@p.Name</label></div>
+                }
+            </fieldset></div>
+        }
+    </div>
+    <div class="mt-3 d-flex gap-2">
+        @if (!ro) { <button type="submit" class="btn btn-primary"><span class="spinner-border spinner-border-sm d-none" aria-hidden="true"></span> Save role</button> }
+        <a asp-action="Index" class="btn btn-outline-secondary">@(ro ? "Back" : "Cancel")</a>
+    </div>
+</form>

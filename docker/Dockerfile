@@ -13,7 +13,8 @@ ARG PROJECT
 ENV PROJECT_DLL=${PROJECT}.dll
 WORKDIR /app
 COPY --from=build /app/publish .
-RUN useradd --system --uid 10001 appuser && chown -R appuser /app
+# /keys holds the shared Data Protection key ring (mounted as a volume by docker-compose); it must be writable by the non-root user.
+RUN useradd --system --uid 10001 appuser && mkdir -p /keys && chown -R appuser /app /keys
 USER appuser
 ENV ASPNETCORE_URLS=http://+:8080
 EXPOSE 8080

@@ -1,0 +1,37 @@
+@model TenantListViewModel
+@{ ViewData["Title"] = "Tenants"; }
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <h1 class="h3 mb-0">Tenants</h1>
+    <a asp-action="Create" class="btn btn-primary">New tenant</a>
+</div>
+<form method="get" asp-action="Index" class="card card-body mb-3">
+    <div class="row g-3 align-items-end">
+        <div class="col-12 col-md-6 col-xl-3"><label class="form-label" for="q">Search</label><input id="q" name="q" value="@Model.Query" class="form-control" placeholder="Name or slug" /></div>
+        <div class="col-12 col-md-6 col-xl-3"><label class="form-label" for="status">Status</label>
+            <select id="status" name="status" class="form-select"><option value="">All</option><option value="Active" selected="@(Model.Status == "Active")">Active</option><option value="Suspended" selected="@(Model.Status == "Suspended")">Suspended</option></select></div>
+        <div class="col-12 col-md-6 col-xl-3"><button type="submit" class="btn btn-outline-primary">Filter</button></div>
+    </div>
+</form>
+@if (Model.Result.Items.Count == 0)
+{
+    <div class="card"><partial name="_EmptyState" model='("No tenants found", "Adjust the filter or create a tenant.")' /></div>
+}
+else
+{
+    <div class="card"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
+        <thead><tr><th>Name</th><th>Slug</th><th>Status</th><th class="text-end">Members</th><th>Created</th><th></th></tr></thead>
+        <tbody>
+        @foreach (var t in Model.Result.Items)
+        {
+            <tr>
+                <td><a asp-action="Details" asp-route-id="@t.Id" class="fw-semibold">@t.Name</a> @if (t.IsPlatform) { <span class="badge text-bg-secondary">platform</span> }</td>
+                <td><code>@t.Slug</code></td>
+                <td><span class="badge @(t.Status == "Active" ? "text-bg-success" : "text-bg-danger")">@t.Status</span></td>
+                <td class="text-end">@t.MemberCount</td>
+                <td>@t.CreatedAtUtc.ToString("yyyy-MM-dd")</td>
+                <td class="text-end"><a asp-action="Details" asp-route-id="@t.Id" class="btn btn-sm btn-outline-secondary">Manage</a></td>
+            </tr>
+        }
+        </tbody></table></div></div>
+    <partial name="_Pager" model='new PagerModel(Model.Result.Page, Model.Result.TotalPages, Model.Result.TotalCount, "Index", new Dictionary<string, string?> { ["q"] = Model.Query, ["status"] = Model.Status })' />
+}

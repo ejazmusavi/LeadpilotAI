@@ -1,9 +1,16 @@
+@using LeadPilot.Application.Security
+@using LeadPilot.Infrastructure.Web
+@inject LeadPilot.Application.Contracts.IPermissionEvaluator Permissions
 @{
+    var path = Context.Request.Path.Value ?? "/";
+    var perms = await Permissions.GetCurrentAsync();
+    var tenantName = Context.Items[TenantResolutionMiddleware.TenantNameItem] as string;
+    var viaPlatform = Context.Items[TenantResolutionMiddleware.PlatformAccessItem] as bool? == true;
+    bool Nav(string prefix) => path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
     var crumbs = ViewData["Breadcrumbs"] as IEnumerable<(string Title, string? Url)> ?? Enumerable.Empty<(string, string?)>();
     var title = ViewData["Title"] as string ?? "LeadPilot AI";
     var name = User.Identity?.Name ?? "";
     var initial = name.Length > 0 ? name[..1].ToUpperInvariant() : "?";
-    var path = Context.Request.Path.Value ?? "/";
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -23,14 +30,42 @@
         <button type="button" class="btn-close btn-close-white d-lg-none" data-bs-dismiss="offcanvas" data-bs-target="#sidebar" aria-label="Close"></button>
     </div>
     <nav class="nav flex-column px-2">
-        <a class="nav-link @(path == "/" || path.StartsWith("/Home", StringComparison.OrdinalIgnoreCase) ? "active" : "")" asp-controller="Home" asp-action="Index">Dashboard</a>
+        <a class="nav-link @(path == "/" || Nav("/Home") ? "active" : "")" asp-controller="Home" asp-action="Index">Dashboard</a>
     </nav>
+    @if (perms.Has(PermissionCodes.UsersManage) || perms.Has(PermissionCodes.SettingsManage) || perms.Has(PermissionCodes.AuditView))
+    {
+        <div class="nav-section">Administration</div>
+        <nav class="nav flex-column px-2">
+            @if (perms.Has(PermissionCodes.UsersManage))
+            {
+                <a class="nav-link @(Nav("/Users") ? "active" : "")" asp-controller="Users" asp-action="Index">Users</a>
+                <a class="nav-link @(Nav("/Invitations") ? "active" : "")" asp-controller="Invitations" asp-action="Index">Invitations</a>
+                <a class="nav-link @(Nav("/Roles") ? "active" : "")" asp-controller="Roles" asp-action="Index">Roles &amp; permissions</a>
+            }
+            @if (perms.Has(PermissionCodes.SettingsManage)) { <a class="nav-link @(Nav("/Settings") ? "active" : "")" asp-controller="Settings" asp-action="Index">Settings</a> }
+            @if (perms.Has(PermissionCodes.AuditView)) { <a class="nav-link @(Nav("/Audit") ? "active" : "")" asp-controller="Audit" asp-action="Index">Audit log</a> }
+        </nav>
+    }
+    @if (perms.Has(PermissionCodes.TenantsManage))
+    {
+        <div class="nav-section">Platform</div>
+        <nav class="nav flex-column px-2">
+            <a class="nav-link @(Nav("/Tenants") && !Nav("/Tenants/Switch") ? "active" : "")" asp-controller="Tenants" asp-action="Index">Tenants</a>
+        </nav>
+    }
     <div class="sidebar-footer small">Discover. Engage. Convert.</div>
 </aside>
 
 <div class="main-col">
     <header class="topbar">
         <button class="btn btn-outline-secondary d-lg-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebar" aria-controls="sidebar" aria-label="Open navigation">☰</button>
+        @if (tenantName is not null)
+        {
+            <a asp-controller="Tenants" asp-action="Switch" class="tenant-badge text-decoration-none" title="Switch workspace">
+                <span class="fw-semibold">@tenantName</span>
+                @if (viaPlatform) { <span class="badge text-bg-warning ms-1">platform access</span> }
+            </a>
+        }
         <div class="ms-auto d-flex align-items-center gap-2">
             <div class="dropdown">
                 <button class="btn btn-outline-secondary position-relative" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-label="Notifications" aria-expanded="false">🔔</button>
@@ -45,6 +80,8 @@
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end">
                     <li><span class="dropdown-item-text small text-muted">Signed in as<br />@name</span></li>
+                    <li><a class="dropdown-item" href="/Profile">My profile</a></li>
+                    <li><a class="dropdown-item" asp-controller="Tenants" asp-action="Switch">Switch workspace</a></li>
                     <li><hr class="dropdown-divider" /></li>
                     <li>
                         <form asp-controller="Account" asp-action="Logout" method="post" class="px-3">
@@ -63,6 +100,7 @@
     </main>
 </div>
 
+<partial name="_ConfirmModal" />
 <script src="~/lib/jquery/dist/jquery.min.js"></script>
 <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
 <script src="~/js/site.js" asp-append-version="true"></script>

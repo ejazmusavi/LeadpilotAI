@@ -16,4 +16,25 @@
   window.addEventListener('pageshow', function (e) {
     if (e.persisted) document.querySelectorAll('form[data-loading-form] button[type=submit]').forEach(function (b) { b.disabled = false; });
   });
+
+  // Confirmation dialog for destructive actions: <button data-confirm="message" data-confirm-label="Delete">
+  var modalEl = document.getElementById('confirm-modal');
+  if (modalEl && window.bootstrap) {
+    var modal = new bootstrap.Modal(modalEl), pending = null;
+    document.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-confirm]');
+      if (!b || !b.form) return;
+      e.preventDefault();
+      pending = b;
+      document.getElementById('confirm-message').textContent = b.getAttribute('data-confirm');
+      document.getElementById('confirm-ok').textContent = b.getAttribute('data-confirm-label') || 'Confirm';
+      modal.show();
+    });
+    document.getElementById('confirm-ok').addEventListener('click', function () {
+      if (!pending) return;
+      var b = pending; pending = null; modal.hide();
+      b.removeAttribute('data-confirm');
+      b.form.requestSubmit(b);
+    });
+  }
 })();

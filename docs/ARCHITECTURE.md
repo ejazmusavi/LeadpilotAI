@@ -81,3 +81,18 @@ Structured logging (Serilog, JSON, with TenantId/CorrelationId enrichment), glob
 | Fallback authorization policy = authenticated user everywhere | Secure by default; endpoints opt out with `[AllowAnonymous]`. |
 | API auth: JWT bearer with ephemeral key until `Jwt:SigningKey` is set | Phase 1 has no token issuing, so protected API endpoints answer 401; token issuing is Phase 2. |
 | Migrations applied by Web at startup only when `Database:MigrateOnStartup=true` | Single migrator avoids races; production can disable and run `dotnet ef` explicitly. |
+
+## Phase 2 decisions (tenancy, users, permissions)
+| Decision | Reason |
+|---|---|
+| Use cases are **interfaces in Application, implementations in Infrastructure** (`ITenantAdminService`, `IRoleService`, `IUserManagementService`, `IInvitationService`, `ITenantSettingsService`, `IAuditService`, `ITenantSwitchService`, `IAuthTokenService`, ...) | Application must stay free of EF Core (architecture test). Web and Api call the same services, so MVC and API enforce identical rules. Web/Api never touch `AppDbContext` outside `Program.cs` (architecture test). |
+| Permissions are **policies named after the permission code** (`PermissionPolicyProvider` + `PermissionAuthorizationHandler`) | `[Authorize(Policy = "Users.Manage")]` on controllers; unknown names are not turned into policies. Permissions are read from the database per request (cached per request), never from the token, so changes apply immediately. |
+| Object-level checks live in the services (tenant predicate + 404), plus a **privilege-escalation guard** (you can only grant/remove permissions you hold) | Permission policies alone do not stop a user-manager from making themselves an administrator. |
+| Authorization failures are real **401/403** (cookie `OnRedirectToAccessDenied` → 403; unauthenticated MVC still redirects to login) | SECURITY.md semantics, testable. |
+| API tokens: short-lived JWT (`sub`, `email`, `tid`) + rotating refresh tokens stored as SHA-256 hashes with reuse detection; `Jwt:SigningKey` required outside Development | Phase 1 left token issuing for Phase 2. Suspension revokes refresh tokens. |
+| One tenant-resolution middleware for both hosts (`TenantResolutionMiddleware`, between authentication and authorization) | One implementation, one set of tests. |
+| Platform operators live in a **platform tenant** instead of a global flag | Reuses roles/permissions/audit; "platform user" = holds `Platform.SwitchTenant`. |
+| `AddTenancyServices` (HTTP + Identity dependent) is separate from `AddInfrastructure` (all hosts) | The Worker has no Identity/HTTP; `ValidateOnBuild` in Development would otherwise fail. |
+| Self-registration no longer yields a usable account on its own | An account is not a workspace; the user lands on a "no workspace" page until invited. Registration stays off by default. |
+| Secret tenant settings use ASP.NET Data Protection (`ISecretProtector`) with a persisted key ring (`DataProtection:KeysPath`) | Needed now (secret flag); the same protector will encrypt gateway/API credentials in Phases 4-5. No new dependency. |
+| `Microsoft.AspNetCore.Authentication.JwtBearer` package added to Infrastructure (token creation) | It already shipped in the Api; same version. |

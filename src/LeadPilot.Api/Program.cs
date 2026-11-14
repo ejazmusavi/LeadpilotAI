@@ -1,7 +1,11 @@
 using LeadPilot.Application;
 using LeadPilot.Infrastructure;
+using LeadPilot.Infrastructure.Identity;
 using LeadPilot.Infrastructure.Logging;
+using LeadPilot.Infrastructure.Persistence;
+using LeadPilot.Infrastructure.Services.Tenancy;
 using LeadPilot.Infrastructure.Web;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
@@ -16,27 +20,38 @@ builder.Host.UseLeadPilotSerilog("LeadPilot.Api");
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration, builder.Environment);
 
-builder.Services.AddControllers();
+builder.Services.AddIdentityCore<ApplicationUser>(IdentitySetup.Configure)
+    .AddRoles<ApplicationRole>()
+    .AddEntityFrameworkStores<AppDbContext>()
+    .AddDefaultTokenProviders();
+builder.Services.AddTenancyServices(builder.Configuration, builder.Environment); // throws outside Development when Jwt:SigningKey is missing
+builder.Services.Configure<TenantResolutionOptions>(o =>
+    o.ExemptPathPrefixes = ["/api/v1/auth", "/api/v1/invitations/accept", "/health", "/swagger"]);
+
+builder.Services.AddControllers(o => o.Filters.AddService<RejectSpoofedTenantFilter>());
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(o =>
-    o.SwaggerDoc("v1", new() { Title = "LeadPilot AI API", Version = "v1", Description = "Discover. Engage. Convert." }));
+{
+    o.SwaggerDoc("v1", new() { Title = "LeadPilot AI API", Version = "v1", Description = "Discover. Engage. Convert." });
+    o.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.OpenApiSecurityScheme { Type = Microsoft.OpenApi.SecuritySchemeType.Http, Scheme = "bearer", BearerFormat = "JWT", Description = "Obtain a token from POST /api/v1/auth/login." });
+});
 
-// JWT bearer authentication. Token issuing, tenant claims and permission policies arrive in Phase 2.
-// Jwt:SigningKey must be configured (>= 32 chars) in real deployments. When it is absent an ephemeral random key is used,
-// which means no externally-issued token validates and every protected endpoint answers 401 — never an implicit allow.
-var signingKey = builder.Configuration["Jwt:SigningKey"];
-if (string.IsNullOrWhiteSpace(signingKey) || signingKey.Length < 32)
-    signingKey = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(48));
+// JWT bearer authentication. Access tokens carry sub + tid; the tenant claim is re-validated against membership on every request.
+var jwt = JwtSettings.Resolve(builder.Configuration, builder.Environment);
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(o => o.TokenValidationParameters = new TokenValidationParameters
+    .AddJwtBearer(o =>
     {
-        ValidateIssuer = true, ValidIssuer = builder.Configuration["Jwt:Issuer"] ?? "leadpilot",
-        ValidateAudience = true, ValidAudience = builder.Configuration["Jwt:Audience"] ?? "leadpilot-api",
-        ValidateLifetime = true, ValidateIssuerSigningKey = true,
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
-        ClockSkew = TimeSpan.FromMinutes(1)
+        o.MapInboundClaims = false;
+        o.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true, ValidIssuer = jwt.Issuer,
+            ValidateAudience = true, ValidAudience = jwt.Audience,
+            ValidateLifetime = true, ValidateIssuerSigningKey = true,
+            IssuerSigningKey = jwt.Key, ClockSkew = TimeSpan.FromMinutes(1),
+            NameClaimType = "name",
+        };
     });
 
 // Everything requires authentication unless explicitly [AllowAnonymous].
@@ -45,6 +60,9 @@ builder.Services.AddAuthorization(o => o.FallbackPolicy = new AuthorizationPolic
 builder.Services.AddRateLimiter(o =>
 {
     o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    o.AddPolicy("auth", ctx => RateLimitPartition.GetFixedWindowLimiter(
+        ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = builder.Configuration.GetValue("RateLimiting:AuthPermitLimit", 20), Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
     o.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>
         RateLimitPartition.GetFixedWindowLimiter(ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new FixedWindowRateLimiterOptions { PermitLimit = 300, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
@@ -72,6 +90,7 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Swagger
 
 app.UseRateLimiter();
 app.UseAuthentication();
+app.UseTenantResolution();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHealthChecks("/health/live", new() { Predicate = _ => false }).AllowAnonymous();

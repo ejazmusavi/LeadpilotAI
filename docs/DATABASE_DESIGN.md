@@ -5,20 +5,27 @@ Guid PKs (stored `char(36)` / `BINARY(16)` — decide in Phase 1 after benchmark
 
 Legend — **T** = tenant-owned (has TenantId), **G** = global.
 
-## 1. Tenancy & Identity (Phase 2)
-| Entity | Scope | Key fields / constraints |
+## 1. Tenancy & Identity (Phase 2 — implemented, migration `TenancyAndPermissions`)
+Guid keys are `char(36)` (Oracle MySQL provider default); all timestamps `datetime(6)` UTC; enums stored as strings. Tenant-owned tables carry a mandatory FK `TenantId → Tenants(Id)` (RESTRICT) and an index on it.
+
+| Table (entity) | Scope | Columns / constraints |
 |---|---|---|
-| Tenant | G | Name, Slug (unique), Status (Active/Suspended/…), Industry, Timezone, Locale |
-| TenantSetting | T | (TenantId, Key) unique, Value, IsSecret |
-| AspNetUsers (Identity) | G | Email unique |
-| UserProfile | G | UserId (1:1), DisplayName, Phone |
-| UserTenant | T | (UserId, TenantId) unique, IsDefault, Status |
-| Role | T | (TenantId, Name) unique; system roles seeded per tenant |
-| Permission | G | Code unique (e.g. `Leads.View`) |
-| RolePermission | T | (RoleId, PermissionId) unique |
-| UserRole | T | (UserId, RoleId) unique within tenant |
-| TenantInvitation | T | Email, RoleId, TokenHash, ExpiresAtUtc, Status |
-| AuditLog | T (nullable for platform events) | Actor, Action, EntityType/Id, Summary, Ip, CorrelationId; index (TenantId, CreatedAtUtc) |
+| `Tenants` (Tenant) | G | Name(200), **Slug(63) unique**, Status(Active/Suspended), IsPlatform, Industry, Timezone(64), Locale(16), SuspendedAtUtc, SuspensionReason(500), audit fields; index Status |
+| `TenantSettings` | T | Key(100), Value(4000; ciphertext when secret), IsSecret; **unique (TenantId, Key)** |
+| `AspNetUsers` (Identity) | G | + DisplayName, IsActive, CreatedAtUtc, LastLoginAtUtc (Phase 1) |
+| `UserProfiles` | G | UserId **unique** FK→AspNetUsers (cascade), DisplayName(200), Phone(32) |
+| `UserTenants` | T | UserId FK→AspNetUsers, IsDefault, Status(Active/Disabled), JoinedAtUtc, InvitedByUserId; **unique (TenantId, UserId)**, index UserId |
+| `Roles` (Role) | T | Name(100), Description, IsSystem; **unique (TenantId, Name)**. (Identity's `AspNetRoles` is separate and unused for authorization.) |
+| `Permissions` | G | **Code(100) unique**, Name, Description, Group, IsPlatform, SortOrder. Seeded from `PermissionCatalog` (16 codes). |
+| `RolePermissions` | T | RoleId FK→Roles (cascade), PermissionId FK→Permissions (restrict); **unique (RoleId, PermissionId)** |
+| `UserRoles` (UserRole) | T | UserId FK→AspNetUsers, RoleId FK→Roles (restrict), AssignedAtUtc, AssignedByUserId; **unique (TenantId, UserId, RoleId)** |
+| `TenantInvitations` | T | Email(256, lower-cased), RoleId FK→Roles (restrict), **TokenHash(64) unique** (SHA-256 hex, raw token never stored), ExpiresAtUtc, Status(Pending/Accepted/Revoked; *Expired* is derived), InvitedByUserId, AcceptedAtUtc/By; index (TenantId, Email, Status) |
+| `AuditLogs` | T | ActorTenantId?, ActorUserId?, ActorEmail, Action(100), EntityType, EntityId, Summary(1000), IpAddress, CorrelationId, CreatedAtUtc; **append-only (enforced in SaveChanges)**; indexes (TenantId, CreatedAtUtc), (TenantId, Action). TenantId is **not null**: platform events are stored against the target tenant with `ActorTenantId` set (a change from the Phase 0 sketch, which allowed null). |
+| `RefreshTokens` | per-user (not row-filtered) | UserId FK (cascade), TenantId FK→Tenants (cascade), **TokenHash(64) unique**, ExpiresAtUtc, RevokedAtUtc, ReplacedByTokenHash, CreatedByIp |
+
+Rules enforced in code on top of the schema: foreign keys between tenant-owned rows must stay inside one tenant (SaveChanges guard); system roles are immutable; platform permissions may only sit on platform-tenant roles; at least one active `Users.Manage` holder must remain in a tenant.
+
+Default system roles: *Platform Owner*, *SaaS Administrator* (platform tenant only) and *Tenant Administrator*, *Tenant Staff*, *Sales Manager*, *Sales Agent*, *Marketing Manager*, *Read-only* (every customer tenant). Mapping lives in `Application/Security/Permissions.cs` and is re-synchronised on every Web start.
 
 ## 2. CRM (Phase 3)
 | Entity | Scope | Notes |

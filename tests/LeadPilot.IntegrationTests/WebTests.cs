@@ -107,7 +107,13 @@ public class WebTests(AppFixture app)
             ["__RequestVerificationToken"] = token
         }));
         Assert.Equal(HttpStatusCode.Redirect, res.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await c.GetAsync("/")).StatusCode);
+        // Phase 2: an account is not a workspace. A self-registered user has no tenant yet, so the app fails closed and explains why.
+        var home = await c.GetAsync("/");
+        Assert.Equal(HttpStatusCode.Redirect, home.StatusCode);
+        Assert.EndsWith("/Account/NoWorkspace", home.Headers.Location!.OriginalString);
+        var none = await c.GetAsync("/Account/NoWorkspace");
+        Assert.Equal(HttpStatusCode.OK, none.StatusCode);
+        Assert.Contains("No active workspace", await none.Content.ReadAsStringAsync());
     }
 
     [RequiresMySqlFact]

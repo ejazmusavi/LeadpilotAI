@@ -26,3 +26,9 @@ a { color: var(--lp-primary); }
 
 .auth-body { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem; }
 .auth-card { width: 100%; max-width: 420px; }
+
+.nav-section { padding: 1rem 1rem .25rem; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: #94a3b8; }
+.tenant-badge { padding: .25rem .6rem; border: 1px solid #e5e7eb; border-radius: .5rem; color: #101828; background: #f8fafc; }
+.table-actions form { display: inline; }
+.perm-group { border: 1px solid #e5e7eb; border-radius: .5rem; padding: .75rem 1rem; height: 100%; background: #fff; }
+.perm-group legend { font-size: .85rem; font-weight: 600; float: none; width: auto; padding: 0 .25rem; margin-bottom: .25rem; }

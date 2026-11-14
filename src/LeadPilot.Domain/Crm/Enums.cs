@@ -29,6 +29,6 @@ public enum DuplicatePolicy { Skip = 1, Merge = 2, Review = 3 }
 public enum ImportErrorKind { Validation = 1, Duplicate = 2 }
 public enum DuplicateResolution { Pending = 1, Skipped = 2, Merged = 3 }
 
-public enum ScoreDimension { BusinessCategory = 1, Location, WebsiteAvailability, ContactQuality, Activity, VerifiedInfo, Engagement, Interest }
+public enum ScoreDimension { BusinessCategory = 1, Location, WebsiteAvailability, ContactQuality, Activity, VerifiedInfo, Engagement, Interest, CustomField }
 
 public enum OpportunityStatus { Open = 1, Won = 2, Lost = 3 }

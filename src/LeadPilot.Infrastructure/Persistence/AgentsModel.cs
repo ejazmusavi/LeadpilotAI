@@ -39,6 +39,7 @@ internal static class AgentsModel
             b.ToTable("CatalogProducts");
             b.Property(x => x.Name).HasMaxLength(150).IsRequired(); b.Property(x => x.Summary).HasMaxLength(1000); b.Property(x => x.Features).HasColumnType("text");
             b.Property(x => x.DemoProcess).HasMaxLength(2000); b.Property(x => x.TrialProcess).HasMaxLength(2000);
+            b.Property(x => x.Kind).Str(20).HasDefaultValue(CatalogItemKind.Product);
             b.Property(x => x.CreatedBy).HasMaxLength(256); b.Property(x => x.UpdatedBy).HasMaxLength(256);
             b.Property(x => x.Version).IsConcurrencyToken();
             b.HasIndex(x => new { x.TenantId, x.IsActive });

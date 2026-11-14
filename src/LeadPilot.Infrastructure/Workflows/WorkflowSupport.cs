@@ -53,6 +53,8 @@ internal sealed class WorkflowSupport(CrmContext crm, IContactEligibilityService
         facts["lead.status"] = await db.LeadStatuses.AsNoTracking().Where(s => s.Id == lead.StatusId && s.TenantId == tenantId).Select(s => s.Name).FirstOrDefaultAsync(ct);
         facts["lead.tags"] = (IReadOnlyList<string>)await (from m in db.LeadTagMaps.AsNoTracking() join t in db.LeadTags.AsNoTracking() on m.TagId equals t.Id
                                                            where m.TenantId == tenantId && t.TenantId == tenantId && m.LeadId == leadId select t.Name).ToListAsync(ct);
+        var custom = await Infrastructure.Config.CustomFieldFacts.LoadAsync(db, tenantId, Domain.Config.CustomEntityType.Lead, [leadId], ct);
+        if (custom.TryGetValue(leadId, out var customValues)) foreach (var (key, value) in customValues) facts[ConditionFields.CustomPrefix + key] = value;
 
         var contacts = await db.Contacts.AsNoTracking().Where(c => c.TenantId == tenantId && c.LeadId == leadId && !c.IsDeleted).ToListAsync(ct);
         var contact = contacts.FirstOrDefault(c => c.Id == contactId) ?? contacts.Where(c => c.PhoneE164 != null).OrderByDescending(c => c.IsPrimary).FirstOrDefault() ?? contacts.OrderByDescending(c => c.IsPrimary).FirstOrDefault();

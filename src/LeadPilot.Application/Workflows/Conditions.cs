@@ -29,6 +29,21 @@ public static class ConditionFields
     private static readonly Dictionary<string, ConditionField> ByName = All.ToDictionary(f => f.Name, StringComparer.Ordinal);
     public static ConditionField? Find(string? name) => name is not null && ByName.TryGetValue(name, out var f) ? f : null;
 
+    /// <summary>Custom fields of leads are addressed as <c>lead.cf.&lt;key&gt;</c>. Their type is whatever the stored value is (number, yes/no, text/date, list); the key is checked against the tenant's definitions when the workflow is saved.</summary>
+    public const string CustomPrefix = "lead.cf.";
+    public static bool IsCustom(string? name) => name is not null && name.StartsWith(CustomPrefix, StringComparison.Ordinal) && System.Text.RegularExpressions.Regex.IsMatch(name[CustomPrefix.Length..], "^[a-z][a-z0-9_]{0,39}$");
+    public static string CustomKey(string name) => name[CustomPrefix.Length..];
+
+    /// <summary>Every custom-field key a condition refers to.</summary>
+    public static IReadOnlyList<string> CustomKeysIn(Condition c) => c switch
+    {
+        AllCondition a => a.Items.SelectMany(CustomKeysIn).ToList(),
+        AnyCondition a => a.Items.SelectMany(CustomKeysIn).ToList(),
+        NotCondition n => CustomKeysIn(n.Inner),
+        CompareCondition cmp when IsCustom(cmp.Field) => [CustomKey(cmp.Field)],
+        _ => [],
+    };
+
     public static IReadOnlyList<string> OperatorsFor(FieldKind kind) => kind switch
     {
         FieldKind.Text => ["eq", "neq", "contains", "not_contains", "starts_with", "in", "is_empty", "is_not_empty"],
@@ -93,6 +108,7 @@ public static class ConditionParser
     private static Condition? BuildCompare(JsonObject obj, List<string> errors)
     {
         var fieldName = Str(obj["field"]); var op = Str(obj["op"]);
+        if (ConditionFields.IsCustom(fieldName)) return BuildCustom(obj, fieldName!, op, errors);
         var field = ConditionFields.Find(fieldName);
         if (field is null) { errors.Add($"Unknown field '{Trim(fieldName)}'."); return null; }
         if (op is null || !ConditionFields.OperatorsFor(field.Kind).Contains(op)) { errors.Add($"'{Trim(op)}' cannot be used with '{field.Label}'."); return null; }
@@ -113,6 +129,20 @@ public static class ConditionParser
         }
         catch (FormatException ex) { errors.Add($"The value for '{field.Label}' must be {ex.Message}."); return null; }
     }
+
+    private static Condition? BuildCustom(JsonObject obj, string fieldName, string? op, List<string> errors)
+    {
+        if (op is null || !CustomFieldCompareOps.Contains(op)) { errors.Add($"'{Trim(op)}' cannot be used with a custom field."); return null; }
+        if (!Config.CustomFieldCompare.NeedsValue(op)) return new CompareCondition(fieldName, op, null);
+        var raw = obj["value"];
+        if (raw is not JsonValue v) { errors.Add($"'{Trim(fieldName)}' needs a value."); return null; }
+        string? text = v.TryGetValue<string>(out var s) ? s : v.TryGetValue<bool>(out var b) ? (b ? "true" : "false")
+            : v.TryGetValue<decimal>(out var d) ? d.ToString("0.####", CultureInfo.InvariantCulture) : null;
+        if (text is null || text.Length is 0 or > MaxTextLength) { errors.Add($"The value for '{Trim(fieldName)}' must be text, a number or true/false (at most {MaxTextLength} characters)."); return null; }
+        return new CompareCondition(fieldName, op, text);
+    }
+
+    private static readonly IReadOnlyList<string> CustomFieldCompareOps = Config.CustomFieldCompare.Operators;
 
     private static Condition? BuildWindow(JsonNode? node, List<string> errors)
     {
@@ -193,6 +223,7 @@ public static class ConditionEvaluator
     private static bool Compare(CompareCondition c, IReadOnlyDictionary<string, object?> facts)
     {
         facts.TryGetValue(c.Field, out var actual);
+        if (ConditionFields.IsCustom(c.Field)) return Config.CustomFieldCompare.Matches(actual, c.Op, c.Value as string);
         var kind = ConditionFields.Find(c.Field)?.Kind;
         switch (kind)
         {

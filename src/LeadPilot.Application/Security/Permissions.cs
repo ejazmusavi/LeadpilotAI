@@ -66,6 +66,10 @@ public static class PermissionCodes
     public const string CustomersManage = "Customers.Manage";
     public const string PaymentsRequest = "Payments.Request";
     public const string PaymentsVerify = "Payments.Verify";
+    public const string ConfigPacksImport = "Config.Packs.Import";
+    public const string ConfigPacksExport = "Config.Packs.Export";
+    public const string ConfigPacksManage = "Config.Packs.Manage";
+    public const string CustomFieldsManage = "CustomFields.Manage";
     // Platform (operator) permissions: grantable only by roles of the platform tenant.
     public const string BillingView = "Billing.View";
     public const string BillingManage = "Billing.Manage";
@@ -76,6 +80,7 @@ public static class PermissionCodes
     public const string PlatformSettingsManage = "Platform.Settings.Manage";
     public const string PlatformAuditView = "Platform.Audit.View";
     public const string PlatformSwitchTenant = "Platform.SwitchTenant";
+    public const string PlatformPacksManage = "Platform.Packs.Manage";
 }
 
 public sealed record PermissionDefinition(string Code, string Name, string Group, string Description, bool IsPlatform = false);
@@ -150,12 +155,17 @@ public static class PermissionCatalog
         new(PermissionCodes.PaymentsRequest, "Create payment requests", "Conversion", "Create and cancel payment requests. Nothing is charged and nothing is activated by a request."),
         new(PermissionCodes.PaymentsVerify, "Verify payments", "Conversion", "Confirm that a payment arrived (with evidence) and manage payment provider webhooks. Verifying a payment activates the subscription."),
         new(PermissionCodes.BillingView, "View billing", "Billing", "See the subscription, usage against plan limits, invoices and payments of this workspace."),
+        new(PermissionCodes.ConfigPacksImport, "Import industry packs", "Configuration", "Browse the industry pack gallery, preview what a pack would change and apply it to this workspace (creates categories, pipelines, fields, templates and agent drafts; never overwrites your edits silently)."),
+        new(PermissionCodes.ConfigPacksExport, "Export workspace configuration", "Configuration", "Export this workspace's configuration as a pack file (no secrets, no people)."),
+        new(PermissionCodes.ConfigPacksManage, "Manage private packs", "Configuration", "Upload, validate and delete this workspace's private industry packs."),
+        new(PermissionCodes.CustomFieldsManage, "Manage custom fields", "Configuration", "Create, edit and deactivate custom fields on leads, contacts, opportunities and customers."),
         new(PermissionCodes.BillingManage, "Manage billing", "Billing", "Request plan upgrades and downgrades and report payments for open invoices."),
         new(PermissionCodes.PlatformPlansManage, "Manage subscription plans", "Platform", "Create, edit and archive plans, their prices, limits and features.", IsPlatform: true),
         new(PermissionCodes.PlatformTenantsManage, "Manage tenant subscriptions", "Platform", "Grant plans, set per-tenant overrides, suspend and reactivate tenants for non-payment or abuse.", IsPlatform: true),
         new(PermissionCodes.PlatformBillingVerify, "Verify platform payments", "Platform", "Confirm that a tenant's invoice was paid (with evidence). Verifying a payment activates or renews the subscription.", IsPlatform: true),
         new(PermissionCodes.PlatformSettingsManage, "Manage platform settings", "Platform", "Registration switch, grace period, renewal lead time, invoice issuer and tax.", IsPlatform: true),
         new(PermissionCodes.PlatformAuditView, "View platform audit", "Platform", "Read platform-level actions across tenants.", IsPlatform: true),
+        new(PermissionCodes.PlatformPacksManage, "Manage platform packs", "Platform", "Publish and withdraw industry packs offered to every tenant.", IsPlatform: true),
         new(PermissionCodes.TenantsManage, "Manage tenants", "Platform", "Create, edit, suspend and activate tenants.", IsPlatform: true),
         new(PermissionCodes.PlatformSwitchTenant, "Switch into tenants", "Platform", "Operate inside any active tenant (audited).", IsPlatform: true),
     ];
@@ -204,7 +214,7 @@ public static class SystemRoles
             PermissionCodes.LeadsView, PermissionCodes.LeadsCreate, PermissionCodes.LeadsUpdate, PermissionCodes.LeadsDelete, PermissionCodes.CampaignsView,
             PermissionCodes.ConversationsView, PermissionCodes.ConversationsReply, PermissionCodes.ReportsView,
             PermissionCodes.LeadsImport, PermissionCodes.LeadsExport, PermissionCodes.LeadsAssign, PermissionCodes.ConsentManage,
-            PermissionCodes.SuppressionManage, PermissionCodes.PipelinesManage, PermissionCodes.ScoringManage,
+            PermissionCodes.SuppressionManage, PermissionCodes.PipelinesManage, PermissionCodes.ScoringManage, PermissionCodes.CustomFieldsManage,
             PermissionCodes.DiscoveryView, PermissionCodes.DiscoveryRun, PermissionCodes.DiscoveryReview, PermissionCodes.DiscoveryManage,
             PermissionCodes.ChannelsView, PermissionCodes.MessagesSend, PermissionCodes.CampaignsApprove, PermissionCodes.AudiencesPreview,
             PermissionCodes.KnowledgeView, PermissionCodes.KnowledgeManage, PermissionCodes.AiView, PermissionCodes.AiTest,

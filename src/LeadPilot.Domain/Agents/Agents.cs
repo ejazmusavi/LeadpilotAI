@@ -19,6 +19,9 @@ public enum FollowUpStatus { Open = 1, Done = 2, Cancelled = 3 }
 
 public enum AnswerType { Text = 1, Number = 2, Choice = 3 }
 
+/// <summary>A catalog entry is either something sold as a product or as a service (same fields, same rules).</summary>
+public enum CatalogItemKind { Product = 1, Service = 2 }
+
 public enum QualificationFit { Unknown = 0, Poor = 1, Possible = 2, Good = 3 }
 
 /// <summary>
@@ -116,18 +119,19 @@ public class CatalogProduct : AuditableEntity, ITenantOwned
     /// <summary>A person who knows the product has confirmed the text is true. Sample/placeholder rows are NOT confirmed, so the AI says it does not know.</summary>
     public bool IsConfirmed { get; private set; }
     public bool IsSample { get; private set; }
+    public CatalogItemKind Kind { get; private set; } = CatalogItemKind.Product;
     public int Version { get; private set; } = 1;
 
-    public static CatalogProduct Create(Guid tenantId, string name, string? summary, string? features, string? demo, string? trial, bool confirmed, bool sample, DateTime nowUtc, string? actor)
+    public static CatalogProduct Create(Guid tenantId, string name, string? summary, string? features, string? demo, string? trial, bool confirmed, bool sample, DateTime nowUtc, string? actor, CatalogItemKind kind = CatalogItemKind.Product)
     {
-        var p = new CatalogProduct { TenantId = tenantId, CreatedAtUtc = nowUtc, CreatedBy = actor, IsSample = sample };
+        var p = new CatalogProduct { TenantId = tenantId, CreatedAtUtc = nowUtc, CreatedBy = actor, IsSample = sample, Kind = kind };
         p.Set(name, summary, features, demo, trial, confirmed);
         return p;
     }
 
-    public void Update(string name, string? summary, string? features, string? demo, string? trial, bool confirmed, bool active, DateTime nowUtc, string? actor)
+    public void Update(string name, string? summary, string? features, string? demo, string? trial, bool confirmed, bool active, DateTime nowUtc, string? actor, CatalogItemKind? kind = null)
     {
-        Set(name, summary, features, demo, trial, confirmed); IsActive = active; IsSample = false; UpdatedAtUtc = nowUtc; UpdatedBy = actor; Version++;
+        Set(name, summary, features, demo, trial, confirmed); IsActive = active; IsSample = false; if (kind is { } k) Kind = k; UpdatedAtUtc = nowUtc; UpdatedBy = actor; Version++;
     }
 
     private void Set(string name, string? summary, string? features, string? demo, string? trial, bool confirmed)

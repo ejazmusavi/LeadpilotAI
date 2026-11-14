@@ -8,7 +8,7 @@ public sealed record LeadFacts(
     string? CategoryName, string? Country, string? Province, string? City, string? District, string? Area,
     bool HasWebsite, int ContactCount, bool HasValidPhone, bool HasEmail, bool HasNamedContact, bool HasVerifiedPhone, bool HasVerifiedContact,
     int RecentActivityCount, StageKind StageKind, int StagePosition,
-    IReadOnlyDictionary<string, int> PipelineStagePositions, IReadOnlySet<string> TagNames);
+    IReadOnlyDictionary<string, int> PipelineStagePositions, IReadOnlySet<string> TagNames, IReadOnlyDictionary<string, object?>? CustomValues = null, IReadOnlyList<string>? CategoryAncestors = null);
 
 public sealed record ScoringRuleSpec(Guid? Id, ScoreDimension Dimension, string Target, int Points, string? Description, bool Enabled = true);
 
@@ -50,7 +50,7 @@ public static class ScoringRuleParser
 
     public static string Describe(ScoreDimension d) => d switch
     {
-        ScoreDimension.BusinessCategory => "Category name, e.g. Private school",
+        ScoreDimension.BusinessCategory => "Category name (a lead in a sub-category also matches its parent categories)",
         ScoreDimension.Location => "Field=Value, e.g. City=Riyadh (fields: Country, Province, City, District, Area)",
         ScoreDimension.WebsiteAvailability => "present or absent",
         ScoreDimension.ContactQuality => "valid_phone, email, named_contact or multiple_contacts",
@@ -58,6 +58,7 @@ public static class ScoringRuleParser
         ScoreDimension.Activity => "recent:N (at least N activities in the last 30 days)",
         ScoreDimension.Engagement => "stage:<stage name> (the lead has reached that stage)",
         ScoreDimension.Interest => "stage:<stage name> or tag:<tag name>",
+        ScoreDimension.CustomField => "<field key> <operator> <value>, e.g. student_count gte 500 or board eq Federal (operators: eq, neq, gt, gte, lt, lte, contains, not_contains, is_empty, is_not_empty)",
         _ => string.Empty,
     };
 
@@ -83,6 +84,8 @@ public static class ScoringRuleParser
             case ScoreDimension.Interest:
                 return (t.StartsWith("stage:", StringComparison.OrdinalIgnoreCase) || t.StartsWith("tag:", StringComparison.OrdinalIgnoreCase)) && t[(t.IndexOf(':') + 1)..].Trim().Length > 0
                     ? null : $"Interest rules look like {Describe(dimension)}.";
+            case ScoreDimension.CustomField:
+                return Config.CustomFieldCompare.ParseTarget(t) is not null ? null : $"Custom field rules look like {Describe(dimension)}.";
             default: return "Unknown scoring dimension.";
         }
     }
@@ -110,7 +113,7 @@ public static class LeadScoringEngine
     {
         switch (d)
         {
-            case ScoreDimension.BusinessCategory: return f.CategoryName is not null && Same(f.CategoryName, target);
+            case ScoreDimension.BusinessCategory: return (f.CategoryName is not null && Same(f.CategoryName, target)) || (f.CategoryAncestors?.Any(a => Same(a, target)) ?? false);
             case ScoreDimension.Location:
                 var eq = target.IndexOf('=');
                 var value = target[(eq + 1)..].Trim();
@@ -133,6 +136,9 @@ public static class LeadScoringEngine
             case ScoreDimension.Interest:
                 if (target.StartsWith("tag:", StringComparison.OrdinalIgnoreCase)) return f.TagNames.Contains(target[4..].Trim().ToLowerInvariant());
                 return ReachedStage(f, target[6..].Trim());
+            case ScoreDimension.CustomField:
+                return Config.CustomFieldCompare.ParseTarget(target) is { } cf && f.CustomValues is not null
+                    && Config.CustomFieldCompare.Matches(f.CustomValues.GetValueOrDefault(cf.Key), cf.Op, cf.Value);
             default: return false;
         }
     }

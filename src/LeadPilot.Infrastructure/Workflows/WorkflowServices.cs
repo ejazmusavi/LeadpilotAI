@@ -1,3 +1,4 @@
+using LeadPilot.Infrastructure.Persistence;
 using System.Text.Json;
 using LeadPilot.Application.Agents;
 using LeadPilot.Application.Common;
@@ -90,7 +91,7 @@ internal sealed class WorkflowService(CrmContext crm, ILogger<WorkflowService> l
             if (await db.Workflows.CountAsync(w => w.TenantId == tenantId && !w.IsDeleted, ct) >= 200) return Result.Failure<WorkflowDto>(Error.Validation("A workspace can have at most 200 workflows. Delete workflows you no longer need."));
             var bad = await CheckDefinitionAsync(r.Definition, ct);
             if (bad is not null) return Result.Failure<WorkflowDto>(bad);
-            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            await using var tx = await TxScope.BeginAsync(db, ct);
             var w = Workflow.Create(tenantId, r.Name, r.Description, now, crm.Actor);
             db.Workflows.Add(w);
             await db.SaveChangesAsync(ct);
@@ -120,7 +121,7 @@ internal sealed class WorkflowService(CrmContext crm, ILogger<WorkflowService> l
             if (r.Definition is null) return Result.Failure<WorkflowVersionDto>(Error.Validation("A workflow needs triggers and steps."));
             var bad = await CheckDefinitionAsync(r.Definition, ct);
             if (bad is not null) return Result.Failure<WorkflowVersionDto>(bad);
-            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            await using var tx = await TxScope.BeginAsync(db, ct);
             var draft = await db.WorkflowVersions.FirstOrDefaultAsync(v => v.TenantId == tenantId && v.WorkflowId == workflowId && v.State == VersionState.Draft, ct);
             if (draft is null) draft = await AddVersionAsync(w, r.Definition, ct);
             else
@@ -146,7 +147,7 @@ internal sealed class WorkflowService(CrmContext crm, ILogger<WorkflowService> l
             if (src is null) return Result.Failure<WorkflowVersionDto>(Error.NotFound("Version"));
             if (await db.WorkflowVersions.AnyAsync(v => v.TenantId == tenantId && v.WorkflowId == workflowId && v.State == VersionState.Draft, ct)) return Result.Failure<WorkflowVersionDto>(Error.Conflict("This workflow already has a draft. Edit or activate it first."));
             var def = await LoadDefinitionAsync(src.Id, ct);
-            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            await using var tx = await TxScope.BeginAsync(db, ct);
             var draft = await AddVersionAsync(w, def, ct);
             crm.Record("Workflow.DraftCreated", "WorkflowVersion", draft.Id, $"Draft v{draft.Number} of '{w.Name}' created from v{src.Number}.");
             await db.SaveChangesAsync(ct);
@@ -178,7 +179,7 @@ internal sealed class WorkflowService(CrmContext crm, ILogger<WorkflowService> l
             if (def.Steps.Any(s => s.Type == StepType.ScheduleDemo) && !(await demos.AvailabilityAsync(now, now.AddDays(1), ct)).Available)
                 return Result.Failure<WorkflowDto>(Error.Validation("This workflow contains a 'Schedule demo' step, but no demo slot can be read right now. Try again."));
 
-            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            await using var tx = await TxScope.BeginAsync(db, ct);
             if (w.ActiveVersionId is { } prev && await db.WorkflowVersions.FirstOrDefaultAsync(x => x.Id == prev && x.TenantId == tenantId, ct) is { State: VersionState.Active } old) old.Retire(now);
             foreach (var t in await db.WorkflowTriggers.Where(t => t.WorkflowVersionId == v.Id && t.TenantId == tenantId).ToListAsync(ct)) t.Seal();
             foreach (var s in await db.WorkflowSteps.Where(s => s.WorkflowVersionId == v.Id && s.TenantId == tenantId).ToListAsync(ct)) s.Seal();
@@ -259,6 +260,13 @@ internal sealed class WorkflowService(CrmContext crm, ILogger<WorkflowService> l
     private async Task<List<ValidationProblem>> CheckReferencesAsync(WorkflowDefinition def, CancellationToken ct)
     {
         var db = crm.Db; var tenantId = crm.TenantId; var errors = new List<ValidationProblem>();
+        var raw = string.Concat(def.Triggers.Select(t => DefinitionMapper.Raw(t.Condition)), def.Steps.Select(x => DefinitionMapper.Raw(x.Condition) + DefinitionMapper.Raw(x.Config)));
+        var keys = System.Text.RegularExpressions.Regex.Matches(raw, @"lead\.cf\.([a-z][a-z0-9_]{0,39})").Select(m => m.Groups[1].Value).Distinct().ToList();
+        if (keys.Count > 0)
+        {
+            var known = await db.CustomFieldDefinitions.AsNoTracking().Where(d => d.TenantId == tenantId && d.EntityType == Domain.Config.CustomEntityType.Lead && d.IsActive && keys.Contains(d.Key)).Select(d => d.Key).ToListAsync(ct);
+            foreach (var k in keys.Except(known)) errors.Add(new("conditions", $"There is no active lead custom field '{k}'."));
+        }
         for (var i = 0; i < def.Steps.Count; i++)
         {
             var s = def.Steps[i]; var path = $"steps[{i}].config"; var cfg = WorkflowDefinitionValidator.ConfigOf(s);

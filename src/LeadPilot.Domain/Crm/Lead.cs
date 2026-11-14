@@ -10,13 +10,19 @@ public class LeadCategory : AuditableEntity, ITenantOwned
     public string Name { get; private set; } = string.Empty;
     public string NormalizedName { get; private set; } = string.Empty;
     public bool IsActive { get; private set; } = true;
+    /// <summary>Categories form a tree per tenant (at most <see cref="MaxDepth"/> levels). Null = top level.</summary>
+    public Guid? ParentId { get; private set; }
+    public const int MaxDepth = 4;
 
-    public static LeadCategory Create(Guid tenantId, string name, DateTime nowUtc)
+    public static LeadCategory Create(Guid tenantId, string name, DateTime nowUtc, Guid? parentId = null)
     {
-        var c = new LeadCategory { TenantId = tenantId, CreatedAtUtc = nowUtc };
+        var c = new LeadCategory { TenantId = tenantId, CreatedAtUtc = nowUtc, ParentId = parentId };
         c.Rename(name, nowUtc, touch: false);
         return c;
     }
+
+    /// <summary>The caller has already checked for cycles and depth (it needs the whole tree).</summary>
+    public void SetParent(Guid? parentId, DateTime nowUtc) { ParentId = parentId; UpdatedAtUtc = nowUtc; }
 
     public void Rename(string name, DateTime nowUtc, bool touch = true)
     {

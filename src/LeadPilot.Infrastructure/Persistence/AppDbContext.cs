@@ -127,6 +127,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
     public DbSet<SalesAgent> SalesAgents => Set<SalesAgent>();
     public DbSet<AgentQualificationQuestion> AgentQualificationQuestions => Set<AgentQualificationQuestion>();
     public DbSet<CatalogProduct> CatalogProducts => Set<CatalogProduct>();
+    public DbSet<LeadPilot.Domain.Config.CustomFieldDefinition> CustomFieldDefinitions => Set<LeadPilot.Domain.Config.CustomFieldDefinition>();
+    public DbSet<LeadPilot.Domain.Config.CustomFieldValue> CustomFieldValues => Set<LeadPilot.Domain.Config.CustomFieldValue>();
+    public DbSet<LeadPilot.Domain.Config.PackDefinition> PackDefinitions => Set<LeadPilot.Domain.Config.PackDefinition>();
+    public DbSet<LeadPilot.Domain.Config.TenantPackApplication> TenantPackApplications => Set<LeadPilot.Domain.Config.TenantPackApplication>();
+    public DbSet<LeadPilot.Domain.Config.PackItemLink> PackItemLinks => Set<LeadPilot.Domain.Config.PackItemLink>();
     public DbSet<PricingPlan> PricingPlans => Set<PricingPlan>();
     public DbSet<ApprovalRequest> ApprovalRequests => Set<ApprovalRequest>();
     public DbSet<ConversationNote> ConversationNotes => Set<ConversationNote>();
@@ -317,6 +322,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
         ConversionModel.Configure(builder);
         AnalyticsModel.Configure(builder);
         BillingModel.Configure(builder);
+        ConfigModel.Configure(builder);
 
         // Every tenant-owned entity: mandatory FK to Tenant (restrict), indexed TenantId and the global tenant filter.
         foreach (var type in builder.Model.GetEntityTypes().Select(e => e.ClrType).Where(t => typeof(ITenantOwned).IsAssignableFrom(t)).ToList())

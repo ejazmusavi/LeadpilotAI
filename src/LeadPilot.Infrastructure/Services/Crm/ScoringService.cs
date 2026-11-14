@@ -1,4 +1,5 @@
 using LeadPilot.Application.Crm;
+using LeadPilot.Infrastructure.Config;
 using LeadPilot.Domain.Crm;
 using LeadPilot.Shared.Results;
 using Microsoft.EntityFrameworkCore;
@@ -102,6 +103,14 @@ public sealed class ScoringService(CrmContext crm, ILogger<ScoringService> logge
         await crm.Db.SaveChangesAsync(ct);
     }
 
+    private static IReadOnlyList<string> AncestorsOf(Guid? categoryId, Dictionary<Guid, (string Name, Guid? ParentId)> all)
+    {
+        var list = new List<string>(); var seen = new HashSet<Guid>();
+        var cur = categoryId is { } c && all.TryGetValue(c, out var self) ? self.ParentId : null;
+        while (cur is { } id && seen.Add(id) && all.TryGetValue(id, out var p)) { list.Add(p.Name); cur = p.ParentId; }
+        return list;
+    }
+
     /// <summary>Scores the given leads (tracked in the context, saved by the caller). Returns how many scores changed.</summary>
     private async Task<int> ScoreBatchAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct)
     {
@@ -118,7 +127,10 @@ public sealed class ScoringService(CrmContext crm, ILogger<ScoringService> logge
         var pipelineIds = batch.Select(l => l.PipelineId).Distinct().ToList();
         var stages = await db.PipelineStages.AsNoTracking().Where(s => s.TenantId == tenantId && pipelineIds.Contains(s.PipelineId)).ToListAsync(ct);
         var categoryIds = batch.Where(l => l.CategoryId != null).Select(l => l.CategoryId!.Value).Distinct().ToList();
-        var categories = await db.LeadCategories.AsNoTracking().Where(c => c.TenantId == tenantId && categoryIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id, c => c.Name, ct);
+        var allCategories = categoryIds.Count == 0 ? new Dictionary<Guid, (string Name, Guid? ParentId)>()
+            : (await db.LeadCategories.AsNoTracking().Where(c => c.TenantId == tenantId).Select(c => new { c.Id, c.Name, c.ParentId }).ToListAsync(ct)).ToDictionary(c => c.Id, c => (c.Name, c.ParentId));
+        var categories = allCategories.Where(kv => categoryIds.Contains(kv.Key)).ToDictionary(kv => kv.Key, kv => kv.Value.Name);
+        var customValues = await CustomFieldFacts.LoadAsync(db, tenantId, Domain.Config.CustomEntityType.Lead, leadIds, ct);
         var contacts = (await db.Contacts.AsNoTracking().Where(c => c.TenantId == tenantId && !c.IsDeleted && leadIds.Contains(c.LeadId)).ToListAsync(ct)).ToLookup(c => c.LeadId);
         var since = now.AddDays(-30);
         var activity = await db.LeadActivities.AsNoTracking().Where(a => a.TenantId == tenantId && leadIds.Contains(a.LeadId) && a.OccurredAtUtc >= since && CountedActivity.Contains(a.Type))
@@ -138,7 +150,7 @@ public sealed class ScoringService(CrmContext crm, ILogger<ScoringService> logge
                 cs.Any(c => c.PhoneVerifiedAtUtc is not null), cs.Any(c => c.DataOrigin == DataOrigin.Verified),
                 activity.GetValueOrDefault(lead.Id), stage?.Kind ?? StageKind.Open, stage?.Position ?? 0,
                 pipelineStages.GroupBy(s => s.Name.ToLowerInvariant()).ToDictionary(g => g.Key, g => g.Min(s => s.Position)),
-                tags[lead.Id].ToHashSet());
+                tags[lead.Id].ToHashSet(), customValues.GetValueOrDefault(lead.Id), AncestorsOf(lead.CategoryId, allCategories));
             var result = LeadScoringEngine.Score(facts, rules);
             if (result.Score == lead.Score && lead.ScoreRuleVersion == set.Version) continue;
             lead.ApplyScore(result.Score, set.Version, now);

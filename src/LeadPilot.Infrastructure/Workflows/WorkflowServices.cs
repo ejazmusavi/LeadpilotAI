@@ -176,7 +176,7 @@ internal sealed class WorkflowService(CrmContext crm, ILogger<WorkflowService> l
             var bad = await CheckDefinitionAsync(def, ct);
             if (bad is not null) return Result.Failure<WorkflowDto>(bad);
             if (def.Steps.Any(s => s.Type == StepType.ScheduleDemo) && !(await demos.AvailabilityAsync(now, now.AddDays(1), ct)).Available)
-                return Result.Failure<WorkflowDto>(Error.Validation("This workflow contains a 'Schedule demo' step, but demo scheduling is not connected yet (it arrives in Phase 10). Remove the step to activate."));
+                return Result.Failure<WorkflowDto>(Error.Validation("This workflow contains a 'Schedule demo' step, but no demo slot can be read right now. Try again."));
 
             await using var tx = await db.Database.BeginTransactionAsync(ct);
             if (w.ActiveVersionId is { } prev && await db.WorkflowVersions.FirstOrDefaultAsync(x => x.Id == prev && x.TenantId == tenantId, ct) is { State: VersionState.Active } old) old.Retire(now);

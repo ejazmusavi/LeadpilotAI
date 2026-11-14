@@ -1,5 +1,6 @@
 using System.Reflection;
 using LeadPilot.Application.Security;
+using LeadPilot.Application.Workflows;
 using LeadPilot.Domain.Common;
 using LeadPilot.Domain.Workflows;
 using LeadPilot.Infrastructure.Persistence;
@@ -58,15 +59,22 @@ public class WorkflowArchitectureTests
     }
 
     [Fact]
-    public void Phase_10_events_have_no_producer_in_the_product()
+    public void Phase_10_events_are_produced_only_by_the_conversion_module_and_every_one_has_a_producer()
     {
+        var names = new[] { "WorkflowEventTypes.DemoBooked", "WorkflowEventTypes.DemoCompleted", "WorkflowEventTypes.TrialCreated", "WorkflowEventTypes.TrialExpires", "WorkflowEventTypes.PaymentConfirmed" };
+        var producers = new Dictionary<string, List<string>>();
         foreach (var f in Files("."))
         {
             if (f.EndsWith("Definition.cs") && f.Contains("Workflows")) continue;
             var text = File.ReadAllText(f);
-            foreach (var n in new[] { "WorkflowEventTypes.DemoBooked", "WorkflowEventTypes.DemoCompleted", "WorkflowEventTypes.TrialCreated", "WorkflowEventTypes.TrialExpires", "WorkflowEventTypes.PaymentConfirmed" })
-                Assert.False(text.Contains(n), $"{Path.GetFileName(f)} produces/uses {n}");
+            foreach (var n in names.Where(text.Contains))
+            {
+                Assert.True(f.Replace('\\', '/').Contains("/LeadPilot.Infrastructure/Conversion/"), $"{Path.GetFileName(f)} produces {n} outside the conversion module");
+                (producers.TryGetValue(n, out var l) ? l : producers[n] = []).Add(Path.GetFileName(f));
+            }
         }
+        foreach (var n in names) Assert.True(producers.ContainsKey(n), $"{n} has no producer");
+        foreach (var key in names.Select(n => n.Split('.')[1])) Assert.True(TriggerCatalog.All.Single(t => t.Key == typeof(WorkflowEventTypes).GetField(key)!.GetValue(null)!.ToString()).Available);
     }
 
     [Theory]

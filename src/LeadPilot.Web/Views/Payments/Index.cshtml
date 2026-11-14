@@ -1,0 +1,14 @@
+@model PaymentsViewModel
+@using LeadPilot.Domain.Conversion
+@{ ViewData["Title"] = "Payments"; var q = Model.Query; }
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2"><h1 class="h3 mb-0">Payment requests</h1>@if (Model.CanVerify) { <a class="btn btn-outline-secondary" asp-action="Providers">Payment providers</a> }</div>
+<p class="text-muted">A payment request asks for money; it activates nothing. A subscription becomes active only when a person with the verify permission records evidence of the payment (open the customer), or when a signature-verified provider event matches the request. Chat messages and AI replies never count as payment.</p>
+<form method="get" class="card card-body mb-3"><div class="row g-3 align-items-end"><div class="col-6 col-md-3"><label class="form-label" for="status">Status</label><select id="status" name="status" class="form-select"><option value="">All</option>@foreach (var d in Enum.GetValues<PaymentRequestStatus>()) { <option value="@d" selected="@(q.Status == d)">@d</option> }</select></div><div class="col-12 col-md-3"><button class="btn btn-outline-primary" type="submit">Filter</button> <a asp-action="Index" class="btn btn-link">Clear</a></div></div></form>
+@if (Model.Result.Items.Count == 0) { <div class="card"><partial name="_EmptyState" model='("No payment requests", "Create a payment request from a customer with a pending subscription.")' /></div> }
+else
+{
+    <div class="card"><div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Reference</th><th>Customer</th><th>Plan</th><th class="text-end">Amount</th><th>Status</th><th>Created</th><th></th></tr></thead><tbody>
+    @foreach (var p in Model.Result.Items) { <tr><td>@p.Reference</td><td>@p.CustomerName</td><td>@p.PlanName</td><td class="text-end">@p.Amount.ToString("0.00") @p.Currency</td><td>@p.Status</td><td class="small">@p.CreatedAtUtc.ToString("yyyy-MM-dd")</td><td class="text-end"><a class="btn btn-outline-primary btn-sm" asp-controller="Customers" asp-action="Details" asp-route-id="@p.CustomerId">Open customer</a></td></tr> }
+    </tbody></table></div></div>
+    <partial name="_Pager" model='new PagerModel(Model.Result.Page, Model.Result.TotalPages, Model.Result.TotalCount, "Index", Model.QueryValues)' />
+}

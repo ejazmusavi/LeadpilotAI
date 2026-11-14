@@ -104,7 +104,7 @@ public class WorkflowLogicTests
         Assert.False(WorkflowDefinitionValidator.Validate(new WorkflowDefinition([new("lead.inactive")], [S("a", StepType.AddTag, """{"tag":"x"}""")])).IsValid);   // needs the number of days
         Assert.False(WorkflowDefinitionValidator.Validate(new WorkflowDefinition([new("lead.created")], [S("a", StepType.AddTag, """{"tag":"x"}""")], CooldownHours: -1)).IsValid);
         var phase10 = WorkflowDefinitionValidator.Validate(new WorkflowDefinition([new("demo.booked")], [S("a", StepType.AddTag, """{"tag":"x"}""")]));
-        Assert.True(phase10.IsValid); Assert.Contains(phase10.Warnings, w => w.Message.Contains("Phase 10"));
+        Assert.True(phase10.IsValid); Assert.DoesNotContain(phase10.Warnings, w => w.Message.Contains("Phase 10"));   // the event has a producer now
     }
 
     [Fact]
@@ -144,10 +144,10 @@ public class WorkflowLogicTests
     }
 
     [Fact]
-    public void Trigger_catalog_marks_phase_10_events_unavailable_and_without_producer()
+    public void Trigger_catalog_lists_the_phase_10_events_as_available_with_a_producer()
     {
-        foreach (var k in new[] { "demo.booked", "demo.completed", "trial.created", "trial.expires", "payment.confirmed" }) { var t = TriggerCatalog.Find(k)!; Assert.False(t.Available); Assert.False(t.HasProducer); }
-        Assert.All(TriggerCatalog.All.Where(t => t.Available), t => Assert.True(t.HasProducer));
+        foreach (var k in new[] { "demo.booked", "demo.completed", "trial.created", "trial.expires", "payment.confirmed" }) { var t = TriggerCatalog.Find(k)!; Assert.True(t.Available); Assert.True(t.HasProducer); Assert.Null(t.UnavailableReason); }
+        Assert.All(TriggerCatalog.All, t => Assert.True(t.HasProducer));
         Assert.Equal(12, TriggerCatalog.All.Count);
         Assert.DoesNotContain(WorkflowEventTypes.LeadInactive, TriggerCatalog.ConsumedEventTypes);     // evaluated by a Hangfire job, not a broker event
         Assert.Contains(WorkflowEventTypes.MessageReceived, TriggerCatalog.ConsumedEventTypes);

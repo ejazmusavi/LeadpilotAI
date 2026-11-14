@@ -12,6 +12,7 @@ using LeadPilot.Infrastructure.Services.Tenancy;
 using LeadPilot.Infrastructure.Tenancy;
 using LeadPilot.Infrastructure.Web;
 using LeadPilot.Infrastructure.Workflows;
+using LeadPilot.Infrastructure.Conversion;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -70,6 +71,7 @@ public static class DiscoveryServiceCollection
         services.AddCampaigns(config);
         services.AddAi(config);
         services.AddWorkflows(config);
+        services.AddConversion(config);
         services.AddMessagingConsumers();
         return services;
     }

@@ -164,3 +164,21 @@ Applied and checked on an empty MySQL 8 database and on a database at the Phase 
 | `WorkflowTenantSettings` | **unique TenantId**; kill switch, max concurrent runs (20), monthly runs (5000), daily messages (200) |
 | `WorkflowNotifications` | **unique (WorkflowExecutionId, StepKey, UserId)** so a replayed step never notifies twice |
 Every table has a tenant FK (restrict), `TenantId` index and the global query filter. Applied and checked on an empty MySQL 8 database and on a database at the Phase 8 schema holding a tenant, roles and a lead (`WorkflowMigrationTests`).
+
+## Phase 10 tables (migration `Phase10Conversion`; all tenant-owned: FK to Tenants, TenantId index, global filter, SaveChanges guard)
+| Table | Notes |
+|---|---|
+| ConversionSettings | one row per tenant (unique TenantId): time zone, slot, notice, horizon, assignment, link template, reminders, trial and payment defaults; `Version` concurrency token |
+| DemoReps / DemoAvailabilityRules / DemoAvailabilityExceptions | unique (TenantId, UserId); rules in local minutes; exceptions `date` + Closed/ExtraOpen |
+| Demos | **unique (TenantId, ActiveSlot)** = `{rep}:{startUtc}` while the demo holds the slot (NULL otherwise) — the double-booking guard; status stored as text |
+| DemoHistory, TrialEvents, CommercialAgreements, Payments, PaymentEvents | append-only (guard rejects update/delete) |
+| DemoReminders | unique (DemoId, Generation, OffsetMinutes); status Scheduled/Processing/Sent/Skipped/Failed/Cancelled |
+| Trials | status, dates, provisioning fields, usage fields, expiry-notice marker |
+| Customers | unique (TenantId, LeadId), unique (TenantId, Number) |
+| Subscriptions | **CHECK `Status <> 'Active' OR ActivatedByPaymentId IS NOT NULL`**, FK ActivatedByPaymentId → Payments |
+| CommercialAgreements | unique (TenantId, OpportunityId): a won opportunity converts once; `decimal(18,2)`, 3-letter currency |
+| PaymentRequests | unique (TenantId, Reference); unique (TenantId, OpenForSubscription): one open request per subscription |
+| Payments | unique PaymentRequestId (paid once); unique (TenantId, EvidenceKey): one receipt, one payment |
+| PaymentProviderConfigs | unique WebhookId, unique (TenantId, ProviderKey); secret encrypted (data protection) |
+| PaymentEvents | unique (TenantId, ProviderKey, ExternalEventId): webhook idempotency |
+Money columns are `decimal(18,2)` with an explicit currency column; nothing is priced in code.

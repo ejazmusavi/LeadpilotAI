@@ -501,3 +501,42 @@ See SECURITY.md / MULTI_TENANCY.md. Highlights: no code execution (closed catalo
 
 ### Next
 Phase 10 (demo, trial and customer conversion). Prerequisite: register real `IDemoScheduler`, `ITrialProvisioner`, `IPaymentRequestGateway` and publish the five reserved events through `WorkflowEvents.Emit`. Not started.
+
+## Phase 10 — Demo, trial and customer conversion (reported)
+
+### 1. Implemented
+Demo calendar (week/day), slot picker, booking, rescheduling, cancellation, status machine (Requested/Booked/Confirmed/Completed/NoShow/Cancelled), rep assignment (round-robin / least-loaded), weekly hours + exceptions + buffers + daily maximum + time zones (DST-tested), meeting links (manual or own template), reminders through the Phase 5 pipeline with the service-message policy; trials (record-only provisioning, plan from the catalog, clock starts when staff mark it provisioned, usage updates, extend, cancel, expiry notice + expiry by Hangfire); customer conversion of Won opportunities (separate Customer, links to the lead history, pending subscription, immutable commercial agreement), payment requests, manual payment verification with evidence, provider-neutral signature-first webhook (no provider, no adapter shipped); the Phase 8 tools and the Phase 9 schedule-demo step now use the real services; the five Phase 10 workflow triggers have producers (outbox). UI: calendar, book/reschedule/cancel with confirm dialogs, settings + hours, trials, customers (timeline, agreement, payments), payments, providers; REST endpoints with Swagger docs. Permissions: Demos.View/Book/Manage, Trials.View/Manage, Customers.View/Manage, Payments.Request/Verify.
+
+### 2. Files
+`Domain/Conversion/*`, `Application/Conversion/*`, `Infrastructure/Conversion/*`, `Infrastructure/Messaging/Services/ServiceNoticeSender.cs`, `Infrastructure/Persistence/ConversionModel.cs` + migration `Phase10Conversion`, `Api/Controllers/ConversionControllers.cs`, `Web/Controllers/ConversionControllers.cs` + `Views/{Demos,DemoSettings,Trials,Customers,Payments}`, permissions in `Application/Security/Permissions.cs`; removed `Agents/UnavailablePorts.cs`; changed `TrialInfo` (nullable expiry + message), workflow catalog/validator/actions (Phase 10 markers removed), nav layout.
+
+### 3. Database
+16 tables (see DATABASE_DESIGN.md): unique `(TenantId, ActiveSlot)` on Demos (double booking), one open payment request per subscription, one Payment per request, one receipt per payment, webhook idempotency key, check constraint "Active subscription needs a payment", append-only ledgers, `decimal(18,2)` money. Verified on a clean database (migration chain, no pending model changes) and on a Phase 9 database that holds data (roles receive the new permissions, services work).
+
+### 4. Tests (actually run, this machine, MySQL 8 + RabbitMQ local)
+| | |
+|---|---|
+| Build | succeeded, 0 warnings, 0 errors (warnings as errors) |
+| Unit | 1045 passed, 0 failed (23 new: slots incl. DST spring-forward/fall-back/gap, buffers, exceptions, notice, daily max, state machine, trial/subscription/money rules, template language) |
+| Architecture | 113 passed, 0 failed (new: tenant ownership, activation callers pinned, no verify/activate tool, no provider adapter, one scheduler/one pipeline, permissions on every action) |
+| Integration | 483 passed, 0 failed, 1 skipped (the live-provider test, as before); 32 new: booking rules and race (one rep / two reps), unique index, reschedule/cancel, reminders (suppressed / no-consent contact gets none, once only, follow reschedule), trial lifecycle and idempotent expiry jobs, conversion + history links, payment verification gating (partial, currency, evidence, duplicate receipt, race, DB check), AI tool and workflow end-to-end, webhook (forged, tampered, duplicate burst, wrong amount, cross-tenant, inactive, too large), permissions 401/403/404, tenant isolation (API, MVC, jobs, DB guard), migrations |
+| Not executed | live WAHA, live Claude/Voyage, real Qdrant, any payment/meeting provider, Docker, load tests |
+Older tests changed on purpose: two Phase 9 unit tests, one Phase 9 integration test and one Phase 8 architecture test asserted the "unavailable until Phase 10" markers; the test fixture's Phase 10 doubles are now a proxy that defaults to the old "not connected" doubles and switches to the real services with `Phase10.UseReal`.
+Playwright (Chromium, scratch DB, 1280 px and 390 px): the eight new pages render with their empty states, no JS errors, no horizontal overflow. Populated pages are covered by the integration tests' HTML assertions, not screenshots.
+
+### 5. Security and architecture review
+See SECURITY.md "Phase 10" and MULTI_TENANCY.md. Key points: only `PaymentVerificationCore` creates payments and activates subscriptions (architecture-pinned, DB check constraint, tested via AI/workflow/chat/webhook attacks); reminders are service messages with consent-or-window and are never sent to suppressed/opted-out contacts; booking is serialised per rep and index-guarded.
+
+### 6. Outstanding / known limits
+1. No payment provider, adapter or HTTP trial provisioner exists (by design); manual flows only. 2. No refunds or partial payments. 3. Free (0) agreements are refused. 4. The AI's payment request needs an already converted customer. 5. A customer notice is attempted once after the transaction that claims it (a crash exactly between would lose that single message; the staff follow-up and event are never lost). 6. The calendar is a server-rendered week/day grid (no drag and drop). 7. The conversion is manual (a Won stage does not convert by itself; the Customers page lists the waiting ones). 8. Reminders created before reminders were switched on do not exist (no back-fill). 9. Decisions: OWNER_DECISIONS 30–40.
+
+### 7. Acceptance criteria
+| Criterion | Result |
+|---|---|
+| Demo booking works | **Passed** (API, MVC, AI tool, workflow step; race-safe; reminders policy) |
+| Trial creation is authorized | **Passed** (permission Trials.Manage, 401/403/404, AI limit + approval, record-only provisioning) |
+| Conversion preserves lead history | **Passed** (links, lead activity rows untouched, timeline) |
+| Payment verification controls subscription activation | **Passed** (unverified, partial, forged, duplicate, AI, workflow, chat claim cannot activate) |
+
+### Next
+Phase 11 (analytics and reporting). No prerequisites outstanding from Phase 10. Not started.

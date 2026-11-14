@@ -230,7 +230,7 @@ public sealed class AgentToolHandlers(CrmContext crm, IDemoScheduler demos, ITri
         if (!r.Available) return ToolOutput.NotAvailable("Trial accounts cannot be created yet (the trial service is not connected). Nothing was created; say a colleague will set up the trial.");
         if (r.Error is not null || r.Value is null) return new ToolOutput(ToolOutcome.Failed, "trial_failed", new { message = "The trial could not be created." });
         crm.Activity(lead.Id, LeadActivityType.Updated, "Trial account created (requested by the AI assistant)", new { by = "ai", trial = r.Value.TrialId });
-        return ToolOutput.Ok(new { created = true, expiresAtUtc = r.Value.ExpiresAtUtc });
+        return ToolOutput.Ok(new { created = true, status = r.Value.Status, expiresAtUtc = r.Value.ExpiresAtUtc, note = r.Value.Message });
     }
 
     private async Task<ToolOutput> PaymentAsync(Conversation conv, ToolArgsResult a, ToolCallContext ctx, CancellationToken ct)

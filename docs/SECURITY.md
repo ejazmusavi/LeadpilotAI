@@ -124,3 +124,11 @@ Cross-tenant data leakage (IDOR, filter bypass, cache/vector leakage) · credent
 - **No duplicates:** persisted step state + idempotency keys; retry, redelivery, concurrent triggers and crash recovery are tested.
 - **Control:** per-workflow and workspace kill switches, usage limits (runs per month, concurrent runs, messages per day), cancellation; all audited. Versions are immutable once active (domain rule + save guard).
 - **Data:** lead values placed in messages, tasks and notices are sanitised (braces, formatting marks, control and bidi characters removed). Workflow notices are visible only to their recipient.
+
+## Phase 10: conversion, payments, reminders
+- **Payment verification** is the money boundary: a subscription activates only inside `PaymentVerificationCore` (manual evidence by `Payments.Verify`, or a signature-verified, tenant-matched, amount-exact provider event). The AI tool catalog has no verify/activate tool; workflows have no payment step; an architecture test pins the callers of `ActivateWithVerifiedPayment` and the writers of `Payment`; a database check constraint refuses an Active subscription without a payment; tests cover the AI tool path (approved request created, still pending), made-up tool names, smuggled arguments, a customer chat claiming payment, forged/tampered/duplicate/wrong-amount webhook events and racing verifications.
+- **Webhook** — random id → tenant, HMAC verified before parsing, size capped (256 KB), idempotent by (provider, event id), 401/404 reveal nothing, secret encrypted and never returned. No adapter ships.
+- **Reminders** — service-message policy in OWNER_DECISIONS 34; suppressed / opted-out / no-consent contacts get nothing (tested), once per (demo, generation, offset) (idempotency key + atomic claim), sanitised closed-placeholder text.
+- **Booking integrity** — only calculator slots; row-lock + recalculation + unique index; race tests (one rep, two reps).
+- **Separation of duties** — request, convert and verify are different permissions; verification records the verifier; the agreement records its approver and is immutable.
+- **Not covered** — no refunds, no partial payments, no card data of any kind is handled.

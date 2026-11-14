@@ -1,0 +1,20 @@
+@model ProvidersViewModel
+@{ ViewData["Title"] = "Payment providers"; }
+<h1 class="h3 mb-2">Payment providers</h1>
+<p class="text-muted">No payment provider has been chosen and the product ships no provider adapter. Until one is installed, payments are verified manually with evidence. The webhook endpoint below is provider-neutral: it verifies the provider's signature with the secret you store here before it reads anything, and it never applies the same event twice.</p>
+@if (Model.Installed.Count == 0)
+{
+    <div class="alert alert-info">No provider adapter is installed in this deployment, so there is nothing to configure. Manual verification with evidence is available on every payment request.</div>
+}
+else
+{
+    <form asp-action="Providers" method="post" class="card card-body mb-3"><div class="row g-2 align-items-end">
+        <div class="col-md-3"><label class="form-label" for="providerKey">Provider</label><select id="providerKey" name="providerKey" class="form-select">@foreach (var i in Model.Installed) { <option value="@i.Key">@i.Name</option> }</select></div>
+        <div class="col-md-5"><label class="form-label" for="secret">Webhook secret (min 16 characters; stored encrypted)</label><input id="secret" name="secret" type="password" autocomplete="off" class="form-control" required /></div>
+        <div class="col-md-2"><div class="form-check"><input type="hidden" name="isActive" value="false" /><input class="form-check-input" type="checkbox" id="act" name="isActive" value="true" checked /><label class="form-check-label" for="act">Active</label></div></div>
+        <div class="col-md-2"><button class="btn btn-primary" type="submit">Save</button></div></div></form>
+}
+@if (Model.Configs.Count > 0)
+{
+    <div class="card"><ul class="list-group list-group-flush">@foreach (var c in Model.Configs) { <li class="list-group-item"><strong>@c.DisplayName</strong> · @(c.IsActive ? "active" : "off") · secret stored<div class="small text-muted">Webhook URL: <code>@(string.IsNullOrEmpty(Model.WebhookBase) ? "{public API address}" : Model.WebhookBase)/api/v1/payments/webhooks/@c.WebhookId</code></div></li> }</ul></div>
+}

@@ -220,18 +220,18 @@ internal sealed class ScheduleDemoAction(IDemoScheduler demos, CrmContext crm) :
     public async Task<string> DescribeAsync(ActionContext c, CancellationToken ct)
     {
         var r = await demos.AvailabilityAsync(c.Now, c.Now.AddDays(c.Int("withinDays") ?? 7), ct);
-        return r.Available ? "would book the next free demo slot" : "NOT AVAILABLE: demo scheduling is not connected yet (Phase 10). This step would fail.";
+        return r.Available ? "would book the next free demo slot" : "NOT AVAILABLE: demo scheduling could not be read.";
     }
 
     public async Task<ActionResult> ExecuteAsync(ActionContext c, CancellationToken ct)
     {
         var avail = await demos.AvailabilityAsync(c.Now, c.Now.AddDays(c.Int("withinDays") ?? 7), ct);
-        if (!avail.Available) return ActionResult.Fail("Demo scheduling is not connected yet (it arrives in Phase 10). Nothing was booked.");
+        if (!avail.Available) return ActionResult.Fail("Demo scheduling is unavailable. Nothing was booked.");
         if (avail.Error is not null) return ActionResult.Retry("Availability could not be read right now.");
         var slot = (avail.Value ?? []).Where(s => s.StartUtc > c.Now).OrderBy(s => s.StartUtc).FirstOrDefault();
         if (slot is null) return ActionResult.Fail("There is no free demo slot in that period.");
         var booked = await demos.BookAsync(c.Lead.Id, slot, c.Str("notes"), ct);
-        if (!booked.Available) return ActionResult.Fail("Demo scheduling is not connected yet (it arrives in Phase 10). Nothing was booked.");
+        if (!booked.Available) return ActionResult.Fail("Demo scheduling is unavailable. Nothing was booked.");
         if (booked.Error is not null || booked.Value is null) return ActionResult.Retry("The slot could not be booked (it may have just been taken).");
         crm.Activity(c.Lead.Id, LeadActivityType.Updated, $"Demo booked by a workflow for {booked.Value.StartUtc:u}.", new { by = "workflow", booking = booked.Value.BookingId });
         return ActionResult.Done($"Demo booked for {booked.Value.StartUtc:u}.", booked.Value.BookingId);

@@ -1,0 +1,42 @@
+@model CalendarViewModel
+@using LeadPilot.Domain.Conversion
+@{ ViewData["Title"] = "Demo calendar"; var step = Model.View == "day" ? 1 : 7; }
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+    <h1 class="h3 mb-0">Demo calendar</h1>
+    @if (Model.CanBook) { <a class="btn btn-primary" asp-action="Book">Book a demo</a> }
+</div>
+<p class="text-muted">All times are in the workspace time zone (<strong>@Model.TimeZoneId</strong>). A demo can only be booked at a free slot.</p>
+@if (!Model.Configured)
+{
+    <div class="alert alert-warning">No sales representative has working hours yet, so there are no free slots. Add a representative and their weekly hours under <a asp-controller="DemoSettings" asp-action="Index">Demo &amp; trial settings</a>.</div>
+}
+<form method="get" class="card card-body mb-3"><div class="row g-2 align-items-end">
+    <div class="col-6 col-md-2"><label class="form-label" for="view">View</label><select id="view" name="view" class="form-select"><option value="week" selected="@(Model.View == "week")">Week</option><option value="day" selected="@(Model.View == "day")">Day</option></select></div>
+    <div class="col-6 col-md-3"><label class="form-label" for="date">Date</label><input id="date" name="date" type="date" class="form-control" value="@Model.Date.ToString("yyyy-MM-dd")" /></div>
+    <div class="col-12 col-md-3"><label class="form-label" for="repUserId">Representative</label><select id="repUserId" name="repUserId" class="form-select"><option value="">All</option>@foreach (var r in Model.Reps) { <option value="@r.UserId" selected="@(Model.RepUserId == r.UserId)">@r.UserName</option> }</select></div>
+    <div class="col-12 col-md-4"><button class="btn btn-outline-primary" type="submit">Show</button>
+        <a class="btn btn-link" asp-action="Index" asp-route-view="@Model.View" asp-route-date="@Model.FromLocal.AddDays(-step).ToString("yyyy-MM-dd")" asp-route-repUserId="@Model.RepUserId">&laquo; Previous</a>
+        <a class="btn btn-link" asp-action="Index" asp-route-view="@Model.View" asp-route-date="@Model.FromLocal.AddDays(step).ToString("yyyy-MM-dd")" asp-route-repUserId="@Model.RepUserId">Next &raquo;</a></div>
+</div></form>
+<div class="row g-2">
+@for (var i = 0; i < Model.Days; i++)
+{
+    var d = Model.FromLocal.AddDays(i); var key = d.ToString("yyyy-MM-dd");
+    var dayDemos = Model.Demos.Where(x => x.LocalDate == key).OrderBy(x => x.StartUtc).ToList();
+    var daySlots = Model.Slots.Where(x => x.LocalDate == key).ToList();
+    <div class="@(Model.Days == 1 ? "col-12" : "col-12 col-md-6 col-xl")"><div class="card h-100"><div class="card-header small fw-semibold">@d.ToString("ddd d MMM")</div><div class="card-body p-2">
+        @foreach (var x in dayDemos)
+        {
+            <div class="border rounded p-2 mb-2 small @(x.Status is DemoStatus.Cancelled or DemoStatus.NoShow ? "text-muted" : "")">
+                <a asp-action="Details" asp-route-id="@x.Id" class="fw-semibold text-decoration-none">@x.LocalStart–@x.LocalEnd</a> <span class="badge text-bg-light border">@x.Status</span><br />@x.LeadName<br /><span class="text-muted">@x.RepName</span>
+            </div>
+        }
+        @if (daySlots.Count > 0)
+        {
+            <div class="small text-muted mb-1">Free slots (@daySlots.Count)</div>
+            <div class="d-flex flex-wrap gap-1">@foreach (var s in daySlots) { if (Model.CanBook) { <a class="btn btn-outline-success btn-sm py-0" asp-action="Book" asp-route-date="@key" asp-route-slotId="@s.SlotId">@s.LocalStart</a> } else { <span class="badge text-bg-light border">@s.LocalStart</span> } }</div>
+        }
+        else if (dayDemos.Count == 0) { <div class="small text-muted">Nothing here.</div> }
+    </div></div></div>
+}
+</div>

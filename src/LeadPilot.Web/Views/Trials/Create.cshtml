@@ -1,0 +1,20 @@
+@model TrialCreateViewModel
+@{ ViewData["Title"] = "New trial"; }
+<h1 class="h3 mb-3">New trial</h1>
+<div class="alert alert-info">Creating a trial <strong>records</strong> it. The account in the product is created by your staff (no product integration is connected), and the trial period starts when they mark it as provisioned.</div>
+<div class="card mb-3"><div class="card-body"><h2 class="h6">Lead</h2>
+@if (Model.LeadId is not null) { <p class="mb-0"><strong>@Model.LeadName</strong> <a class="btn btn-link btn-sm" asp-action="Create">change</a></p> }
+else
+{
+    <form method="get" class="row g-2"><div class="col-8 col-md-6"><label class="visually-hidden" for="search">Search leads</label><input id="search" name="search" class="form-control" placeholder="Search leads by name" value="@Model.Search" /></div><div class="col"><button class="btn btn-outline-primary" type="submit">Search</button></div></form>
+    @if (Model.Leads.Count > 0) { <ul class="list-group mt-2">@foreach (var l in Model.Leads) { <li class="list-group-item"><a asp-action="Create" asp-route-leadId="@l.Id">@l.Name</a> <span class="text-muted small">@l.City</span></li> }</ul> }
+}
+</div></div>
+@if (Model.LeadId is not null)
+{
+    <form asp-action="Create" method="post" class="card card-body"><input type="hidden" asp-for="LeadId" />
+        <div class="row g-3"><div class="col-md-6"><label class="form-label" asp-for="PlanId">Plan (from the product catalog)</label><select asp-for="PlanId" class="form-select"><option value="">— decide later —</option>@foreach (var p in Model.Plans) { <option value="@p.Id">@p.Label</option> }</select></div>
+        <div class="col-md-3"><label class="form-label" asp-for="DurationDays">Days (default @Model.DefaultDays)</label><input asp-for="DurationDays" type="number" class="form-control" /></div>
+        <div class="col-12"><label class="form-label" asp-for="Notes">Notes for the person who provisions</label><input asp-for="Notes" class="form-control" maxlength="500" /></div></div>
+        <div class="mt-3"><button class="btn btn-primary" type="submit">Record trial</button></div></form>
+}

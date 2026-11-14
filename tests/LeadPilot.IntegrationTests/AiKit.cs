@@ -210,6 +210,13 @@ public sealed class FakeProviderServer : IAsyncDisposable
 
 public static class AiKit
 {
+    private static void Proxy<T>(IServiceCollection s, AiTestControls c) where T : class
+    {
+        var real = s.Last(d => d.ServiceType == typeof(T)).ImplementationType!;
+        s.RemoveAll<T>();
+        s.AddScoped<T>(sp => c.Phase10.UseReal ? (T)ActivatorUtilities.CreateInstance(sp, real) : (T)(object)c.Phase10);
+    }
+
     public const string ChatKey = "sk-ant-test-0123456789abcdef";
     public const string EmbedKey = "pa-test-0123456789abcdef";
 
@@ -219,9 +226,11 @@ public static class AiKit
         s.RemoveAll<IRawAIProvider>(); s.AddScoped<IRawAIProvider>(_ => c.Llm);
         s.RemoveAll<IRawEmbeddingProvider>(); s.AddScoped<IRawEmbeddingProvider, FakeEmbeddingProvider>();
         s.RemoveAll<IAiJobScheduler>(); s.AddSingleton<IAiJobScheduler>(c.Scheduler);
-        s.RemoveAll<LeadPilot.Application.Agents.IDemoScheduler>(); s.AddSingleton<LeadPilot.Application.Agents.IDemoScheduler>(c.Phase10);
-        s.RemoveAll<LeadPilot.Application.Agents.ITrialProvisioner>(); s.AddSingleton<LeadPilot.Application.Agents.ITrialProvisioner>(c.Phase10);
-        s.RemoveAll<LeadPilot.Application.Agents.IPaymentRequestGateway>(); s.AddSingleton<LeadPilot.Application.Agents.IPaymentRequestGateway>(c.Phase10);
+        s.AddSingleton<LeadPilot.Application.Conversion.IPaymentProviderAdapter, FakeProviderAdapter>();   // TEST-ONLY adapter: the product ships none
+        // The Phase 10 ports answer with the doubles (default: "not connected"), unless a test sets Phase10.UseReal: then the product's REAL services answer.
+        Proxy<LeadPilot.Application.Agents.IDemoScheduler>(s, c);
+        Proxy<LeadPilot.Application.Agents.ITrialProvisioner>(s, c);
+        Proxy<LeadPilot.Application.Agents.IPaymentRequestGateway>(s, c);
     }
 }
 

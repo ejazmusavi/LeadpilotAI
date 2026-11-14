@@ -24,8 +24,10 @@ public sealed class Phase10Doubles : IDemoScheduler, ITrialProvisioner, IPayment
     public List<DemoSlot> Slots { get; } = [];
     public ConcurrentQueue<string> Calls { get; } = new();
     public bool FailBooking;
+    /// <summary>When true the REAL Phase 10 services (registered by the product) answer instead of these doubles. Reset() turns it off again.</summary>
+    public bool UseReal;
 
-    public void Reset() { DemoConnected = TrialConnected = PaymentConnected = false; Slots.Clear(); Calls.Clear(); FailBooking = false; }
+    public void Reset() { DemoConnected = TrialConnected = PaymentConnected = false; Slots.Clear(); Calls.Clear(); FailBooking = false; UseReal = false; }
 
     public Task<PortResult<IReadOnlyList<DemoSlot>>> AvailabilityAsync(DateTime fromUtc, DateTime toUtc, CancellationToken ct)
     {

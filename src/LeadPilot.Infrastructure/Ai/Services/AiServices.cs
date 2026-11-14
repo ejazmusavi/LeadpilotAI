@@ -205,7 +205,7 @@ internal sealed class AiSuggestionService(CrmContext crm, ILogger<AiSuggestionSe
     private async Task<AiSuggestionDto> ToDtoAsync(AiInteraction i, CancellationToken ct)
     {
         var tenantId = crm.TenantId;
-        var tools = await crm.Db.AiToolExecutions.AsNoTracking().Where(t => t.TenantId == tenantId && t.InteractionId == i.Id).OrderBy(t => t.OccurredAtUtc).Select(t => new AiToolExecutionDto(t.ToolName, t.ArgumentsSummary, t.Outcome, t.Reason, t.OccurredAtUtc)).ToListAsync(ct);
+        var tools = await crm.Db.AiToolExecutions.AsNoTracking().Where(t => t.TenantId == tenantId && (t.InteractionId == i.Id || t.TriggerMessageId == i.TriggerMessageId)).OrderBy(t => t.OccurredAtUtc).Select(t => new AiToolExecutionDto(t.ToolName, t.ArgumentsSummary, t.Outcome, t.Reason, t.OccurredAtUtc)).ToListAsync(ct);
         var names = await crm.UserNamesAsync([i.HandledByUserId], ct);
         return new AiSuggestionDto(i.Id, i.ConversationId, i.TriggerMessageId, i.Intent, i.Decision, i.Confidence, i.DraftText, Read<List<Citation>>(i.CitationsJson) ?? [], Read<List<ValidationIssue>>(i.ValidationJson) ?? [], i.EscalationReason, i.NextAction,
             Read<Dictionary<string, string>>(i.ExtractedJson) ?? new Dictionary<string, string>(), i.InjectionSuspected, i.Status, i.Model, i.HandledByUserId is { } u && names.TryGetValue(u, out var n) ? n : null, i.HandledAtUtc, i.CreatedAtUtc, tools);

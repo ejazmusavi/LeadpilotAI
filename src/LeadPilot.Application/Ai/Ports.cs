@@ -119,6 +119,8 @@ public sealed record AiRunResult
     public string? EscalationReason { get; init; }
     public string? NextAction { get; init; }
     public bool InjectionSuspected { get; init; }
+    /// <summary>The customer asked to stop: the orchestrator runs StopMarketingMessages and writes nothing back.</summary>
+    public bool StopMarketing { get; init; }
     public IReadOnlyDictionary<string, string> Extracted { get; init; } = new Dictionary<string, string>();
     public IReadOnlyList<RetrievedChunk> Chunks { get; init; } = [];
     public IReadOnlyList<ToolResultItem> Tools { get; init; } = [];

@@ -132,6 +132,7 @@ internal static class AiModel
             b.HasIndex(x => new { x.TenantId, x.Status, x.CreatedAtUtc });
             b.HasOne<Conversation>().WithMany().HasForeignKey(x => x.ConversationId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<Message>().WithMany().HasForeignKey(x => x.TriggerMessageId).OnDelete(DeleteBehavior.Restrict);
+            b.Property(x => x.AutoSend).Str(20); b.Property(x => x.AutoSendNote).HasMaxLength(200);
         });
 
         builder.Entity<AiToolExecution>(b =>
@@ -139,7 +140,12 @@ internal static class AiModel
             b.ToTable("AiToolExecutions");
             b.Property(x => x.ToolName).HasMaxLength(60).IsRequired(); b.Property(x => x.ArgumentsSummary).HasMaxLength(500).IsRequired();
             b.Property(x => x.Outcome).Str(20); b.Property(x => x.Reason).HasMaxLength(200);
+            b.Property(x => x.InputJson).HasColumnType("text"); b.Property(x => x.OutputJson).HasColumnType("mediumtext"); b.Property(x => x.DedupeKey).HasMaxLength(100);
             b.HasIndex(x => new { x.TenantId, x.InteractionId });
+            b.HasIndex(x => new { x.TenantId, x.TriggerMessageId });
+            b.HasIndex(x => new { x.TenantId, x.OccurredAtUtc });
+            b.HasIndex(x => new { x.TenantId, x.LeadId, x.ToolName });
+            b.HasIndex(x => new { x.TenantId, x.DedupeKey }).IsUnique();
             b.HasOne<AiInteraction>().WithMany().HasForeignKey(x => x.InteractionId).OnDelete(DeleteBehavior.Restrict);
         });
     }

@@ -1,3 +1,4 @@
+using LeadPilot.Domain.Agents;
 using System.Reflection;
 using LeadPilot.Application.Abstractions;
 using LeadPilot.Domain.Ai;
@@ -101,6 +102,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
     public DbSet<ConversationSummary> ConversationSummaries => Set<ConversationSummary>();
     public DbSet<AiInteraction> AiInteractions => Set<AiInteraction>();
     public DbSet<AiToolExecution> AiToolExecutions => Set<AiToolExecution>();
+    public DbSet<SalesAgent> SalesAgents => Set<SalesAgent>();
+    public DbSet<AgentQualificationQuestion> AgentQualificationQuestions => Set<AgentQualificationQuestion>();
+    public DbSet<CatalogProduct> CatalogProducts => Set<CatalogProduct>();
+    public DbSet<PricingPlan> PricingPlans => Set<PricingPlan>();
+    public DbSet<ApprovalRequest> ApprovalRequests => Set<ApprovalRequest>();
+    public DbSet<ConversationNote> ConversationNotes => Set<ConversationNote>();
+    public DbSet<HandoffEvent> HandoffEvents => Set<HandoffEvent>();
+    public DbSet<AgentTenantSettings> AgentTenantSettings => Set<AgentTenantSettings>();
+    public DbSet<LeadQualification> LeadQualifications => Set<LeadQualification>();
+    public DbSet<FollowUp> FollowUps => Set<FollowUp>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -247,6 +258,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
         MessagingModel.Configure(builder);
         CampaignModel.Configure(builder);
         AiModel.Configure(builder);
+        AgentsModel.Configure(builder);
 
         // Every tenant-owned entity: mandatory FK to Tenant (restrict), indexed TenantId and the global tenant filter.
         foreach (var type in builder.Model.GetEntityTypes().Select(e => e.ClrType).Where(t => typeof(ITenantOwned).IsAssignableFrom(t)).ToList())

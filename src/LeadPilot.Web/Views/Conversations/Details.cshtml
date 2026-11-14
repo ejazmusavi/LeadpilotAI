@@ -23,6 +23,30 @@
         }
     </div>
 </div>
+@{ var aiBadge = s.AiMode == AiMode.Active ? "text-bg-success" : s.AiMode == AiMode.HumanControl ? "text-bg-primary" : "text-bg-secondary"; }
+<div class="card mb-3 @(s.AiMode == AiMode.HumanControl ? "border-primary" : "")"><div class="card-body">
+    <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+        <strong>Who answers</strong>
+        <span class="badge @aiBadge">@(s.AiMode == AiMode.Active ? "AI agent" : s.AiMode == AiMode.HumanControl ? "A person (human control)" : "Nobody automatic (AI paused)")</span>
+        @if (c.OptedOut) { <span class="badge text-bg-danger">Customer opted out</span> }
+        <span class="small text-muted">Assigned to: @(s.AssignedUserName ?? "nobody")</span>
+        <span class="small text-muted">Status: @s.Status</span>
+    </div>
+    @if (s.AiMode == AiMode.HumanControl && c.EscalationReason is not null) { <p class="small mb-2"><strong>Why a person is needed:</strong> @c.EscalationReason@(c.EscalatedAtUtc is { } et ? " (" + et.ToString("yyyy-MM-dd HH:mm") + " UTC)" : "")</p> }
+    @if (Model.CanReply)
+    {
+        <div class="d-flex flex-wrap gap-2 align-items-start">
+            @if (s.AiMode != AiMode.HumanControl)
+            {
+                <form asp-action="TakeOver" asp-route-id="@s.Id" method="post" class="d-flex gap-2"><label class="visually-hidden" for="to-reason">Reason</label><input id="to-reason" name="reason" class="form-control form-control-sm" placeholder="Reason (optional)" maxlength="200" /><button class="btn btn-primary btn-sm text-nowrap" type="submit" data-confirm="Take over this conversation? The AI stops answering it immediately." data-confirm-label="Take over">Take over</button></form>
+            }
+            @if (s.AiMode == AiMode.Active) { <form asp-action="PauseAi" asp-route-id="@s.Id" method="post"><button class="btn btn-outline-secondary btn-sm" type="submit" data-confirm="Pause the AI for this conversation?" data-confirm-label="Pause AI">Pause AI</button></form> }
+            @if (s.AiMode != AiMode.Active && !c.OptedOut) { <form asp-action="ResumeAi" asp-route-id="@s.Id" method="post"><button class="btn btn-outline-success btn-sm" type="submit" data-confirm="Give this conversation back to the AI agent? It will answer the customer's next message." data-confirm-label="Resume AI">Resume AI</button></form> }
+            @if (s.AssignedUserId != Model.CurrentUserId && Model.CurrentUserId is { } me) { <form asp-action="Assign" asp-route-id="@s.Id" method="post"><input type="hidden" name="userId" value="@me" /><button class="btn btn-outline-secondary btn-sm" type="submit">Assign to me</button></form> }
+            @if (s.AssignedUserId is not null) { <form asp-action="Assign" asp-route-id="@s.Id" method="post"><button class="btn btn-outline-secondary btn-sm" type="submit" data-confirm="Unassign this conversation?" data-confirm-label="Unassign">Unassign</button></form> }
+        </div>
+    }
+</div></div>
 <div class="card mb-3"><div class="card-body" id="thread" aria-live="polite">
     @if (Model.Messages.TotalPages > 1 && Model.Messages.Page < Model.Messages.TotalPages) { <div class="text-center mb-3"><a asp-action="Details" asp-route-id="@s.Id" asp-route-page="@(Model.Messages.Page + 1)" class="btn btn-sm btn-outline-secondary">Older messages</a></div> }
     @if (Model.Messages.Items.Count == 0) { <partial name="_EmptyState" model='("No messages yet", "Messages in this conversation appear here.")' /> }
@@ -67,3 +91,16 @@
         }
     </div></div>
 }
+
+<div class="row g-3 mt-1">
+    <div class="col-12 col-lg-6"><div class="card h-100"><div class="card-header">Internal notes</div><div class="card-body">
+        <p class="small text-muted">Only your team sees these. They are never sent to the customer.</p>
+        @if (Model.CanReply) { <form asp-action="AddNote" asp-route-id="@s.Id" method="post" class="mb-3"><label class="visually-hidden" for="note-body">Note</label><textarea id="note-body" name="body" class="form-control mb-2" rows="2" maxlength="2000" placeholder="Write a note for your team"></textarea><button class="btn btn-outline-primary btn-sm" type="submit">Add note</button></form> }
+        @if (Model.Notes.Count == 0) { <p class="text-muted mb-0">No notes yet.</p> }
+        @foreach (var n in Model.Notes) { <div class="border-bottom py-2"><div style="white-space:pre-wrap;overflow-wrap:anywhere">@n.Body</div><div class="small text-muted">@(n.Author == LeadPilot.Domain.Agents.ActorKind.Ai ? "AI agent" : n.AuthorName ?? "A person") · @n.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm") UTC</div></div> }
+    </div></div></div>
+    <div class="col-12 col-lg-6"><div class="card h-100"><div class="card-header">Handoff history</div><div class="card-body">
+        @if (Model.History.Count == 0) { <p class="text-muted mb-0">Nothing yet: takeovers, pauses, escalations and assignments are listed here.</p> }
+        @foreach (var h in Model.History) { <div class="border-bottom py-2"><strong>@h.Kind</strong> @if (h.FromState is not null) { <span class="small text-muted">@h.FromState → @h.ToState</span> }<div class="small">@(h.Reason)@(h.TargetName is null ? "" : " → " + h.TargetName)</div><div class="small text-muted">@(h.Actor == LeadPilot.Domain.Agents.ActorKind.Ai ? "AI agent" : h.Actor == LeadPilot.Domain.Agents.ActorKind.System ? "System" : h.ActorName ?? "A person") · @h.OccurredAtUtc.ToString("yyyy-MM-dd HH:mm") UTC</div></div> }
+    </div></div></div>
+</div>

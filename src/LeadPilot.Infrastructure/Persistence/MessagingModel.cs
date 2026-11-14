@@ -55,7 +55,7 @@ internal static class MessagingModel
             b.Property(x => x.ExternalChatId).HasMaxLength(100).IsRequired();
             b.Property(x => x.PeerPhoneE164).HasMaxLength(20); b.Property(x => x.PeerName).HasMaxLength(200);
             b.Property(x => x.Status).Str(20); b.Property(x => x.AiMode).Str(20);
-            b.Property(x => x.LastMessagePreview).HasMaxLength(200);
+            b.Property(x => x.LastMessagePreview).HasMaxLength(200); b.Property(x => x.EscalationReason).HasMaxLength(200);
             b.Property(x => x.CreatedBy).HasMaxLength(256); b.Property(x => x.UpdatedBy).HasMaxLength(256);
             b.HasIndex(x => new { x.TenantId, x.ChannelAccountId, x.ExternalChatId }).IsUnique();
             b.HasIndex(x => new { x.TenantId, x.LastMessageAtUtc });

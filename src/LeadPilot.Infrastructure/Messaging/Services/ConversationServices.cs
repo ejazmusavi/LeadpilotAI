@@ -7,6 +7,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using LeadPilot.Application.Crm;
 using LeadPilot.Domain.Crm;
+using LeadPilot.Application.Agents;
+using LeadPilot.Domain.Agents;
 
 namespace LeadPilot.Infrastructure.Messaging.Services;
 
@@ -65,6 +67,15 @@ public sealed class ConversationService(CrmContext crm, OutboundQueueService que
     {
         var r = await queue.QueueAsync(new QueueRequest(id, null, null, request.Text, request.TemplateId, request.IdempotencyKey, true), ct);
         if (r.IsFailure) return Result.Failure<MessageDto>(r.Error);
+        // a person answering means a person is in control: the AI must not talk over them
+        var conv = await crm.Db.Conversations.FirstOrDefaultAsync(c => c.Id == id && c.TenantId == crm.TenantId, ct);
+        if (conv is { AiMode: AiMode.Active })
+        {
+            conv.Escalate("a person replied", crm.Now);
+            Event(id, HandoffKind.AutoTakeover, "A person sent a reply", null, AiMode.Active.ToString(), AiMode.HumanControl.ToString());
+            await crm.Db.SaveChangesAsync(ct);
+            await WithdrawQueuedAiMessagesAsync(id, ct);
+        }
         var names = await crm.UserNamesAsync([r.Value.CreatedByUserId], ct);
         return Result.Success(MessageMapper.ToDto(r.Value, [], r.Value.CreatedByUserId is { } u ? names.GetValueOrDefault(u) : null));
     }
@@ -90,10 +101,55 @@ public sealed class ConversationService(CrmContext crm, OutboundQueueService que
     }
 
     public Task<Result<ConversationDto>> SetStatusAsync(Guid id, ConversationStatus status, CancellationToken ct = default) =>
-        Mutate(id, c => { c.SetStatus(status, crm.Now); crm.Record("Conversation.StatusChanged", "Conversation", id, $"Conversation set to {status}."); }, ct);
+        Mutate(id, c =>
+        {
+            var from = c.Status; c.SetStatus(status, crm.Now);
+            Event(c.Id, HandoffKind.StatusChanged, null, null, from.ToString(), status.ToString());
+            crm.Record("Conversation.StatusChanged", "Conversation", id, $"Conversation set to {status}.");
+        }, ct);
 
     public Task<Result<ConversationDto>> SetAiModeAsync(Guid id, AiMode mode, CancellationToken ct = default) =>
-        Mutate(id, c => { c.SetAiMode(mode, crm.Now); crm.Record("Conversation.AiModeChanged", "Conversation", id, $"AI mode set to {mode}."); }, ct);
+        mode switch { AiMode.Active => ResumeAiAsync(id, ct), AiMode.Paused => PauseAiAsync(id, null, ct), _ => TakeOverAsync(id, null, ct) };
+
+    public async Task<Result<ConversationDto>> TakeOverAsync(Guid id, string? reason, CancellationToken ct = default)
+    {
+        var r = await Mutate(id, c =>
+        {
+            var from = c.AiMode;
+            c.Escalate(string.IsNullOrWhiteSpace(reason) ? "taken over by staff" : reason.Trim(), crm.Now);
+            if (c.AssignedUserId is null && crm.UserId is { } me) { c.Assign(me, crm.Now); crm.Db.ConversationAssignments.Add(ConversationAssignment.Create(crm.TenantId, c.Id, me, me, crm.Now)); }
+            Event(c.Id, HandoffKind.Takeover, string.IsNullOrWhiteSpace(reason) ? null : reason.Trim(), crm.UserId is { } u ? u : null, from.ToString(), AiMode.HumanControl.ToString());
+            crm.Record("Conversation.TakenOver", "Conversation", id, "A person took over the conversation; the AI no longer answers it.");
+        }, ct);
+        if (r.IsSuccess) await WithdrawQueuedAiMessagesAsync(id, ct);
+        return r;
+    }
+
+    public async Task<Result<ConversationDto>> PauseAiAsync(Guid id, string? reason, CancellationToken ct = default)
+    {
+        var r = await Mutate(id, c =>
+        {
+            var from = c.AiMode; c.SetAiMode(AiMode.Paused, crm.Now);
+            Event(c.Id, HandoffKind.AiPaused, string.IsNullOrWhiteSpace(reason) ? null : reason.Trim(), null, from.ToString(), AiMode.Paused.ToString());
+            crm.Record("Conversation.AiModeChanged", "Conversation", id, "AI paused for this conversation.");
+        }, ct);
+        if (r.IsSuccess) await WithdrawQueuedAiMessagesAsync(id, ct);
+        return r;
+    }
+
+    public async Task<Result<ConversationDto>> ResumeAiAsync(Guid id, CancellationToken ct = default)
+    {
+        var tenantId = crm.TenantId;
+        var existing = await crm.Db.Conversations.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id && c.TenantId == tenantId, ct);
+        if (existing is null) return Result.Failure<ConversationDto>(Error.NotFound("Conversation"));
+        if (existing.OptedOutAtUtc is not null) return Result.Failure<ConversationDto>(Error.Conflict("This customer opted out of messages, so the AI cannot be switched on for this conversation."));
+        return await Mutate(id, c =>
+        {
+            var from = c.AiMode; c.SetAiMode(AiMode.Active, crm.Now);
+            Event(c.Id, HandoffKind.AiResumed, null, null, from.ToString(), AiMode.Active.ToString());
+            crm.Record("Conversation.AiModeChanged", "Conversation", id, "AI resumed for this conversation.");
+        }, ct);
+    }
 
     public async Task<Result<ConversationDto>> AssignAsync(Guid id, Guid? userId, CancellationToken ct = default)
     {
@@ -102,9 +158,59 @@ public sealed class ConversationService(CrmContext crm, OutboundQueueService que
         {
             c.Assign(userId, crm.Now);
             crm.Db.ConversationAssignments.Add(ConversationAssignment.Create(crm.TenantId, id, userId, crm.UserId, crm.Now));
+            crm.Db.HandoffEvents.Add(HandoffEvent.Create(crm.TenantId, id, userId is null ? HandoffKind.Unassigned : HandoffKind.Assigned, ActorKind.User, crm.UserId, userId, null, null, null, crm.Now));
             crm.Record("Conversation.Assigned", "Conversation", id, userId is null ? "Conversation unassigned." : "Conversation assigned.");
         }, ct);
     }
+
+    public async Task<Result<ConversationNoteDto>> AddNoteAsync(Guid id, string body, CancellationToken ct = default)
+    {
+        var tenantId = crm.TenantId;
+        if (!await crm.Db.Conversations.AnyAsync(c => c.Id == id && c.TenantId == tenantId, ct)) return Result.Failure<ConversationNoteDto>(Error.NotFound("Conversation"));
+        try
+        {
+            var note = ConversationNote.Create(tenantId, id, body, crm.UserId, ActorKind.User, crm.Now);
+            crm.Db.ConversationNotes.Add(note);
+            crm.Record("Conversation.NoteAdded", "Conversation", id, "Internal note added.");
+            await crm.Db.SaveChangesAsync(ct);
+            var names = await crm.UserNamesAsync([note.AuthorUserId], ct);
+            return Result.Success(new ConversationNoteDto(note.Id, note.Body, note.AuthorUserId is { } a ? names.GetValueOrDefault(a) : null, note.Author, note.CreatedAtUtc));
+        }
+        catch (LeadPilot.Domain.Common.DomainException ex) { return Result.Failure<ConversationNoteDto>(Error.Validation(ex.Message)); }
+    }
+
+    public async Task<Result<IReadOnlyList<ConversationNoteDto>>> NotesAsync(Guid id, CancellationToken ct = default)
+    {
+        var tenantId = crm.TenantId;
+        if (!await crm.Db.Conversations.AnyAsync(c => c.Id == id && c.TenantId == tenantId, ct)) return Result.Failure<IReadOnlyList<ConversationNoteDto>>(Error.NotFound("Conversation"));
+        var rows = await crm.Db.ConversationNotes.AsNoTracking().Where(n => n.TenantId == tenantId && n.ConversationId == id).OrderByDescending(n => n.CreatedAtUtc).Take(200).ToListAsync(ct);
+        var names = await crm.UserNamesAsync(rows.Select(r => r.AuthorUserId), ct);
+        return Result.Success<IReadOnlyList<ConversationNoteDto>>(rows.Select(n => new ConversationNoteDto(n.Id, n.Body, n.AuthorUserId is { } a ? names.GetValueOrDefault(a) : null, n.Author, n.CreatedAtUtc)).ToList());
+    }
+
+    public async Task<Result<IReadOnlyList<HandoffEventDto>>> HistoryAsync(Guid id, CancellationToken ct = default)
+    {
+        var tenantId = crm.TenantId;
+        if (!await crm.Db.Conversations.AnyAsync(c => c.Id == id && c.TenantId == tenantId, ct)) return Result.Failure<IReadOnlyList<HandoffEventDto>>(Error.NotFound("Conversation"));
+        var rows = await crm.Db.HandoffEvents.AsNoTracking().Where(n => n.TenantId == tenantId && n.ConversationId == id).OrderByDescending(n => n.OccurredAtUtc).Take(200).ToListAsync(ct);
+        var names = await crm.UserNamesAsync(rows.SelectMany(r => new[] { r.ActorUserId, r.TargetUserId }), ct);
+        return Result.Success<IReadOnlyList<HandoffEventDto>>(rows.Select(e => new HandoffEventDto(e.Id, e.Kind, e.Actor, e.ActorUserId is { } a ? names.GetValueOrDefault(a) : null, e.TargetUserId is { } t ? names.GetValueOrDefault(t) : null, e.Reason, e.FromState, e.ToState, e.OccurredAtUtc)).ToList());
+    }
+
+    private void Event(Guid conversationId, HandoffKind kind, string? reason, Guid? target, string? from, string? to) =>
+        crm.Db.HandoffEvents.Add(HandoffEvent.Create(crm.TenantId, conversationId, kind, ActorKind.User, crm.UserId, target, reason, from, to, crm.Now));
+
+    /// <summary>An AI reply that was queued but not yet picked up by the sender must not leave after a person took over or the AI was paused. (The send runner re-checks as well; a message already Sending finishes.)</summary>
+    internal static async Task WithdrawQueuedAiMessagesAsync(CrmContext crm, Guid conversationId, string code, string text, CancellationToken ct)
+    {
+        var tenantId = crm.TenantId; var now = crm.Now;
+        await crm.Db.Messages.Where(m => m.TenantId == tenantId && m.ConversationId == conversationId && m.IsAiGenerated && m.Status == MessageStatus.Queued)
+            .ExecuteUpdateAsync(u => u.SetProperty(m => m.Status, MessageStatus.Failed).SetProperty(m => m.FailureCode, code).SetProperty(m => m.FailureMessage, text).SetProperty(m => m.FailedAtUtc, now)
+                .SetProperty(m => m.NextAttemptAtUtc, (DateTime?)null).SetProperty(m => m.Version, m => m.Version + 1), ct);
+    }
+
+    private Task WithdrawQueuedAiMessagesAsync(Guid conversationId, CancellationToken ct) =>
+        WithdrawQueuedAiMessagesAsync(crm, conversationId, "ai_withdrawn", "A person took control (or the AI was paused) before this AI reply was sent.", ct);
 
     // ------------------------------------------------------------------
 
@@ -128,7 +234,7 @@ public sealed class ConversationService(CrmContext crm, OutboundQueueService que
     {
         var summary = (await MapAsync([conv], ct))[0];
         var state = await queue.ReplyStateAsync(conv, ct);
-        return new ConversationDto(summary, conv.LastInboundAtUtc, conv.LastOutboundAtUtc, state.CanReply, state.Reason, state.Purpose, (int)state.Window.TotalHours, state.InsideWindow);
+        return new ConversationDto(summary, conv.LastInboundAtUtc, conv.LastOutboundAtUtc, state.CanReply, state.Reason, state.Purpose, (int)state.Window.TotalHours, state.InsideWindow, conv.EscalationReason, conv.EscalatedAtUtc, conv.OptedOutAtUtc is not null);
     }
 
     private async Task<List<ConversationListItemDto>> MapAsync(IReadOnlyList<Conversation> rows, CancellationToken ct)

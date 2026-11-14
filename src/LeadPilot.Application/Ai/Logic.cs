@@ -156,10 +156,10 @@ public static class SensitivityRules
 {
     private static readonly (string Reason, Regex Pattern)[] Rules =
     [
-        ("payment_dispute", new Regex(@"\b(refund|chargeback|charged (me|twice|again)|double[- ]charged|card number|cvv|iban|i (have )?(paid|transferred|sent (the )?(money|payment))|(payment|transfer) (failed|not (received|going|working)|was not)|invoice (is )?(wrong|incorrect))\b", RegexOptions.IgnoreCase | RegexOptions.Compiled)),
-        ("legal_or_privacy", new Regex(@"\b(lawyer|attorney|lawsuit|sue (you|us)|legal action|court|gdpr|data protection|delete my (data|information|account)|privacy (request|complaint)|subpoena)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled)),
-        ("complaint", new Regex(@"\b(complain(t)?|unacceptable|scam|fraud|rip[- ]?off|terrible service|worst|furious|report you|cancel (my|the) (contract|subscription|agreement))\b", RegexOptions.IgnoreCase | RegexOptions.Compiled)),
-        ("human_requested", new Regex(@"\b(speak|talk|chat|connect me|transfer me)\b[^.\n]{0,25}\b(to|with)\b[^.\n]{0,20}\b(human|person|agent|manager|representative|someone|staff|team|owner)\b|\b(real|live) (person|human|agent)\b|\bcall me\b", RegexOptions.IgnoreCase | RegexOptions.Compiled)),
+        ("payment_dispute", new Regex(@"\b(refund|chargeback|charged (me|twice|again)|double[- ]charged|card number|cvv|iban|i (have )?(paid|transferred|sent (the )?(money|payment))|(payment|transfer) (failed|not (received|going|working)|was not)|invoice (is )?(wrong|incorrect))\b|\b(paise|paisay|raqam) wapas\b|\brefund (chahiye|karo|kar do|kardo)\b|(پیسے|رقم) واپس|ریفنڈ|\b(maine|main ne|humne) (payment|paise|raqam) (kar di|bhej di|de di)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled)),
+        ("legal_or_privacy", new Regex(@"\b(lawyer|attorney|lawsuit|sue (you|us)|legal action|court|gdpr|data protection|delete my (data|information|account)|privacy (request|complaint)|subpoena)\b|\b(wakeel|wakil|adalat|case karunga|case kar dunga)\b|وکیل|عدالت", RegexOptions.IgnoreCase | RegexOptions.Compiled)),
+        ("complaint", new Regex(@"\b(complain(t)?|unacceptable|scam|fraud|rip[- ]?off|terrible service|worst|furious|report you|cancel (my|the) (contract|subscription|agreement))\b|\b(shikayat|shikaayat|dhoka|dhokha|bakwas service)\b|شکایت|دھوکہ|دھوکا", RegexOptions.IgnoreCase | RegexOptions.Compiled)),
+        ("human_requested", new Regex(@"\b(speak|talk|chat|connect me|transfer me)\b[^.\n]{0,25}\b(to|with)\b[^.\n]{0,20}\b(human|person|agent|manager|representative|someone|staff|team|owner)\b|\b(real|live) (person|human|agent)\b|\bcall me\b|\b(insan|insaan|kisi (insan|bande|shakhs)|manager|owner|staff) se (baat|bat) (karni|karna|kara|karwa)|\bmujhe (call|phone) (karo|karen|kijiye|kar do)\b|(کسی|انسان|منیجر|مالک) سے بات|مجھے (کال|فون) کریں", RegexOptions.IgnoreCase | RegexOptions.Compiled)),
         ("credentials", new Regex(@"\b(password|passcode|otp|one[- ]time (code|password)|verification code|login (details|credentials)|api[- ]?key|secret key)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled)),
         ("safety", new Regex(@"\b(suicide|kill (myself|you|someone)|self[- ]harm|bomb|threat(en)?)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled)),
     ];
@@ -180,9 +180,9 @@ public static class SensitivityRules
 public static class Intents
 {
     public const string Greeting = "greeting", Thanks = "thanks", Product = "product_question", Pricing = "pricing", Features = "features", Demo = "demo_request", Trial = "trial_request",
-        Support = "support", Complaint = "complaint", OptOut = "opt_out", Payment = "payment", Other = "other", Unknown = "unknown";
+        Support = "support", Complaint = "complaint", OptOut = "opt_out", Payment = "payment", OffTopic = "off_topic", Other = "other", Unknown = "unknown";
 
-    public static readonly IReadOnlyList<string> All = [Greeting, Thanks, Product, Pricing, Features, Demo, Trial, Support, Complaint, OptOut, Payment, Other];
+    public static readonly IReadOnlyList<string> All = [Greeting, Thanks, Product, Pricing, Features, Demo, Trial, Support, Complaint, OptOut, Payment, OffTopic, Other];
 
     public static string Normalise(string? raw)
     {
@@ -191,7 +191,7 @@ public static class Intents
     }
 
     /// <summary>Intents that need grounded knowledge to be answered. Greetings and thanks do not; everything else must be backed by retrieved passages.</summary>
-    public static bool RequiresKnowledge(string intent) => intent is not (Greeting or Thanks or OptOut);
+    public static bool RequiresKnowledge(string intent) => intent is not (Greeting or Thanks or OptOut or OffTopic);
 
     /// <summary>Always handled by a person, whatever the model says.</summary>
     public static bool AlwaysHuman(string intent) => intent is Complaint or Payment or OptOut;
@@ -200,6 +200,10 @@ public static class Intents
 public sealed record ClassifierOutput(string Intent, bool NeedsHuman, string StandaloneQuery, string? Language, decimal Confidence, IReadOnlyDictionary<string, string> Extracted);
 
 public sealed record GeneratorAction(string Name, IReadOnlyDictionary<string, string> Arguments);
+
+public sealed record AgentToolCallRequest(string Name, string ArgumentsJson);
+
+public sealed record AgentOutput(string Answer, IReadOnlyList<string> Citations, decimal Confidence, bool NeedsHuman, string? Reason, string? NextAction, IReadOnlyList<AgentToolCallRequest> ToolCalls);
 
 public sealed record GeneratorOutput(string Answer, IReadOnlyList<string> Citations, decimal Confidence, bool NeedsHuman, string? Reason, string? NextAction, IReadOnlyList<GeneratorAction> Actions);
 
@@ -240,6 +244,28 @@ public static class ModelOutput
         return new GeneratorOutput(answer ?? string.Empty, citations.Distinct().ToList(), Num(o, "confidence"), Bool(o, "needs_human"), Str(o, "reason", 200), Str(o, "next_action", 300), actions);
     }
 
+    /// <summary>The sales-agent protocol: like <see cref="ParseGenerator"/> but the model may ask for tools ("tool_calls": [{"name", "arguments": {…}}]) and may leave the answer empty while it does.</summary>
+    public static AgentOutput? ParseAgent(string? text)
+    {
+        if (ExtractObject(text) is not { ValueKind: JsonValueKind.Object } o) return null;
+        var calls = new List<AgentToolCallRequest>();
+        foreach (var key in new[] { "tool_calls", "actions" })
+            if (o.TryGetProperty(key, out var a) && a.ValueKind == JsonValueKind.Array)
+                foreach (var item in a.EnumerateArray().Take(6))
+                    if (item.ValueKind == JsonValueKind.Object && Str(item, "name", 60) is { } name)
+                    {
+                        var args = item.TryGetProperty("arguments", out var av) && av.ValueKind == JsonValueKind.Object ? av.GetRawText() : "{}";
+                        if (args.Length > 4000) args = "{\"__too_large\":true}";
+                        calls.Add(new AgentToolCallRequest(name, args));
+                    }
+        var answer = Str(o, "answer", 4000);
+        if (answer is null && calls.Count == 0 && !Bool(o, "needs_human")) return null;
+        var citations = new List<string>();
+        if (o.TryGetProperty("citations", out var c) && c.ValueKind == JsonValueKind.Array)
+            foreach (var item in c.EnumerateArray().Take(12)) if (item.ValueKind == JsonValueKind.String && item.GetString() is { Length: > 0 and <= 20 } r) citations.Add(r.Trim().Trim('[', ']').ToUpperInvariant());
+        return new AgentOutput(answer ?? string.Empty, citations.Distinct().ToList(), Num(o, "confidence"), Bool(o, "needs_human"), Str(o, "reason", 200), Str(o, "next_action", 300), calls);
+    }
+
     private static string? Str(JsonElement o, string name, int max)
     {
         if (!o.TryGetProperty(name, out var v) || v.ValueKind != JsonValueKind.String) return null;
@@ -274,7 +300,7 @@ public static class ModelOutput
 
 public sealed record ValidationInput(
     string Answer, IReadOnlyList<string> CitedRefs, IReadOnlyDictionary<string, string> ContextByRef, IReadOnlyList<string> CustomerTexts,
-    IReadOnlyList<string> ProtectedTexts, string? Canary, bool RequireCitation, int MaxChars = 1500);
+    IReadOnlyList<string> ProtectedTexts, string? Canary, bool RequireCitation, int MaxChars = 1500, IReadOnlySet<string>? VerifiedCompletions = null);
 
 /// <summary>
 /// Deterministic check of a generated reply against what the AI is allowed to say. A single issue means the reply is NOT used as written. It cannot prove a reply is true, but it does enforce: grounded in
@@ -327,8 +353,12 @@ public static partial class ResponseValidator
                 issues.Add(new(UnsupportedDiscount, $"Mentions '{term}' but the cited knowledge does not."));
 
         // completion claims: nothing in this phase can verify that a demo / payment / account action happened
-        if (CompletionPassive().IsMatch(answer) || CompletionActive().IsMatch(answer) || PaymentClaim().IsMatch(answer))
-            issues.Add(new(CompletionClaim, "States that a booking, payment or account action has been completed; this cannot be verified."));
+        // (a claim is allowed only when a tool of THIS run really did it: "demo" after BookDemo succeeded, "trial" after CreateTrialAccount succeeded; a payment is never claimed)
+        var verified = input.VerifiedCompletions ?? new HashSet<string>();
+        var unverifiedClaim = PaymentClaim().IsMatch(answer)
+            || CompletionPassive().Matches(answer).Any(m => !IsVerifiedClaim(m.Value, verified))
+            || CompletionActive().Matches(answer).Any(m => !IsVerifiedClaim(m.Value, verified));
+        if (unverifiedClaim) issues.Add(new(CompletionClaim, "States that a booking, payment or account action has been completed; this cannot be verified."));
 
         // leaks
         if (!string.IsNullOrEmpty(input.Canary) && answer.Contains(input.Canary, StringComparison.OrdinalIgnoreCase)) issues.Add(new(PromptLeak, "Contains the internal reference code."));
@@ -347,6 +377,12 @@ public static partial class ResponseValidator
 
         return issues.GroupBy(i => (i.Code, i.Detail)).Select(g => g.First()).ToList();
     }
+
+    private static readonly Regex DemoWords = new(@"\b(demo|meeting|call|appointment|booking|booked|schedule[d]?)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex TrialWords = new(@"\b(trial|account)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private static bool IsVerifiedClaim(string matched, IReadOnlySet<string> verified) =>
+        (verified.Contains("demo") && DemoWords.IsMatch(matched)) || (verified.Contains("trial") && TrialWords.IsMatch(matched));
 
     private static HashSet<decimal> Numbers(string text)
     {

@@ -119,10 +119,11 @@ public sealed class RecordingAiScheduler : IAiJobScheduler
 public sealed class AiTestControls
 {
     public ScriptedLlm Llm { get; } = new();
+    public Phase10Doubles Phase10 { get; } = new();
     public RecordingAiScheduler Scheduler { get; } = new();
     public int EmbeddingCalls;
     public Func<Exception?>? EmbedFault;
-    public void Reset() { Llm.Reset(); EmbeddingCalls = 0; EmbedFault = null; Scheduler.ThrowOnEnqueue = false; }
+    public void Reset() { Llm.Reset(); Phase10.Reset(); EmbeddingCalls = 0; EmbedFault = null; Scheduler.ThrowOnEnqueue = false; }
 }
 
 /// <summary>TEST-ONLY website: scripted pages for the website knowledge source, with a DNS resolver that maps its host to a public address.</summary>
@@ -218,6 +219,9 @@ public static class AiKit
         s.RemoveAll<IRawAIProvider>(); s.AddScoped<IRawAIProvider>(_ => c.Llm);
         s.RemoveAll<IRawEmbeddingProvider>(); s.AddScoped<IRawEmbeddingProvider, FakeEmbeddingProvider>();
         s.RemoveAll<IAiJobScheduler>(); s.AddSingleton<IAiJobScheduler>(c.Scheduler);
+        s.RemoveAll<LeadPilot.Application.Agents.IDemoScheduler>(); s.AddSingleton<LeadPilot.Application.Agents.IDemoScheduler>(c.Phase10);
+        s.RemoveAll<LeadPilot.Application.Agents.ITrialProvisioner>(); s.AddSingleton<LeadPilot.Application.Agents.ITrialProvisioner>(c.Phase10);
+        s.RemoveAll<LeadPilot.Application.Agents.IPaymentRequestGateway>(); s.AddSingleton<LeadPilot.Application.Agents.IPaymentRequestGateway>(c.Phase10);
     }
 }
 

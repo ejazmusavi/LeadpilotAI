@@ -27,6 +27,9 @@ internal sealed record QueueRequest(Guid? ConversationId, Guid? ContactId, Guid?
     public bool TextIsRendered { get; init; }
     /// <summary>Test send to an allow-listed internal number that is not a contact (always a Service-purpose message labelled as a test; suppression and opt-out still apply).</summary>
     public string? TestPhoneE164 { get; init; }
+    /// <summary>The message is written by the AI agent (set only by <see cref="AiReplySender"/>): it carries the interaction and the AI epoch the generation started with.</summary>
+    public Guid? AiInteractionId { get; init; }
+    public int AiEpoch { get; init; }
 }
 
 /// <summary>
@@ -109,6 +112,7 @@ public sealed class OutboundQueueService(CrmContext crm, IContactEligibilityServ
 
         var message = Message.Outbound(tenantId, conv.Id, account.Id, contact?.Id, purpose, text, key, request.CorrelationId ?? Guid.NewGuid().ToString("N"), q.TemplateId, crm.UserId, now);
         if (q.CampaignId is { } campaignId) message.SetCampaign(campaignId, q.CampaignRecipientId);
+        if (q.AiInteractionId is { } aiInteraction) message.MarkAiGenerated(aiInteraction, q.AiEpoch);
         db.Messages.Add(message);
         db.MessageStatusEvents.Add(MessageStatusEvent.Create(tenantId, message.Id, MessageStatus.Queued, "queue", null, true, now, now));
         conv.RegisterOutbound(now, text, now);
@@ -217,6 +221,9 @@ public sealed class OutboundSendRunner(
         var (account, conn) = loaded.Value;
         var conv = await db.Conversations.AsNoTracking().FirstAsync(c => c.Id == message.ConversationId && c.TenantId == tenantId, ct);
 
+        // an AI reply may only leave while the AI still has the conversation: a takeover, a pause or an opt-out after it was written cancels it
+        if (message.IsAiGenerated && (conv.AiMode != AiMode.Active || conv.AiEpoch != message.AiEpoch)) { await FailAsync(messageId, "ai_not_allowed", "A person took control, or the AI was paused, before this AI reply was sent.", ct); return; }
+
         // the state of the world may have changed since the message was queued
         if (account.IsPaused) { await FailAsync(messageId, "account_paused", "The account was paused before this message was sent.", ct); return; }
         if (account.ConnectionStatus != ConnectionStatus.Working) { await FailAsync(messageId, "account_not_connected", "The WhatsApp session is not connected.", ct); return; }
@@ -243,6 +250,13 @@ public sealed class OutboundSendRunner(
             jobs.EnqueueSend(tenantId, messageId, at - now);
             logger.LogInformation("Message {MessageId} delayed until {At:u} ({Block})", messageId, at, rate.Block);
             return;
+        }
+
+        if (message.IsAiGenerated)
+        {
+            // last look immediately before the claim (the pacing check above can take a while): the AI epoch is re-read from the database
+            var fresh = await db.Conversations.AsNoTracking().Where(c => c.Id == message.ConversationId && c.TenantId == tenantId).Select(c => new { c.AiMode, c.AiEpoch, c.OptedOutAtUtc }).FirstAsync(ct);
+            if (fresh.AiMode != AiMode.Active || fresh.AiEpoch != message.AiEpoch || fresh.OptedOutAtUtc is not null) { await FailAsync(messageId, "ai_not_allowed", "A person took control, or the AI was paused, before this AI reply was sent.", ct); return; }
         }
 
         // atomic claim: exactly one worker moves Queued → Sending; a retried or concurrent job gets 0 rows and stops.

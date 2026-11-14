@@ -74,13 +74,17 @@
             <a class="nav-link @(Nav("/CampaignSettings") ? "active" : "")" asp-controller="CampaignSettings" asp-action="Index">Campaign settings</a>
         </nav>
     }
-    @if (perms.Has(PermissionCodes.KnowledgeView) || perms.Has(PermissionCodes.AiTest) || perms.Has(PermissionCodes.AiView) || perms.Has(PermissionCodes.AiSettings))
+    @if (perms.Has(PermissionCodes.KnowledgeView) || perms.Has(PermissionCodes.AiTest) || perms.Has(PermissionCodes.AiView) || perms.Has(PermissionCodes.AiSettings) || perms.Has(PermissionCodes.AgentsView) || perms.Has(PermissionCodes.CatalogView) || perms.Has(PermissionCodes.ApprovalsView))
     {
         <div class="nav-section">AI</div>
         <nav class="nav flex-column px-2">
             @if (perms.Has(PermissionCodes.KnowledgeView)) { <a class="nav-link @(Nav("/Knowledge") ? "active" : "")" asp-controller="Knowledge" asp-action="Index">Knowledge base</a> }
             @if (perms.Has(PermissionCodes.AiTest)) { <a class="nav-link @(Nav("/AiTester") ? "active" : "")" asp-controller="AiTester" asp-action="Index">Retrieval tester</a> }
             @if (perms.Has(PermissionCodes.AiView)) { <a class="nav-link @(Nav("/Ai/Activity") ? "active" : "")" asp-controller="Ai" asp-action="Activity">AI activity</a><a class="nav-link @(Nav("/Ai/Usage") ? "active" : "")" asp-controller="Ai" asp-action="Usage">AI usage</a> }
+            @if (perms.Has(PermissionCodes.AgentsView)) { <a class="nav-link @(Nav("/Agents") ? "active" : "")" asp-controller="Agents" asp-action="Index">Sales agent</a> }
+            @if (perms.Has(PermissionCodes.CatalogView)) { <a class="nav-link @(Nav("/Catalog") ? "active" : "")" asp-controller="Catalog" asp-action="Index">Product catalog</a> }
+            @if (perms.Has(PermissionCodes.ApprovalsView)) { <a class="nav-link @(Nav("/Approvals") ? "active" : "")" asp-controller="Approvals" asp-action="Index">Approvals</a> }
+            @if (perms.Has(PermissionCodes.LeadsView)) { <a class="nav-link @(Nav("/FollowUps") ? "active" : "")" asp-controller="FollowUps" asp-action="Index">Follow-ups</a> }
             @if (perms.Has(PermissionCodes.AiSettings)) { <a class="nav-link @(Nav("/AiSettings") ? "active" : "")" asp-controller="AiSettings" asp-action="Index">AI settings</a> }
         </nav>
     }

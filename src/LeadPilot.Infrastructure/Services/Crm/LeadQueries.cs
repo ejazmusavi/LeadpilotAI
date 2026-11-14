@@ -32,6 +32,7 @@ internal static class LeadQueries
         if (q.SourceType is { } src) query = query.Where(l => l.PrimarySourceType == src);
         if (q.CreatedFromUtc is { } from) query = query.Where(l => l.CreatedAtUtc >= from);
         if (q.CreatedToUtc is { } to) query = query.Where(l => l.CreatedAtUtc < to);
+        foreach (var cf in q.CustomFilters.Take(LeadPilot.Application.Config.CustomFieldFilters.Max)) query = ApplyCustom(db, tenantId, query, cf);
         if (!string.IsNullOrWhiteSpace(q.Search))
         {
             var s = q.Search.Trim();
@@ -43,6 +44,33 @@ internal static class LeadQueries
                     && ((c.Name != null && c.Name.Contains(s)) || (c.Email != null && c.Email.Contains(s)) || (phoneTerm != null && c.PhoneE164 != null && c.PhoneE164.Contains(phoneTerm)))));
         }
         return query;
+    }
+
+    /// <summary>A custom-field filter: matches only fields that are active and marked filterable; an unknown key matches nothing. All reads are tenant-scoped.</summary>
+    private static IQueryable<Lead> ApplyCustom(AppDbContext db, Guid tenantId, IQueryable<Lead> query, LeadPilot.Application.Config.CustomFieldFilter cf)
+    {
+        var key = cf.Key.Trim().ToLowerInvariant(); var raw = cf.Value.Trim();
+        const Domain.Config.CustomEntityType lead = Domain.Config.CustomEntityType.Lead;
+        var s = raw.ToLowerInvariant(); var pipe = "|" + s + "|";
+        switch (cf.Op)
+        {
+            case "eq":
+                return query.Where(l => db.CustomFieldValues.Any(v => v.TenantId == tenantId && v.EntityType == lead && v.EntityId == l.Id && (v.SearchText == s || v.SearchText.Contains(pipe))
+                    && db.CustomFieldDefinitions.Any(d => d.Id == v.FieldId && d.TenantId == tenantId && d.Key == key && d.IsFilterable && d.IsActive)));
+            case "contains":
+                return query.Where(l => db.CustomFieldValues.Any(v => v.TenantId == tenantId && v.EntityType == lead && v.EntityId == l.Id && v.SearchText.Contains(s)
+                    && db.CustomFieldDefinitions.Any(d => d.Id == v.FieldId && d.TenantId == tenantId && d.Key == key && d.IsFilterable && d.IsActive)));
+            case "min" or "max":
+                var isMin = cf.Op == "min";
+                if (decimal.TryParse(raw, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var n))
+                    return query.Where(l => db.CustomFieldValues.Any(v => v.TenantId == tenantId && v.EntityType == lead && v.EntityId == l.Id && v.NumberValue != null && (isMin ? v.NumberValue >= n : v.NumberValue <= n)
+                        && db.CustomFieldDefinitions.Any(d => d.Id == v.FieldId && d.TenantId == tenantId && d.Key == key && d.IsFilterable && d.IsActive)));
+                if (DateTime.TryParseExact(raw, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var dt))
+                    return query.Where(l => db.CustomFieldValues.Any(v => v.TenantId == tenantId && v.EntityType == lead && v.EntityId == l.Id && v.DateValue != null && (isMin ? v.DateValue >= dt : v.DateValue <= dt)
+                        && db.CustomFieldDefinitions.Any(d => d.Id == v.FieldId && d.TenantId == tenantId && d.Key == key && d.IsFilterable && d.IsActive)));
+                return query.Where(_ => false);
+            default: return query.Where(_ => false);
+        }
     }
 
     public static IQueryable<Lead> Sort(AppDbContext db, IQueryable<Lead> query, LeadQuery q)

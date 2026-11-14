@@ -18,6 +18,31 @@ public sealed record CustomFieldValueDto(CustomFieldDto Field, string? Raw, stri
 
 public sealed record CustomFieldFilter(string Key, string Op, string Value);
 
+public static class CustomFieldFilters
+{
+    public const int Max = 5;
+
+    /// <summary><c>cf.key=v</c> (equals; for multi-select: includes), <c>cf.key.contains=v</c>, <c>cf.key.min=v</c>, <c>cf.key.max=v</c>. Anything else is ignored.</summary>
+    public static List<CustomFieldFilter> FromQuery(IEnumerable<KeyValuePair<string, string?>> query)
+    {
+        var list = new List<CustomFieldFilter>();
+        foreach (var (name, value) in query)
+        {
+            if (list.Count >= Max) break;
+            if (!name.StartsWith("cf.", StringComparison.Ordinal) || string.IsNullOrWhiteSpace(value) || value.Length > 100) continue;
+            var parts = name[3..].Split('.');
+            if (parts.Length is < 1 or > 2 || !LeadPilot.Domain.Config.CustomFieldDefinition.KeyRule.IsMatch(parts[0])) continue;
+            var op = parts.Length == 2 ? parts[1] : "eq";
+            if (op is not ("eq" or "contains" or "min" or "max")) continue;
+            list.Add(new CustomFieldFilter(parts[0], op, value.Trim()));
+        }
+        return list;
+    }
+
+    public static IEnumerable<KeyValuePair<string, string?>> ToQuery(IEnumerable<CustomFieldFilter> filters) =>
+        filters.Select(f => new KeyValuePair<string, string?>(f.Op == "eq" ? "cf." + f.Key : $"cf.{f.Key}.{f.Op}", f.Value));
+}
+
 public interface ICustomFieldService
 {
     Task<IReadOnlyList<CustomFieldDto>> ListAsync(CustomEntityType? entityType, bool includeInactive, CancellationToken ct = default);

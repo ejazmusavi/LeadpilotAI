@@ -99,6 +99,8 @@ public interface ILeadCatalogService
     Task<IReadOnlyList<CategoryDto>> ListCategoriesAsync(CancellationToken ct = default);
     Task<Result<CategoryDto>> CreateCategoryAsync(SaveCategoryRequest request, CancellationToken ct = default);
     Task<Result<CategoryDto>> RenameCategoryAsync(Guid id, SaveCategoryRequest request, CancellationToken ct = default);
+    /// <summary>Moves a category under another one (or to the top level with null). Cycles and trees deeper than four levels are refused.</summary>
+    Task<Result<CategoryDto>> MoveCategoryAsync(Guid id, Guid? parentId, CancellationToken ct = default);
     Task<Result<CategoryDto>> SetCategoryActiveAsync(Guid id, bool active, CancellationToken ct = default);
     Task<IReadOnlyList<StatusDto>> ListStatusesAsync(CancellationToken ct = default);
     Task<Result<StatusDto>> CreateStatusAsync(SaveStatusRequest request, CancellationToken ct = default);

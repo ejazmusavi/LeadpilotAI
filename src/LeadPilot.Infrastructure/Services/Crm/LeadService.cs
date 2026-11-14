@@ -322,7 +322,7 @@ public sealed class LeadService(IEntitlementService entitlements, CrmContext crm
     {
         await crm.EnsureDefaultsAsync(ct);
         var db = crm.Db; var tenantId = crm.TenantId;
-        var categories = await db.LeadCategories.AsNoTracking().Where(c => c.TenantId == tenantId && c.IsActive).OrderBy(c => c.Name).Select(c => new LookupItem(c.Id, c.Name)).ToListAsync(ct);
+        var categories = CategoryTree.Flatten(await db.LeadCategories.AsNoTracking().Where(c => c.TenantId == tenantId).ToListAsync(ct), new Dictionary<Guid, int>()).Where(c => c.IsActive).Select(c => new LookupItem(c.Id, c.Path ?? c.Name)).ToList();
         var statuses = await db.LeadStatuses.AsNoTracking().Where(s => s.TenantId == tenantId && s.IsActive).OrderBy(s => s.SortOrder).Select(s => new LookupItem(s.Id, s.Name)).ToListAsync(ct);
         var tags = await db.LeadTags.AsNoTracking().Where(t => t.TenantId == tenantId).OrderBy(t => t.Name).Select(t => new LookupItem(t.Id, t.Name)).ToListAsync(ct);
         var pipelineList = await pipelines.ListAsync(ct);

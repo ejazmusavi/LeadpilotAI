@@ -277,21 +277,26 @@ public sealed class LeadCatalogService(CrmContext crm, ILogger<LeadCatalogServic
     public async Task<IReadOnlyList<CategoryDto>> ListCategoriesAsync(CancellationToken ct = default)
     {
         var tenantId = crm.TenantId;
-        var cats = await crm.Db.LeadCategories.AsNoTracking().Where(c => c.TenantId == tenantId).OrderByDescending(c => c.IsActive).ThenBy(c => c.Name).ToListAsync(ct);
+        var cats = await crm.Db.LeadCategories.AsNoTracking().Where(c => c.TenantId == tenantId).ToListAsync(ct);
         var counts = await crm.Db.Leads.AsNoTracking().Where(l => l.TenantId == tenantId && l.CategoryId != null).GroupBy(l => l.CategoryId!.Value).Select(g => new { g.Key, N = g.Count() }).ToDictionaryAsync(x => x.Key, x => x.N, ct);
-        return cats.Select(c => new CategoryDto(c.Id, c.Name, c.IsActive, counts.GetValueOrDefault(c.Id))).ToList();
+        return CategoryTree.Flatten(cats, counts);
     }
 
     public Task<Result<CategoryDto>> CreateCategoryAsync(SaveCategoryRequest r, CancellationToken ct = default) =>
         CrmFlow.GuardAsync(async () =>
         {
             var tenantId = crm.TenantId;
-            var c = LeadCategory.Create(tenantId, r.Name, crm.Now);
+            var c = LeadCategory.Create(tenantId, r.Name, crm.Now, r.ParentId);
             if (await crm.Db.LeadCategories.AnyAsync(x => x.TenantId == tenantId && x.NormalizedName == c.NormalizedName, ct)) return Result.Failure<CategoryDto>(Error.Conflict($"A category named '{c.Name}' already exists."));
+            if (r.ParentId is not null)
+            {
+                var all = await crm.Db.LeadCategories.AsNoTracking().Where(x => x.TenantId == tenantId).ToListAsync(ct);
+                if (CategoryTree.Check(all, c.Id, r.ParentId) is { } problem) return Result.Failure<CategoryDto>(Error.Validation(problem));
+            }
             crm.Db.LeadCategories.Add(c);
             crm.Record("Category.Created", "LeadCategory", c.Id, $"Category '{c.Name}' created.");
             await crm.Db.SaveChangesAsync(ct);
-            return Result.Success(new CategoryDto(c.Id, c.Name, true, 0));
+            return Result.Success(new CategoryDto(c.Id, c.Name, true, 0, c.ParentId));
         }, logger);
 
     public Task<Result<CategoryDto>> RenameCategoryAsync(Guid id, SaveCategoryRequest r, CancellationToken ct = default) =>
@@ -304,7 +309,21 @@ public sealed class LeadCatalogService(CrmContext crm, ILogger<LeadCatalogServic
             if (await crm.Db.LeadCategories.AnyAsync(x => x.TenantId == tenantId && x.NormalizedName == c.NormalizedName && x.Id != id, ct)) return Result.Failure<CategoryDto>(Error.Conflict($"A category named '{c.Name}' already exists."));
             crm.Record("Category.Renamed", "LeadCategory", id, $"Category '{old}' renamed to '{c.Name}'.");
             await crm.Db.SaveChangesAsync(ct);
-            return Result.Success(new CategoryDto(c.Id, c.Name, c.IsActive, await crm.Db.Leads.CountAsync(l => l.TenantId == tenantId && l.CategoryId == id, ct)));
+            return Result.Success(new CategoryDto(c.Id, c.Name, c.IsActive, await crm.Db.Leads.CountAsync(l => l.TenantId == tenantId && l.CategoryId == id, ct), c.ParentId));
+        }, logger);
+
+    public Task<Result<CategoryDto>> MoveCategoryAsync(Guid id, Guid? parentId, CancellationToken ct = default) =>
+        CrmFlow.GuardAsync(async () =>
+        {
+            var tenantId = crm.TenantId;
+            var all = await crm.Db.LeadCategories.Where(x => x.TenantId == tenantId).ToListAsync(ct);
+            var c = all.FirstOrDefault(x => x.Id == id);
+            if (c is null) return Result.Failure<CategoryDto>(Error.NotFound("Category"));
+            if (CategoryTree.Check(all, id, parentId) is { } problem) return Result.Failure<CategoryDto>(Error.Validation(problem));
+            c.SetParent(parentId, crm.Now);
+            crm.Record("Category.Moved", "LeadCategory", id, parentId is null ? $"Category '{c.Name}' moved to the top level." : $"Category '{c.Name}' moved under '{all.First(x => x.Id == parentId).Name}'.");
+            await crm.Db.SaveChangesAsync(ct);
+            return Result.Success(new CategoryDto(c.Id, c.Name, c.IsActive, await crm.Db.Leads.CountAsync(l => l.TenantId == tenantId && l.CategoryId == id, ct), c.ParentId));
         }, logger);
 
     public Task<Result<CategoryDto>> SetCategoryActiveAsync(Guid id, bool active, CancellationToken ct = default) =>
@@ -316,7 +335,7 @@ public sealed class LeadCatalogService(CrmContext crm, ILogger<LeadCatalogServic
             c.SetActive(active, crm.Now);
             crm.Record(active ? "Category.Activated" : "Category.Deactivated", "LeadCategory", id, $"Category '{c.Name}' {(active ? "activated" : "deactivated")}.");
             await crm.Db.SaveChangesAsync(ct);
-            return Result.Success(new CategoryDto(c.Id, c.Name, c.IsActive, await crm.Db.Leads.CountAsync(l => l.TenantId == tenantId && l.CategoryId == id, ct)));
+            return Result.Success(new CategoryDto(c.Id, c.Name, c.IsActive, await crm.Db.Leads.CountAsync(l => l.TenantId == tenantId && l.CategoryId == id, ct), c.ParentId));
         }, logger);
 
     public async Task<IReadOnlyList<StatusDto>> ListStatusesAsync(CancellationToken ct = default)
@@ -436,4 +455,48 @@ public sealed class OpportunityService(CrmContext crm, ILogger<OpportunityServic
             await db.SaveChangesAsync(ct);
             return Result.Success((await ToDtos([opp], ct))[0]);
         }, logger);
+}
+
+/// <summary>Tree rules for a tenant's categories: no cycles, at most <see cref="LeadCategory.MaxDepth"/> levels, a stable depth-first listing.</summary>
+internal static class CategoryTree
+{
+    public static string? Check(IReadOnlyCollection<LeadCategory> all, Guid id, Guid? parentId)
+    {
+        if (parentId is null) return null;
+        var byId = all.ToDictionary(c => c.Id);
+        if (!byId.ContainsKey(parentId.Value)) return "The parent category does not exist.";
+        if (parentId == id) return "A category cannot be its own parent.";
+        var depth = 1; var cur = (Guid?)parentId; var seen = new HashSet<Guid>();
+        while (cur is { } p && byId.TryGetValue(p, out var node))
+        {
+            if (p == id) return "A category cannot be moved under one of its own sub-categories.";
+            if (!seen.Add(p)) return "The category tree contains a loop.";
+            depth++; cur = node.ParentId;
+        }
+        var below = SubtreeHeight(all, id);
+        return depth + below > LeadCategory.MaxDepth ? $"Categories can be nested at most {LeadCategory.MaxDepth} levels deep." : null;
+    }
+
+    private static int SubtreeHeight(IReadOnlyCollection<LeadCategory> all, Guid id)
+    {
+        var kids = all.Where(c => c.ParentId == id).ToList();
+        return kids.Count == 0 ? 0 : 1 + kids.Max(k => SubtreeHeight(all, k.Id));
+    }
+
+    public static IReadOnlyList<CategoryDto> Flatten(IReadOnlyCollection<LeadCategory> all, IReadOnlyDictionary<Guid, int> counts)
+    {
+        var ids = all.Select(c => c.Id).ToHashSet();
+        var children = all.Where(c => c.ParentId is { } p && ids.Contains(p)).ToLookup(c => c.ParentId!.Value);
+        var roots = all.Where(c => c.ParentId is null || !ids.Contains(c.ParentId.Value)).OrderByDescending(c => c.IsActive).ThenBy(c => c.Name);
+        var list = new List<CategoryDto>();
+        void Walk(LeadCategory c, int depth, string path)
+        {
+            if (depth >= 12) return;
+            var p = path.Length == 0 ? c.Name : path + " › " + c.Name;
+            list.Add(new CategoryDto(c.Id, c.Name, c.IsActive, counts.GetValueOrDefault(c.Id), c.ParentId, depth, p));
+            foreach (var k in children[c.Id].OrderByDescending(x => x.IsActive).ThenBy(x => x.Name)) Walk(k, depth + 1, p);
+        }
+        foreach (var r in roots) Walk(r, 0, "");
+        return list;
+    }
 }

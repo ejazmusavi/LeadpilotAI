@@ -62,6 +62,8 @@ public class LeadQuery
     public LeadSourceType? SourceType { get; set; }
     public DateTime? CreatedFromUtc { get; set; }
     public DateTime? CreatedToUtc { get; set; }
+    /// <summary>Filters on tenant-defined custom fields (only fields marked filterable match). Built from <c>cf.&lt;key&gt;</c>, <c>cf.&lt;key&gt;.min</c>, <c>.max</c> and <c>.contains</c> query parameters.</summary>
+    public List<Config.CustomFieldFilter> CustomFilters { get; set; } = [];
     public ArchivedFilter Archived { get; set; } = ArchivedFilter.Active;
     public LeadSort Sort { get; set; } = LeadSort.Created;
     public bool Descending { get; set; } = true;
@@ -153,8 +155,8 @@ public sealed record BoardCardDto(Guid Id, string Name, string? City, string? Ca
 public sealed record BoardColumnDto(StageDto Stage, IReadOnlyList<BoardCardDto> Cards);
 public sealed record BoardDto(PipelineDto Pipeline, IReadOnlyList<BoardColumnDto> Columns, int CardsPerColumn);
 
-public sealed record CategoryDto(Guid Id, string Name, bool IsActive, int LeadCount);
-public sealed record SaveCategoryRequest(string Name) : TenantScopedRequest;
+public sealed record CategoryDto(Guid Id, string Name, bool IsActive, int LeadCount, Guid? ParentId = null, int Depth = 0, string? Path = null);
+public sealed record SaveCategoryRequest(string Name, Guid? ParentId = null) : TenantScopedRequest;
 public sealed record StatusDto(Guid Id, string Name, bool IsClosed, bool IsDefault, bool IsActive, int SortOrder, int LeadCount);
 public sealed record SaveStatusRequest(string Name, bool IsClosed = false) : TenantScopedRequest;
 

@@ -253,15 +253,16 @@ public class AiArchitectureTests
     }
 
     [Fact]
-    public void The_phase_10_ports_have_no_fake_implementation_in_the_product_and_report_not_connected()
+    public void The_phase_10_ports_are_backed_by_the_real_conversion_services_and_nothing_pretends_to_be_connected()
     {
         foreach (var port in new[] { typeof(IDemoScheduler), typeof(ITrialProvisioner), typeof(IPaymentRequestGateway) })
         {
             var impl = Infrastructure.GetTypes().Single(t => port.IsAssignableFrom(t) && !t.IsInterface);
-            Assert.StartsWith("Unavailable", impl.Name);
+            Assert.DoesNotContain("Unavailable", impl.Name);
+            Assert.Equal("LeadPilot.Infrastructure.Conversion", impl.Namespace);
         }
-        var source = File.ReadAllText(Sources("LeadPilot.Infrastructure").Single(f => f.EndsWith("UnavailablePorts.cs")));
-        Assert.DoesNotContain("PortResult<TrialInfo>.Ok", source); Assert.DoesNotContain(".Ok(", source.Replace("NotConnected", ""));
+        Assert.DoesNotContain(Sources("LeadPilot.Infrastructure"), f => f.EndsWith("UnavailablePorts.cs"));
+        Assert.DoesNotContain(Infrastructure.GetTypes(), t => t.Name.StartsWith("Unavailable") && typeof(IDemoScheduler).IsAssignableFrom(t));
     }
 
     [Fact]

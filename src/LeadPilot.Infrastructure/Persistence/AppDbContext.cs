@@ -8,6 +8,7 @@ using LeadPilot.Domain.Crm;
 using LeadPilot.Domain.Discovery;
 using LeadPilot.Domain.Messaging;
 using LeadPilot.Domain.Tenancy;
+using LeadPilot.Domain.Conversion;
 using LeadPilot.Domain.Workflows;
 using LeadPilot.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -123,6 +124,24 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
     public DbSet<WorkflowExecutionLog> WorkflowExecutionLogs => Set<WorkflowExecutionLog>();
     public DbSet<WorkflowTenantSettings> WorkflowTenantSettings => Set<WorkflowTenantSettings>();
     public DbSet<WorkflowNotification> WorkflowNotifications => Set<WorkflowNotification>();
+
+    // Demos, trials, customers and payments (Phase 10)
+    public DbSet<ConversionSettings> ConversionSettings => Set<ConversionSettings>();
+    public DbSet<DemoRep> DemoReps => Set<DemoRep>();
+    public DbSet<DemoAvailabilityRule> DemoAvailabilityRules => Set<DemoAvailabilityRule>();
+    public DbSet<DemoAvailabilityException> DemoAvailabilityExceptions => Set<DemoAvailabilityException>();
+    public DbSet<Demo> Demos => Set<Demo>();
+    public DbSet<DemoHistory> DemoHistory => Set<DemoHistory>();
+    public DbSet<DemoReminder> DemoReminders => Set<DemoReminder>();
+    public DbSet<Trial> Trials => Set<Trial>();
+    public DbSet<TrialEvent> TrialEvents => Set<TrialEvent>();
+    public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<Subscription> Subscriptions => Set<Subscription>();
+    public DbSet<CommercialAgreement> CommercialAgreements => Set<CommercialAgreement>();
+    public DbSet<PaymentRequest> PaymentRequests => Set<PaymentRequest>();
+    public DbSet<Payment> Payments => Set<Payment>();
+    public DbSet<PaymentProviderConfig> PaymentProviderConfigs => Set<PaymentProviderConfig>();
+    public DbSet<PaymentEvent> PaymentEvents => Set<PaymentEvent>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -271,6 +290,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
         AiModel.Configure(builder);
         AgentsModel.Configure(builder);
         WorkflowModel.Configure(builder);
+        ConversionModel.Configure(builder);
 
         // Every tenant-owned entity: mandatory FK to Tenant (restrict), indexed TenantId and the global tenant filter.
         foreach (var type in builder.Model.GetEntityTypes().Select(e => e.ClrType).Where(t => typeof(ITenantOwned).IsAssignableFrom(t)).ToList())

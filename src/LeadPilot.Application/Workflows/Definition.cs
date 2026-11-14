@@ -7,7 +7,7 @@ using LeadPilot.Domain.Workflows;
 namespace LeadPilot.Application.Workflows;
 
 // ===================================================================================================================================================================
-// Event contract (routing keys on the broker) and the catalog of triggers. Phase 10 events are declared and wired but have NO producer yet: they are listed as unavailable, never faked.
+// Event contract (routing keys on the broker) and the catalog of triggers. Phase 10 events (demo booked/completed, trial created/expires, payment confirmed) are published by the conversion module through the outbox.
 // ===================================================================================================================================================================
 
 public static class WorkflowEventTypes
@@ -35,8 +35,6 @@ public sealed record TriggerInfo(string Key, string Title, string Description, b
 
 public static class TriggerCatalog
 {
-    private const string Phase10 = "Available when Phase 10 (demos, trials and payments) ships. Nothing produces this event yet, so a workflow with this trigger will not start until then.";
-
     public static readonly IReadOnlyList<TriggerInfo> All =
     [
         new(WorkflowEventTypes.LeadCreated, "New lead created", "A lead was added manually, imported or approved from discovery.", true, null, true),
@@ -46,11 +44,11 @@ public static class TriggerCatalog
         new(WorkflowEventTypes.CustomerReplied, "Customer replies", "A contact answered after we had messaged them.", true, null, true),
         new(WorkflowEventTypes.LeadInterested, "Lead becomes interested", "The lead moved to the pipeline stage named \"Interested\".", true, null, true),
         new(WorkflowEventTypes.LeadInactive, "Lead becomes inactive", "No activity on the lead for the configured number of days (checked by an hourly background job).", true, null, true),
-        new(WorkflowEventTypes.DemoBooked, "Demo booked", "A demo was booked.", false, Phase10, false),
-        new(WorkflowEventTypes.DemoCompleted, "Demo completed", "A demo took place.", false, Phase10, false),
-        new(WorkflowEventTypes.TrialCreated, "Trial created", "A trial account was created.", false, Phase10, false),
-        new(WorkflowEventTypes.TrialExpires, "Trial expires", "A trial is about to expire.", false, Phase10, false),
-        new(WorkflowEventTypes.PaymentConfirmed, "Payment confirmed", "A verified payment confirmation arrived.", false, Phase10, false),
+        new(WorkflowEventTypes.DemoBooked, "Demo booked", "A demo was booked.", true, null, true),
+        new(WorkflowEventTypes.DemoCompleted, "Demo completed", "A demo took place.", true, null, true),
+        new(WorkflowEventTypes.TrialCreated, "Trial created", "A trial account was created.", true, null, true),
+        new(WorkflowEventTypes.TrialExpires, "Trial expires", "A trial is about to expire.", true, null, true),
+        new(WorkflowEventTypes.PaymentConfirmed, "Payment confirmed", "A verified payment confirmation arrived.", true, null, true),
     ];
 
     private static readonly Dictionary<string, TriggerInfo> ByKey = All.ToDictionary(t => t.Key, StringComparer.Ordinal);
@@ -77,7 +75,7 @@ public static class StepCatalog
         new(StepType.EscalateToHuman, "Escalate to human", "Hands the lead's conversation to a person (same handover as the AI agent's).", true, null),
         new(StepType.UpdateLeadFields, "Update CRM field", "Sets one text field of the lead (city, province, country, district, area).", true, null),
         new(StepType.AddTag, "Add tag", "Adds a tag to the lead.", true, null),
-        new(StepType.ScheduleDemo, "Schedule demo", "Books the next free demo slot. Demo scheduling is delivered in Phase 10; until then this step reports that it is not available and a workflow containing it cannot be activated.", false, "Available when Phase 10 ships."),
+        new(StepType.ScheduleDemo, "Schedule demo", "Books the next free demo slot of the demo calendar (same rules as a person booking: only available slots, no double booking).", true, null),
         new(StepType.Stop, "Stop workflow", "Ends the run here.", true, null),
     ];
 
@@ -180,7 +178,6 @@ public static partial class WorkflowDefinitionValidator
             if (!Enum.IsDefined(s.OnFailure)) Err(path + ".onFailure", "Unknown failure policy.");
             CheckCondition(s.Condition, path + ".runIf", errors);
             CheckConfig(s, path, errors);
-            if (s.Type == StepType.ScheduleDemo) warnings.Add(new(path, "Demo scheduling is delivered in Phase 10. This workflow cannot be activated while it contains this step."));
         }
         if (errors.Count == 0) CheckGraph(steps, errors);
         return new(errors, warnings);

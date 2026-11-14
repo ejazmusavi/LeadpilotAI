@@ -1,0 +1,32 @@
+@model BookDemoViewModel
+@{ ViewData["Title"] = "Book a demo"; }
+<h1 class="h3 mb-3">Book a demo</h1>
+<div class="card mb-3"><div class="card-body">
+    <h2 class="h6">1. Lead</h2>
+    @if (Model.LeadId is not null) { <p class="mb-0"><strong>@Model.LeadName</strong> <a class="btn btn-link btn-sm" asp-action="Book" asp-route-date="@Model.Date.ToString("yyyy-MM-dd")">change</a></p> }
+    else
+    {
+        <form method="get" class="row g-2"><input type="hidden" name="date" value="@Model.Date.ToString("yyyy-MM-dd")" /><div class="col-8 col-md-6"><label class="visually-hidden" for="search">Search leads</label><input id="search" name="search" class="form-control" placeholder="Search leads by name" value="@Model.Search" /></div><div class="col"><button class="btn btn-outline-primary" type="submit">Search</button></div></form>
+        @if (Model.Leads.Count > 0) { <ul class="list-group mt-2">@foreach (var l in Model.Leads) { <li class="list-group-item"><a asp-action="Book" asp-route-leadId="@l.Id" asp-route-date="@Model.Date.ToString("yyyy-MM-dd")" asp-route-slotId="@Model.SlotId">@l.Name</a> <span class="text-muted small">@l.City</span></li> }</ul> }
+        else if (!string.IsNullOrWhiteSpace(Model.Search)) { <p class="text-muted mt-2 mb-0">No lead matches.</p> }
+    }
+</div></div>
+<div class="card mb-3"><div class="card-body">
+    <h2 class="h6">2. Slot (@Model.TimeZoneId)</h2>
+    <form method="get" class="row g-2 mb-2"><input type="hidden" name="leadId" value="@Model.LeadId" /><div class="col-8 col-md-3"><label class="visually-hidden" for="d">Date</label><input id="d" name="date" type="date" class="form-control" value="@Model.Date.ToString("yyyy-MM-dd")" /></div><div class="col"><button class="btn btn-outline-primary" type="submit">Show slots</button></div></form>
+    @if (Model.Slots.Count == 0) { <p class="text-muted mb-0">No free slots on this day. Try another date.</p> }
+    else if (Model.LeadId is null) { <p class="text-muted mb-0">Choose a lead first, then pick one of the @Model.Slots.Count slots.</p> }
+    else
+    {
+        <form method="post" asp-action="Book">
+            <input type="hidden" asp-for="LeadId" /><input type="hidden" asp-for="Date" />
+            <div class="d-flex flex-wrap gap-2 mb-3">@foreach (var s in Model.Slots) { <div><input type="radio" class="btn-check" name="SlotId" id="s-@s.SlotId" value="@s.SlotId" checked="@(Model.SlotId == s.SlotId)" required /><label class="btn btn-outline-success btn-sm" for="s-@s.SlotId">@s.LocalStart</label></div> }</div>
+            <div class="row g-2">
+                <div class="col-12 col-md-4"><label class="form-label" asp-for="PreferredRepUserId">Preferred representative (optional)</label><select asp-for="PreferredRepUserId" class="form-select"><option value="">Assign automatically</option>@foreach (var r in Model.Reps.Where(r => r.IsActive)) { <option value="@r.UserId">@r.UserName</option> }</select></div>
+                <div class="col-12 col-md-8"><label class="form-label" asp-for="MeetingLink">Meeting link (optional, https)</label><input asp-for="MeetingLink" class="form-control" /></div>
+                <div class="col-12"><label class="form-label" asp-for="Notes">Notes</label><input asp-for="Notes" class="form-control" maxlength="500" /></div>
+            </div>
+            <button class="btn btn-primary mt-3" type="submit">Book demo</button>
+        </form>
+    }
+</div></div>

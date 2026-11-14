@@ -234,23 +234,21 @@ public class WorkflowControlTests(AppFixture app)
     }
 
     [RequiresMySqlFact]
-    public async Task Phase_10_triggers_are_declared_but_unavailable_and_the_schedule_demo_step_is_honest_about_it()
+    public async Task Phase_10_triggers_and_the_schedule_demo_step_are_available_and_the_step_refuses_activation_only_while_the_scheduler_cannot_answer()
     {
         await using var w = await WorkflowWorld.OpenAsync(app, freshTenant: true);
         var catalog = await Crm.Ok<WorkflowCatalogDto>(await w.Admin.Get("/api/v1/workflows/catalog"));
         foreach (var key in new[] { "demo.booked", "demo.completed", "trial.created", "trial.expires", "payment.confirmed" })
-        { var t = catalog.Triggers.Single(x => x.Key == key); Assert.False(t.Available); Assert.False(t.HasProducer); Assert.Contains("Phase 10", t.UnavailableReason); }
-        Assert.All(catalog.Triggers.Where(t => t.Available), t => Assert.True(t.HasProducer));
-        Assert.False(catalog.DemoSchedulingConnected);
-        Assert.False(catalog.Actions.Single(a => a.Type == StepType.ScheduleDemo).Available);
+        { var t = catalog.Triggers.Single(x => x.Key == key); Assert.True(t.Available); Assert.True(t.HasProducer); Assert.Null(t.UnavailableReason); }
+        Assert.All(catalog.Triggers, t => Assert.True(t.HasProducer));
+        Assert.True(catalog.Actions.Single(a => a.Type == StepType.ScheduleDemo).Available);
 
-        // a workflow may be prepared with a Phase 10 trigger (saved with a warning); it simply never starts
         var wf = await w.CreateAsync(Wf.Definition([Wf.Trigger("demo.booked")], [Wf.Step("a", "AddTag", new { tag = "x" })]));
-        Assert.Contains(wf.Draft!.Validation.Warnings, x => x.Message.Contains("Phase 10"));
-        // "Schedule demo" cannot be activated while demo scheduling is not connected ...
+        Assert.DoesNotContain(wf.Draft!.Validation.Warnings, x => x.Message.Contains("Phase 10"));
+        // this suite's default Phase 10 doubles answer "not connected": activation is refused honestly (the real service is covered by the conversion tests)
         var withDemo = await w.CreateAsync(Wf.Definition([Wf.Trigger("lead.created")], [Wf.Step("demo", "ScheduleDemo")]));
         var refused = await w.Admin.Post($"/api/v1/workflows/{withDemo.Id}/versions/1/activate");
-        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode); Assert.Contains("not connected", await Crm.ProblemDetail(refused));
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode); Assert.Contains("demo slot", await Crm.ProblemDetail(refused));
 
         // ... and once the (test-only) Phase 10 scheduler exists, the step books the next free slot through the port
         app.Ai.Phase10.DemoConnected = true;

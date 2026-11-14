@@ -22,7 +22,7 @@ public sealed record PortResult<T>(bool Available, T? Value, string? Error = nul
 
 public sealed record DemoSlot(string SlotId, DateTime StartUtc, DateTime EndUtc);
 public sealed record DemoBooking(string BookingId, DateTime StartUtc, DateTime EndUtc);
-public sealed record TrialInfo(string TrialId, DateTime ExpiresAtUtc);
+public sealed record TrialInfo(string TrialId, DateTime? ExpiresAtUtc, string Status = "Active", string? Message = null);
 public sealed record PaymentRequestInfo(string RequestId, string? PayUrl);
 
 public interface IDemoScheduler

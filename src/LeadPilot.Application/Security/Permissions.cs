@@ -54,6 +54,15 @@ public static class PermissionCodes
     public const string WorkflowsActivate = "Workflows.Activate";
     public const string WorkflowsExecute = "Workflows.Execute";
     public const string WorkflowsDelete = "Workflows.Delete";
+    public const string DemosView = "Demos.View";
+    public const string DemosBook = "Demos.Book";
+    public const string DemosManage = "Demos.Manage";
+    public const string TrialsView = "Trials.View";
+    public const string TrialsManage = "Trials.Manage";
+    public const string CustomersView = "Customers.View";
+    public const string CustomersManage = "Customers.Manage";
+    public const string PaymentsRequest = "Payments.Request";
+    public const string PaymentsVerify = "Payments.Verify";
     // Platform (operator) permissions: grantable only by roles of the platform tenant.
     public const string TenantsManage = "Tenants.Manage";
     public const string PlatformSwitchTenant = "Platform.SwitchTenant";
@@ -118,6 +127,15 @@ public static class PermissionCatalog
         new(PermissionCodes.WorkflowsActivate, "Activate workflows", "Workflows", "Activate or deactivate workflows, use the workflow kill switch and set the workspace workflow limits."),
         new(PermissionCodes.WorkflowsExecute, "Run workflows", "Workflows", "Run a workflow for a lead, retry failed runs, cancel running ones and simulate a workflow against a lead."),
         new(PermissionCodes.WorkflowsDelete, "Delete workflows", "Workflows", "Delete inactive workflows (their run history stays)."),
+        new(PermissionCodes.DemosView, "View demos", "Conversion", "See the demo calendar, available slots and demo details."),
+        new(PermissionCodes.DemosBook, "Book and run demos", "Conversion", "Book, reschedule, cancel and confirm demos, and mark them completed or no-show."),
+        new(PermissionCodes.DemosManage, "Manage demo setup", "Conversion", "Edit demo settings, sales representatives, weekly hours and exceptions, reminders and the assignment strategy."),
+        new(PermissionCodes.TrialsView, "View trials", "Conversion", "See trials, their status and usage."),
+        new(PermissionCodes.TrialsManage, "Manage trials", "Conversion", "Create trials, record provisioning, extend, cancel and record usage."),
+        new(PermissionCodes.CustomersView, "View customers", "Conversion", "See customers, subscriptions, agreements, payment requests and the history timeline."),
+        new(PermissionCodes.CustomersManage, "Manage customers", "Conversion", "Convert won opportunities into customers, record the commercial agreement and cancel subscriptions."),
+        new(PermissionCodes.PaymentsRequest, "Create payment requests", "Conversion", "Create and cancel payment requests. Nothing is charged and nothing is activated by a request."),
+        new(PermissionCodes.PaymentsVerify, "Verify payments", "Conversion", "Confirm that a payment arrived (with evidence) and manage payment provider webhooks. Verifying a payment activates the subscription."),
         new(PermissionCodes.TenantsManage, "Manage tenants", "Platform", "Create, edit, suspend and activate tenants.", IsPlatform: true),
         new(PermissionCodes.PlatformSwitchTenant, "Switch into tenants", "Platform", "Operate inside any active tenant (audited).", IsPlatform: true),
     ];
@@ -157,7 +175,8 @@ public static class SystemRoles
         [
             PermissionCodes.LeadsView, PermissionCodes.LeadsCreate, PermissionCodes.LeadsUpdate, PermissionCodes.CampaignsView,
             PermissionCodes.ConversationsView, PermissionCodes.ConversationsReply, PermissionCodes.ReportsView, PermissionCodes.DiscoveryView, PermissionCodes.ChannelsView,
-            PermissionCodes.KnowledgeView, PermissionCodes.CatalogView, PermissionCodes.WorkflowsView
+            PermissionCodes.KnowledgeView, PermissionCodes.CatalogView, PermissionCodes.WorkflowsView,
+            PermissionCodes.DemosView, PermissionCodes.TrialsView, PermissionCodes.CustomersView
         ]),
         new(SalesManager, "Manages the sales team, leads and conversations.", false,
         [
@@ -169,12 +188,15 @@ public static class SystemRoles
             PermissionCodes.ChannelsView, PermissionCodes.MessagesSend, PermissionCodes.CampaignsApprove, PermissionCodes.AudiencesPreview,
             PermissionCodes.KnowledgeView, PermissionCodes.KnowledgeManage, PermissionCodes.AiView, PermissionCodes.AiTest,
             PermissionCodes.AgentsView, PermissionCodes.CatalogView, PermissionCodes.CatalogManage, PermissionCodes.ApprovalsView, PermissionCodes.ApprovalsDecide,
-            PermissionCodes.WorkflowsView, PermissionCodes.WorkflowsCreate, PermissionCodes.WorkflowsUpdate, PermissionCodes.WorkflowsActivate, PermissionCodes.WorkflowsExecute
+            PermissionCodes.WorkflowsView, PermissionCodes.WorkflowsCreate, PermissionCodes.WorkflowsUpdate, PermissionCodes.WorkflowsActivate, PermissionCodes.WorkflowsExecute,
+            PermissionCodes.DemosView, PermissionCodes.DemosBook, PermissionCodes.DemosManage, PermissionCodes.TrialsView, PermissionCodes.TrialsManage,
+            PermissionCodes.CustomersView, PermissionCodes.CustomersManage, PermissionCodes.PaymentsRequest
         ]),
         new(SalesAgent, "Works leads and conversations.", false,
         [
             PermissionCodes.LeadsView, PermissionCodes.LeadsCreate, PermissionCodes.LeadsUpdate, PermissionCodes.ConversationsView, PermissionCodes.ConversationsReply,
-            PermissionCodes.DiscoveryView, PermissionCodes.ChannelsView, PermissionCodes.KnowledgeView, PermissionCodes.CatalogView, PermissionCodes.ApprovalsView, PermissionCodes.WorkflowsView
+            PermissionCodes.DiscoveryView, PermissionCodes.ChannelsView, PermissionCodes.KnowledgeView, PermissionCodes.CatalogView, PermissionCodes.ApprovalsView, PermissionCodes.WorkflowsView,
+            PermissionCodes.DemosView, PermissionCodes.DemosBook, PermissionCodes.TrialsView, PermissionCodes.CustomersView
         ]),
         new(MarketingManager, "Plans and runs campaigns.", false,
         [
@@ -187,7 +209,8 @@ public static class SystemRoles
         ]),
         new(ReadOnly, "Can view everything operational but change nothing.", false,
         [
-            PermissionCodes.LeadsView, PermissionCodes.CampaignsView, PermissionCodes.ConversationsView, PermissionCodes.ReportsView, PermissionCodes.KnowledgeView, PermissionCodes.CatalogView, PermissionCodes.WorkflowsView
+            PermissionCodes.LeadsView, PermissionCodes.CampaignsView, PermissionCodes.ConversationsView, PermissionCodes.ReportsView, PermissionCodes.KnowledgeView, PermissionCodes.CatalogView, PermissionCodes.WorkflowsView,
+            PermissionCodes.DemosView, PermissionCodes.TrialsView, PermissionCodes.CustomersView
         ]),
     ];
 

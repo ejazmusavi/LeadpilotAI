@@ -150,3 +150,12 @@ Provider terms: customer message text is sent to Anthropic when the AI answers; 
 
 ## Phase 9: events and ports used by workflows
 Published through the existing outbox/RabbitMQ topic exchange (routing keys): `lead.created`, `lead.enriched`, `lead.contact_eligible`, `customer.replied`, `lead.interested` (payload ids only: lead, contact, conversation, message) plus the existing `message.received`. Consumer queue `{prefix}.workflows` (+ retry/DLQ). Reserved for Phase 10 (bound, no producer): `demo.booked`, `demo.completed`, `trial.created`, `trial.expires`, `payment.confirmed`. The workflow "Schedule demo" step uses the Phase 8 `IDemoScheduler` port (not connected until Phase 10).
+
+## Phase 10: ports and what is NOT integrated
+| Port | Shipped implementation | Not integrated |
+|---|---|---|
+| IMeetingLinkProvider | expands the workspace's https template | Google Meet / Zoom / Teams (no API calls are made) |
+| ITrialProvisioningBackend | manual / record-only ("staff must create the account") | any HTTP/webhook provisioner (design-ready, not built: nothing to test it against) |
+| IPaymentProviderAdapter | none | every payment provider — none has been chosen; the neutral webhook endpoint `POST /api/v1/payments/webhooks/{webhookId}` is tested against a test-only HMAC fake |
+| IServiceNoticeSender | Phase 5 pipeline (WAHA) | e-mail / SMS notices |
+Phase 8 ports `IDemoScheduler`, `ITrialProvisioner`, `IPaymentRequestGateway` are now real; events `demo.booked`, `demo.completed`, `trial.created`, `trial.expires`, `payment.confirmed` are published through the outbox (payload `WorkflowEventPayload`, `Detail` = `demo:{id}` / `trial:{id}` / `payment:{id}`).

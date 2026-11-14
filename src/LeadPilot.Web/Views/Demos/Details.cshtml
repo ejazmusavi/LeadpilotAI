@@ -1,0 +1,51 @@
+@model DemoDetailsViewModel
+@using LeadPilot.Domain.Conversion
+@{ var d = Model.Demo; ViewData["Title"] = "Demo"; var holds = DemoRules.HoldsSlot(d.Status); var started = d.StartUtc <= DateTime.UtcNow; }
+<div class="d-flex flex-wrap justify-content-between gap-2 mb-2"><h1 class="h3 mb-0">Demo · <a asp-controller="Leads" asp-action="Details" asp-route-id="@d.LeadId" class="text-decoration-none">@d.LeadName</a></h1><span class="badge text-bg-secondary fs-6 align-self-center">@d.Status</span></div>
+<div class="row g-3">
+<div class="col-lg-7"><div class="card mb-3"><div class="card-body">
+    <dl class="row mb-0">
+        <dt class="col-sm-4">When</dt><dd class="col-sm-8">@d.LocalDate @d.LocalStart–@d.LocalEnd (@d.TimeZoneId)<div class="small text-muted">@d.StartUtc.ToString("yyyy-MM-dd HH:mm") UTC</div></dd>
+        <dt class="col-sm-4">Representative</dt><dd class="col-sm-8">@d.RepName</dd>
+        <dt class="col-sm-4">Contact</dt><dd class="col-sm-8">@(d.ContactName ?? "—")</dd>
+        <dt class="col-sm-4">Source</dt><dd class="col-sm-8">@(d.Source == DemoSource.Automation ? "AI assistant or workflow" : "A team member")</dd>
+        <dt class="col-sm-4">Meeting link</dt><dd class="col-sm-8">@if (d.MeetingLink is not null) { <a href="@d.MeetingLink" rel="noopener noreferrer" target="_blank">@d.MeetingLink</a> } else { <span class="text-muted">None yet</span> }</dd>
+        <dt class="col-sm-4">Notes</dt><dd class="col-sm-8">@(d.Notes ?? "—")</dd>
+        @if (d.CancelReason is not null) { <dt class="col-sm-4">Cancelled because</dt><dd class="col-sm-8">@d.CancelReason</dd> }
+    </dl>
+    @if (Model.CanBook && holds)
+    {
+        <hr /><form asp-action="Edit" asp-route-id="@d.Id" method="post" class="row g-2"><div class="col-12 col-md-6"><label class="form-label" for="meetingLink">Meeting link</label><input id="meetingLink" name="meetingLink" class="form-control" value="@d.MeetingLink" /></div><div class="col-12 col-md-6"><label class="form-label" for="notes">Notes</label><input id="notes" name="notes" class="form-control" value="@d.Notes" maxlength="500" /></div><div class="col-12"><button class="btn btn-outline-primary btn-sm" type="submit">Save link and notes</button></div></form>
+    }
+</div></div>
+@if (Model.CanBook)
+{
+    <div class="d-flex flex-wrap gap-2 mb-3">
+        @if (d.Status == DemoStatus.Requested) { <form asp-action="Accept" asp-route-id="@d.Id" method="post"><button class="btn btn-primary" type="submit">Accept request</button></form> }
+        @if (d.Status == DemoStatus.Booked) { <form asp-action="Confirm" asp-route-id="@d.Id" method="post"><button class="btn btn-outline-primary" type="submit">Customer confirmed</button></form> }
+        @if (holds) { <a class="btn btn-outline-secondary" asp-action="Details" asp-route-id="@d.Id" asp-route-reschedule="true">Reschedule</a> }
+        @if (d.Status is DemoStatus.Booked or DemoStatus.Confirmed && started)
+        {
+            <form asp-action="Complete" asp-route-id="@d.Id" method="post"><button class="btn btn-success" type="submit" data-confirm="Mark this demo as completed?" data-confirm-label="Mark completed">Completed</button></form>
+            <form asp-action="NoShow" asp-route-id="@d.Id" method="post"><button class="btn btn-outline-danger" type="submit" data-confirm="Mark this demo as a no-show?" data-confirm-label="Mark no-show">No-show</button></form>
+        }
+        @if (holds) { <form asp-action="Cancel" asp-route-id="@d.Id" method="post"><input type="hidden" name="reason" value="Cancelled by a team member" /><button class="btn btn-outline-danger" type="submit" data-confirm="Cancel this demo? The slot becomes free and pending reminders are withdrawn." data-confirm-label="Cancel demo">Cancel demo</button></form> }
+    </div>
+}
+@if (Model.Rescheduling)
+{
+    <div class="card mb-3"><div class="card-body"><h2 class="h6">Reschedule (@d.TimeZoneId)</h2>
+        <form method="get" class="row g-2 mb-2"><input type="hidden" name="reschedule" value="true" /><div class="col-8 col-md-4"><input name="date" type="date" class="form-control" aria-label="Date" value="@Model.Date.ToString("yyyy-MM-dd")" /></div><div class="col"><button class="btn btn-outline-primary" type="submit">Show slots</button></div></form>
+        @if (Model.Slots.Count == 0) { <p class="text-muted mb-0">No free slots on this day.</p> }
+        else
+        {
+            <form asp-action="Reschedule" asp-route-id="@d.Id" method="post"><div class="d-flex flex-wrap gap-2 mb-3">@foreach (var s in Model.Slots) { <div><input type="radio" class="btn-check" name="slotId" id="r-@s.SlotId" value="@s.SlotId" required /><label class="btn btn-outline-success btn-sm" for="r-@s.SlotId">@s.LocalStart</label></div> }</div>
+            <button class="btn btn-primary" type="submit" data-confirm="Move the demo to the selected slot? Reminders are rescheduled and the customer has to confirm again." data-confirm-label="Reschedule">Move demo</button></form>
+        }
+    </div></div>
+}
+</div>
+<div class="col-lg-5">
+    <div class="card mb-3"><div class="card-header">Reminders</div>@if (d.Reminders.Count == 0) { <div class="card-body text-muted small">No reminders scheduled (switch them on under settings; they need a WhatsApp account).</div> } else { <ul class="list-group list-group-flush small">@foreach (var r in d.Reminders) { <li class="list-group-item">@(r.OffsetMinutes >= 60 ? (r.OffsetMinutes / 60) + " h" : r.OffsetMinutes + " min") before · due @r.DueAtUtc.ToString("yyyy-MM-dd HH:mm") UTC · <strong>@r.Status</strong>@if (r.Reason is not null) { <div class="text-muted">@r.Reason</div> }</li> }</ul> }</div>
+    <div class="card"><div class="card-header">History</div><ul class="list-group list-group-flush small">@foreach (var h in d.History.OrderByDescending(x => x.OccurredAtUtc)) { <li class="list-group-item"><span class="text-muted">@h.OccurredAtUtc.ToString("yyyy-MM-dd HH:mm") UTC</span><br />@h.Summary</li> }</ul></div>
+</div></div>

@@ -58,3 +58,6 @@ Phase 8 (AI sales agent, controlled tools, human handoff) is **built and tested 
 
 ## Status after Phase 9
 Phase 9 (automation workflow engine) is **built and tested with real MySQL and RabbitMQ and the fake WAHA (test-only); never run against a live WAHA, live Claude or a real Qdrant**. Triggers for demo/trial/payment are declared and unavailable until Phase 10. Details and limits: PROGRESS.md. Next: Phase 10 (demo, trial and customer conversion) — not started.
+
+## Status after Phase 10
+Phase 10 (demos, trials, customer conversion, payment verification) is **built and tested with real MySQL and RabbitMQ, the fake WAHA and a test-only payment provider fake; no live WAHA / Claude / Voyage / Qdrant / payment provider / meeting provider was ever used and Docker was never run**. Next: Phase 11 (analytics and reporting). Prerequisites: none outstanding from Phase 10.

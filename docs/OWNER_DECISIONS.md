@@ -111,3 +111,38 @@ Conditions use a closed field list and operators (no regular expressions, no tem
 
 ### 29. Schedule demo cannot be activated until Phase 10
 The step exists and talks to the Phase 8 `IDemoScheduler` port; while the port reports "not connected", activation is refused with a clear message and a run that reaches it fails honestly.
+
+## Phase 10 (demos, trials, customers, payments) — all **(default taken)**
+
+### 30. Demo slots are laid out in elapsed time in the rep's local zone; the workspace has one zone, a rep may have their own
+Weekly hours are local wall-clock periods. Slots are computed from the UTC instant of the period start, so a spring-forward day loses the skipped hour and a fall-back day gains the repeated one; a time that happens twice resolves to its first occurrence; a boundary inside the gap moves to the first valid instant. Defaults: 60-minute grid configurable per workspace (10–240), minimum notice 2 h, 30 days ahead, rep buffer 0–120 min, maximum demos per rep per local day. **Change:** `SlotCalculator`.
+
+### 31. Rep assignment: round-robin (default) or least-loaded; a preferred rep is honoured only if free
+Round-robin = the free rep with the oldest last assignment; least-loaded = fewest upcoming demos. A booking is serialised per rep by locking the rep's row inside the transaction, then re-reading and re-calculating; the unique index on (tenant, rep, start) is the last line. One upcoming demo per lead (reschedule or cancel first).
+
+### 32. Demo status "Requested" exists for automated bookings only when you switch it on
+Default OFF: a booking made by the AI or a workflow is Booked immediately (it holds the slot like any other). With "automated bookings need acceptance" ON they start as Requested, hold the slot, send no reminders until a person accepts. Completed / No-show are refused before the demo starts. Rescheduling a Confirmed demo makes it Booked again (the customer must confirm the new time).
+
+### 33. Meeting links: manual entry or your own https template; nothing is created at a meeting provider
+`IMeetingLinkProvider` ships with a template expander (`https://meet.example.com/{code}`) and returns nothing when no template is set. No fake Google Meet / Zoom link. **Change:** add a second implementation of the port.
+
+### 34. Reminders and trial notices are SERVICE messages with a stricter rule than the pipeline alone
+Sent only when the contact has a recorded WhatsApp *service* consent, or wrote to us inside the 24 h service window; never to suppressed / opted-out / archived / excluded / invalid contacts; a revoked consent always stops it; marketing consent is irrelevant and nothing is forced as "service" without consent. A refusal is recorded on the reminder (Skipped + reason), not dropped. Reminders more than 30 min late are skipped (the demo is near). Reminders need a chosen WhatsApp account and are OFF by default. Default offsets 24 h and 1 h. **Change:** `ServiceNoticeSender` and the settings page.
+
+### 35. Trial provisioning is record-only; the trial clock starts when staff mark it provisioned
+`ITrialProvisioningBackend` ships with the manual backend, which provisions nothing and says so. The trial is `PendingProvisioning` until a person confirms the product account exists; only then does it become Active and `ExpiresAt` = now + duration. Usage fields change only through recorded updates (append-only events). One live trial per lead. The webhook/HTTP provisioner was NOT built (the port is the seam). Expiry notice: a follow-up task for the lead's owner + `trial.expires` event (default 48 h before the end), optional customer message; expiry itself is a Hangfire sweep every 5 min.
+
+### 36. Conversion is a staff action on a Won opportunity, not an automatic side effect of moving the stage
+`Customers → Convert` (permission Customers.Manage) creates one Customer per lead (a second won deal attaches to it), a Pending subscription for a catalog plan, and the immutable commercial agreement with the acting person as approver. Price and currency default to the catalog plan; a different price is allowed and recorded with the list price and the computed discount. Free (0) agreements are refused: activation needs a verified payment. A Trial can be converted in the same step. The customer record **links** to the lead, contact, opportunity and trial; the timeline reads their history where it lives.
+
+### 37. Payments: request ≠ payment; only evidence (or a verified provider event) makes a payment; exact amount only
+`Payments.Request` creates/cancels requests (amount and currency come from the agreement, one open request per subscription, reference `PR-XXXXXXXX`, instructions are the text YOU wrote in the settings). `Payments.Verify` (Tenant Administrator only by default — Sales Managers can request but not verify) records evidence (receipt / transfer id, unique per workspace after normalisation); amount and currency must equal the request, no partial payments. In one transaction the request is claimed, the Payment row written, the subscription activated with that payment's id (database check constraint: no Active subscription without a payment), the customer activated and `payment.confirmed` published. **Change:** partial payments / refunds are future work.
+
+### 38. No payment provider is selected; the webhook is provider-neutral and has no adapter in the product
+`IPaymentProviderAdapter` (signature verification + parsing) is the seam; the product registers none, so the configuration screen says so and a webhook can never verify anything until one is installed. The endpoint is anonymous but signature-first: random webhook id → tenant, signature verified with the tenant's encrypted secret before the body is read, delivery recorded under (provider, event id) so redeliveries are no-ops, event applied only if it matches an OPEN request of that tenant by reference, amount and currency. Tested against a test-only HMAC fake.
+
+### 39. The AI's CreatePaymentRequest needs a converted customer with a pending subscription for that plan
+After a person approves (Phase 8 approvals, unchanged), the gateway creates the request from the AGREEMENT (never from the model's amount or discount). For a lead that is not a customer yet it creates nothing and says why. The AI cannot verify or activate anything: there is no such tool, and an architecture test pins the only callers of `ActivateWithVerifiedPayment`.
+
+### 40. New permissions and default roles
+Demos.View/Book/Manage, Trials.View/Manage, Customers.View/Manage, Payments.Request/Verify. Tenant Administrator: all. Sales Manager: all except Payments.Verify. Sales Agent: Demos.View/Book, Trials.View, Customers.View. Tenant Staff and Read-only: the three View permissions. Marketing Manager: none. Existing tenants receive them when the Web host starts (system-role synchronisation, verified by the upgrade test).

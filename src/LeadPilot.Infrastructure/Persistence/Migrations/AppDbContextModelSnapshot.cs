@@ -2125,6 +2125,1104 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
                     b.ToTable("CampaignUsageEntries", (string)null);
                 });
 
+            modelBuilder.Entity("LeadPilot.Domain.Conversion.CommercialAgreement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("ApprovedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid>("ApprovedByUserId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("BillingCycle")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("varchar(3)");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<decimal?>("DiscountPercent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<decimal?>("ListPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("OpportunityId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<decimal>("Price")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("SubscriptionId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("Terms")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApprovedByUserId");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("OpportunityId");
+
+                    b.HasIndex("SubscriptionId")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("TenantId", "OpportunityId")
+                        .IsUnique();
+
+                    b.ToTable("CommercialAgreements", (string)null);
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Conversion.ConversionSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("Assignment")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<bool>("ConfirmAutomatedBookings")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("MaxDaysAhead")
+                        .HasColumnType("int");
+
+                    b.Property<string>("MeetingLinkTemplate")
+                        .HasMaxLength(300)
+                        .HasColumnType("varchar(300)");
+
+                    b.Property<int>("MinNoticeMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PaymentDueDays")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PaymentInstructions")
+                        .HasMaxLength(1500)
+                        .HasColumnType("varchar(1500)");
+
+                    b.Property<string>("ReminderBody")
+                        .IsRequired()
+                        .HasMaxLength(600)
+                        .HasColumnType("varchar(600)");
+
+                    b.Property<Guid?>("ReminderChannelAccountId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("ReminderOffsets")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("varchar(60)");
+
+                    b.Property<bool>("RemindersEnabled")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<int>("SlotMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("TimeZoneId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<bool>("TrialCustomerNoticesEnabled")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<int>("TrialDefaultDays")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TrialExpiryNoticeHours")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TrialNoticeBody")
+                        .IsRequired()
+                        .HasMaxLength(600)
+                        .HasColumnType("varchar(600)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId")
+                        .IsUnique();
+
+                    b.ToTable("ConversionSettings", (string)null);
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Conversion.Customer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("AccountNotes")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<string>("AccountReference")
+                        .HasMaxLength(150)
+                        .HasColumnType("varchar(150)");
+
+                    b.Property<DateTime>("ConvertedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid?>("ConvertedByUserId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)");
+
+                    b.Property<Guid>("LeadId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("PrimaryContactId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LeadId");
+
+                    b.HasIndex("PrimaryContactId");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("TenantId", "LeadId")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "Number")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "Status");
+
+                    b.ToTable("Customers", (string)null);
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Conversion.Demo", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("ActiveSlot")
+                        .HasMaxLength(60)
+                        .HasColumnType("varchar(60)");
+
+                    b.Property<string>("CancelReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("varchar(300)");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid?>("ContactId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)");
+
+                    b.Property<DateTime>("EndUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("Generation")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("LeadId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("MeetingLink")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<Guid>("RepUserId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<DateTime>("StartUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContactId");
+
+                    b.HasIndex("LeadId");
+
+                    b.HasIndex("RepUserId");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("TenantId", "ActiveSlot")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "LeadId");
+
+                    b.HasIndex("TenantId", "RepUserId", "StartUtc");
+
+                    b.HasIndex("TenantId", "Status", "StartUtc");
+
+                    b.ToTable("Demos", (string)null);
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Conversion.DemoAvailabilityException", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("Date")
+                        .HasPrecision(6)
+                        .HasColumnType("date");
+
+                    b.Property<int?>("EndMinute")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<Guid>("RepId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<int?>("StartMinute")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("char(36)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RepId");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("TenantId", "RepId", "Date");
+
+                    b.ToTable("DemoAvailabilityExceptions", (string)null);
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Conversion.DemoAvailabilityRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<int>("Day")
+                        .HasColumnType("int");
+
+                    b.Property<int>("EndMinute")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("RepId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<int>("StartMinute")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("char(36)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RepId");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("TenantId", "RepId", "Day");
+
+                    b.ToTable("DemoAvailabilityRules", (string)null);
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Conversion.DemoHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("ActorKind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<Guid?>("ActorUserId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid>("DemoId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("varchar(40)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("DemoId", "OccurredAtUtc");
+
+                    b.ToTable("DemoHistory", (string)null);
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Conversion.DemoReminder", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid>("DemoId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("DueAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("Generation")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("MessageId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<int>("OffsetMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ProcessedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(300)
+                        .HasColumnType("varchar(300)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("char(36)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("DemoId", "Generation", "OffsetMinutes")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "Status", "DueAtUtc");
+
+                    b.ToTable("DemoReminders", (string)null);
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Conversion.DemoRep", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<int>("BufferMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<DateTime?>("LastAssignedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("MaxPerDay")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("TimeZoneId")
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("TenantId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("DemoReps", (string)null);
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Conversion.Payment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("varchar(3)");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("EvidenceKey")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("varchar(150)");
+
+                    b.Property<string>("EvidenceReference")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("varchar(150)");
+
+                    b.Property<string>("Method")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<DateTime>("PaidAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid>("PaymentRequestId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("ProviderEventId")
+                        .HasMaxLength(150)
+                        .HasColumnType("varchar(150)");
+
+                    b.Property<string>("ProviderKey")
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("VerifiedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid?>("VerifiedByUserId")
+                        .HasColumnType("char(36)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("PaymentRequestId")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("TenantId", "EvidenceKey")
+                        .IsUnique();
+
+                    b.ToTable("Payments", (string)null);
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Conversion.PaymentEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("ExternalEventId")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("varchar(150)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("varchar(40)");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<Guid?>("PaymentRequestId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("ProviderKey")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(300)
+                        .HasColumnType("varchar(300)");
+
+                    b.Property<DateTime>("ReceivedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("char(36)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("TenantId", "ProviderKey", "ExternalEventId")
+                        .IsUnique();
+
+                    b.ToTable("PaymentEvents", (string)null);
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Conversion.PaymentProviderConfig", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("ProviderKey")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<string>("SecretProtected")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("varchar(1000)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)");
+
+                    b.Property<Guid>("WebhookId")
+                        .HasColumnType("char(36)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("WebhookId")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "ProviderKey")
+                        .IsUnique();
+
+                    b.ToTable("PaymentProviderConfigs", (string)null);
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Conversion.PaymentRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid>("AgreementId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid?>("ApprovalRequestId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("CloseReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("varchar(300)");
+
+                    b.Property<DateTime?>("ClosedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("varchar(3)");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime?>("DueAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Instructions")
+                        .HasMaxLength(1500)
+                        .HasColumnType("varchar(1500)");
+
+                    b.Property<Guid?>("OpenForSubscription")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("PayUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("varchar(40)");
+
+                    b.Property<string>("RequestedVia")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<Guid>("SubscriptionId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgreementId");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("SubscriptionId");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("TenantId", "OpenForSubscription")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "Reference")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "Status", "CreatedAtUtc");
+
+                    b.ToTable("PaymentRequests", (string)null);
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Conversion.Subscription", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime?>("ActivatedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid?>("ActivatedByPaymentId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("BillingCycle")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<string>("CancelReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("varchar(300)");
+
+                    b.Property<DateTime?>("CancelledAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid?>("PlanId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("PlanName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("ProductName")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActivatedByPaymentId");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("PlanId");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("TenantId", "CustomerId", "Status");
+
+                    b.ToTable("Subscriptions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Subscriptions_ActiveNeedsPayment", "`Status` <> 'Active' OR `ActivatedByPaymentId` IS NOT NULL");
+                        });
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Conversion.Trial", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<int>("ActiveUsers")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("ContactId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid?>("ConvertedCustomerId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)");
+
+                    b.Property<int>("DurationDays")
+                        .HasColumnType("int");
+
+                    b.Property<string>("EndReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("varchar(300)");
+
+                    b.Property<DateTime?>("EndedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTime?>("ExpiresAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTime?>("ExpiryNoticeAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("ExternalAccountRef")
+                        .HasMaxLength(150)
+                        .HasColumnType("varchar(150)");
+
+                    b.Property<DateTime?>("LastActivityAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid>("LeadId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<int>("LoginCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("LoginUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<Guid?>("PlanId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("PlanName")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("ProductName")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("ProvisioningNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<DateTime?>("StartedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)");
+
+                    b.Property<string>("UsageNotes")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContactId");
+
+                    b.HasIndex("LeadId");
+
+                    b.HasIndex("PlanId");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("TenantId", "LeadId");
+
+                    b.HasIndex("TenantId", "Status", "ExpiresAtUtc");
+
+                    b.ToTable("Trials", (string)null);
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Conversion.TrialEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("ActorKind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<Guid?>("ActorUserId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid>("TrialId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("varchar(40)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("TrialId", "OccurredAtUtc");
+
+                    b.ToTable("TrialEvents", (string)null);
+                });
+
             modelBuilder.Entity("LeadPilot.Domain.Crm.ConsentRecord", b =>
                 {
                     b.Property<Guid>("Id")
@@ -6445,6 +7543,300 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
                     b.HasOne("LeadPilot.Domain.Tenancy.Tenant", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Conversion.CommercialAgreement", b =>
+                {
+                    b.HasOne("LeadPilot.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ApprovedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LeadPilot.Domain.Conversion.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LeadPilot.Domain.Crm.Opportunity", null)
+                        .WithMany()
+                        .HasForeignKey("OpportunityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LeadPilot.Domain.Conversion.Subscription", null)
+                        .WithMany()
+                        .HasForeignKey("SubscriptionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LeadPilot.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Conversion.ConversionSettings", b =>
+                {
+                    b.HasOne("LeadPilot.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Conversion.Customer", b =>
+                {
+                    b.HasOne("LeadPilot.Domain.Crm.Lead", null)
+                        .WithMany()
+                        .HasForeignKey("LeadId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LeadPilot.Domain.Crm.Contact", null)
+                        .WithMany()
+                        .HasForeignKey("PrimaryContactId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("LeadPilot.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Conversion.Demo", b =>
+                {
+                    b.HasOne("LeadPilot.Domain.Crm.Contact", null)
+                        .WithMany()
+                        .HasForeignKey("ContactId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("LeadPilot.Domain.Crm.Lead", null)
+                        .WithMany()
+                        .HasForeignKey("LeadId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LeadPilot.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("RepUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LeadPilot.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Conversion.DemoAvailabilityException", b =>
+                {
+                    b.HasOne("LeadPilot.Domain.Conversion.DemoRep", null)
+                        .WithMany()
+                        .HasForeignKey("RepId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LeadPilot.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Conversion.DemoAvailabilityRule", b =>
+                {
+                    b.HasOne("LeadPilot.Domain.Conversion.DemoRep", null)
+                        .WithMany()
+                        .HasForeignKey("RepId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LeadPilot.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Conversion.DemoHistory", b =>
+                {
+                    b.HasOne("LeadPilot.Domain.Conversion.Demo", null)
+                        .WithMany()
+                        .HasForeignKey("DemoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LeadPilot.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Conversion.DemoReminder", b =>
+                {
+                    b.HasOne("LeadPilot.Domain.Conversion.Demo", null)
+                        .WithMany()
+                        .HasForeignKey("DemoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LeadPilot.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Conversion.DemoRep", b =>
+                {
+                    b.HasOne("LeadPilot.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LeadPilot.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Conversion.Payment", b =>
+                {
+                    b.HasOne("LeadPilot.Domain.Conversion.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LeadPilot.Domain.Conversion.PaymentRequest", null)
+                        .WithMany()
+                        .HasForeignKey("PaymentRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LeadPilot.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Conversion.PaymentEvent", b =>
+                {
+                    b.HasOne("LeadPilot.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Conversion.PaymentProviderConfig", b =>
+                {
+                    b.HasOne("LeadPilot.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Conversion.PaymentRequest", b =>
+                {
+                    b.HasOne("LeadPilot.Domain.Conversion.CommercialAgreement", null)
+                        .WithMany()
+                        .HasForeignKey("AgreementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LeadPilot.Domain.Conversion.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LeadPilot.Domain.Conversion.Subscription", null)
+                        .WithMany()
+                        .HasForeignKey("SubscriptionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LeadPilot.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Conversion.Subscription", b =>
+                {
+                    b.HasOne("LeadPilot.Domain.Conversion.Payment", null)
+                        .WithMany()
+                        .HasForeignKey("ActivatedByPaymentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("LeadPilot.Domain.Conversion.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LeadPilot.Domain.Agents.PricingPlan", null)
+                        .WithMany()
+                        .HasForeignKey("PlanId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("LeadPilot.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Conversion.Trial", b =>
+                {
+                    b.HasOne("LeadPilot.Domain.Crm.Contact", null)
+                        .WithMany()
+                        .HasForeignKey("ContactId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("LeadPilot.Domain.Crm.Lead", null)
+                        .WithMany()
+                        .HasForeignKey("LeadId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LeadPilot.Domain.Agents.PricingPlan", null)
+                        .WithMany()
+                        .HasForeignKey("PlanId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("LeadPilot.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Conversion.TrialEvent", b =>
+                {
+                    b.HasOne("LeadPilot.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LeadPilot.Domain.Conversion.Trial", null)
+                        .WithMany()
+                        .HasForeignKey("TrialId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

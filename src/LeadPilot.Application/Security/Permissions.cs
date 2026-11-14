@@ -36,6 +36,9 @@ public static class PermissionCodes
     public const string AiTest = "Ai.Test";
     public const string AiSettings = "Ai.Settings";
     public const string ReportsView = "Reports.View";
+    public const string ReportsExport = "Reports.Export";
+    public const string ReportsTeam = "Reports.Team";
+    public const string DashboardView = "Dashboard.View";
     public const string UsersManage = "Users.Manage";
     public const string SettingsManage = "Settings.Manage";
     public const string AuditView = "Audit.View";
@@ -108,7 +111,10 @@ public static class PermissionCatalog
         new(PermissionCodes.AiView, "View AI activity and usage", "AI", "See AI suggestions, escalations, tool logs and token usage."),
         new(PermissionCodes.AiTest, "Use the retrieval tester", "AI", "Ask test questions against the knowledge base (uses AI tokens)."),
         new(PermissionCodes.AiSettings, "Manage AI settings", "AI", "Store AI provider keys, choose models and thresholds, enable AI for the workspace."),
-        new(PermissionCodes.ReportsView, "View reports", "Reports", "See analytics and reports."),
+        new(PermissionCodes.ReportsView, "View reports", "Reports", "See analytics and reports (of your own work unless you also have Reports.Team)."),
+        new(PermissionCodes.ReportsTeam, "View team and workspace reports", "Reports", "See workspace-wide numbers, every person's performance, campaigns, discovery, AI and revenue reports. Without it, reports and the dashboard only show the viewer's own leads."),
+        new(PermissionCodes.ReportsExport, "Export reports", "Reports", "Download report data as CSV (audited, row-limited)."),
+        new(PermissionCodes.DashboardView, "View dashboard", "Reports", "See the metric dashboard (scoped to your own leads unless you also have Reports.Team)."),
         new(PermissionCodes.UsersManage, "Manage users and roles", "Administration", "Invite users, assign roles and edit custom roles."),
         new(PermissionCodes.SettingsManage, "Manage settings", "Administration", "Edit workspace profile and settings."),
         new(PermissionCodes.AuditView, "View audit log", "Administration", "Read the workspace audit trail."),
@@ -176,7 +182,8 @@ public static class SystemRoles
             PermissionCodes.LeadsView, PermissionCodes.LeadsCreate, PermissionCodes.LeadsUpdate, PermissionCodes.CampaignsView,
             PermissionCodes.ConversationsView, PermissionCodes.ConversationsReply, PermissionCodes.ReportsView, PermissionCodes.DiscoveryView, PermissionCodes.ChannelsView,
             PermissionCodes.KnowledgeView, PermissionCodes.CatalogView, PermissionCodes.WorkflowsView,
-            PermissionCodes.DemosView, PermissionCodes.TrialsView, PermissionCodes.CustomersView
+            PermissionCodes.DemosView, PermissionCodes.TrialsView, PermissionCodes.CustomersView,
+            PermissionCodes.DashboardView, PermissionCodes.ReportsTeam
         ]),
         new(SalesManager, "Manages the sales team, leads and conversations.", false,
         [
@@ -190,13 +197,15 @@ public static class SystemRoles
             PermissionCodes.AgentsView, PermissionCodes.CatalogView, PermissionCodes.CatalogManage, PermissionCodes.ApprovalsView, PermissionCodes.ApprovalsDecide,
             PermissionCodes.WorkflowsView, PermissionCodes.WorkflowsCreate, PermissionCodes.WorkflowsUpdate, PermissionCodes.WorkflowsActivate, PermissionCodes.WorkflowsExecute,
             PermissionCodes.DemosView, PermissionCodes.DemosBook, PermissionCodes.DemosManage, PermissionCodes.TrialsView, PermissionCodes.TrialsManage,
-            PermissionCodes.CustomersView, PermissionCodes.CustomersManage, PermissionCodes.PaymentsRequest
+            PermissionCodes.CustomersView, PermissionCodes.CustomersManage, PermissionCodes.PaymentsRequest,
+            PermissionCodes.DashboardView, PermissionCodes.ReportsTeam, PermissionCodes.ReportsExport
         ]),
         new(SalesAgent, "Works leads and conversations.", false,
         [
             PermissionCodes.LeadsView, PermissionCodes.LeadsCreate, PermissionCodes.LeadsUpdate, PermissionCodes.ConversationsView, PermissionCodes.ConversationsReply,
             PermissionCodes.DiscoveryView, PermissionCodes.ChannelsView, PermissionCodes.KnowledgeView, PermissionCodes.CatalogView, PermissionCodes.ApprovalsView, PermissionCodes.WorkflowsView,
-            PermissionCodes.DemosView, PermissionCodes.DemosBook, PermissionCodes.TrialsView, PermissionCodes.CustomersView
+            PermissionCodes.DemosView, PermissionCodes.DemosBook, PermissionCodes.TrialsView, PermissionCodes.CustomersView,
+            PermissionCodes.DashboardView, PermissionCodes.ReportsView
         ]),
         new(MarketingManager, "Plans and runs campaigns.", false,
         [
@@ -205,12 +214,14 @@ public static class SystemRoles
             PermissionCodes.ConversationsView, PermissionCodes.ReportsView,
             PermissionCodes.LeadsExport, PermissionCodes.ConsentManage, PermissionCodes.SuppressionManage, PermissionCodes.DiscoveryView, PermissionCodes.DiscoveryRun,
             PermissionCodes.ChannelsView, PermissionCodes.MessagesSend, PermissionCodes.KnowledgeView, PermissionCodes.AiTest, PermissionCodes.CatalogView,
-            PermissionCodes.WorkflowsView, PermissionCodes.WorkflowsCreate, PermissionCodes.WorkflowsUpdate, PermissionCodes.WorkflowsExecute
+            PermissionCodes.WorkflowsView, PermissionCodes.WorkflowsCreate, PermissionCodes.WorkflowsUpdate, PermissionCodes.WorkflowsExecute,
+            PermissionCodes.DashboardView, PermissionCodes.ReportsTeam, PermissionCodes.ReportsExport
         ]),
         new(ReadOnly, "Can view everything operational but change nothing.", false,
         [
             PermissionCodes.LeadsView, PermissionCodes.CampaignsView, PermissionCodes.ConversationsView, PermissionCodes.ReportsView, PermissionCodes.KnowledgeView, PermissionCodes.CatalogView, PermissionCodes.WorkflowsView,
-            PermissionCodes.DemosView, PermissionCodes.TrialsView, PermissionCodes.CustomersView
+            PermissionCodes.DemosView, PermissionCodes.TrialsView, PermissionCodes.CustomersView,
+            PermissionCodes.DashboardView, PermissionCodes.ReportsTeam
         ]),
     ];
 

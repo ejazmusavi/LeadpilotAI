@@ -1,0 +1,11 @@
+@model IReadOnlyList<LeadPilot.Application.Analytics.MetricDefinition>
+@{ ViewData["Title"] = "Metric definitions"; }
+<h1 class="h3">Metric definitions</h1>
+<p class="text-muted">Every number is computed from recorded rows. <span class="badge text-bg-success">Verified</span> counted or summed from recorded facts · <span class="badge text-bg-primary">Calculated</span> derived by a formula · <span class="badge text-bg-warning">Estimated</span> rests on an assumption. The same text is documented in <code>docs/METRICS.md</code>.</p>
+<div class="card"><div class="table-responsive"><table class="table align-middle mb-0">
+<thead><tr><th>Metric</th><th>Label</th><th>Definition</th><th>Formula</th><th>Source</th></tr></thead><tbody>
+@foreach (var m in Model)
+{
+    <tr id="@m.Key"><td class="fw-semibold">@m.Name</td><td><span class="badge @AnalyticsFormat.KindClass(m.Kind)">@m.Kind</span></td><td class="small">@m.Definition</td><td class="small">@(m.Formula ?? "—")</td><td class="small text-muted">@m.Sources</td></tr>
+}
+</tbody></table></div></div>

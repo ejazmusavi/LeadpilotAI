@@ -1,3 +1,4 @@
+using LeadPilot.Infrastructure.Analytics;
 using LeadPilot.Infrastructure.Ai.Jobs;
 using LeadPilot.Infrastructure.Campaigns;
 using LeadPilot.Application.Abstractions;
@@ -72,6 +73,7 @@ public static class DiscoveryServiceCollection
         services.AddAi(config);
         services.AddWorkflows(config);
         services.AddConversion(config);
+        services.AddAnalytics(config);
         services.AddMessagingConsumers();
         return services;
     }

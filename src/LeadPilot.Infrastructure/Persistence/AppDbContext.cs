@@ -143,6 +143,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
     public DbSet<PaymentProviderConfig> PaymentProviderConfigs => Set<PaymentProviderConfig>();
     public DbSet<PaymentEvent> PaymentEvents => Set<PaymentEvent>();
 
+    // Analytics (Phase 11)
+    public DbSet<LeadPilot.Domain.Analytics.DailyMetric> DailyMetrics => Set<LeadPilot.Domain.Analytics.DailyMetric>();
+    public DbSet<LeadPilot.Domain.Analytics.AnalyticsRefreshState> AnalyticsRefreshStates => Set<LeadPilot.Domain.Analytics.AnalyticsRefreshState>();
+
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
         configurationBuilder.Properties<DateTime>().HavePrecision(6);
@@ -291,6 +295,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
         AgentsModel.Configure(builder);
         WorkflowModel.Configure(builder);
         ConversionModel.Configure(builder);
+        AnalyticsModel.Configure(builder);
 
         // Every tenant-owned entity: mandatory FK to Tenant (restrict), indexed TenantId and the global tenant filter.
         foreach (var type in builder.Model.GetEntityTypes().Select(e => e.ClrType).Where(t => typeof(ITenantOwned).IsAssignableFrom(t)).ToList())

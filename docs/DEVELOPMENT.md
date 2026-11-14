@@ -224,3 +224,14 @@ Hangfire queue `workflows` is processed by the Worker; recurring jobs `workflow-
 Optional configuration section `Conversion` (`SweepBatch` 50, `StaleProcessingMinutes` 10, `ReminderMaxLatenessMinutes` 30, `MaxWebhookBytes` 262144). Everything else is edited in the UI (Sales conversion → Demo & trial settings). Hangfire queue `conversion` is processed by the Worker; recurring jobs `demo-reminders` (every minute) and `trial-lifecycle` (every 5 minutes). Migration: `Phase10Conversion` only.
 Quick start: Settings → add a representative (a workspace member) and weekly hours → Demo calendar → Book. Reminders: choose a WhatsApp account, switch them on, record WhatsApp *service* consent on the contact. Payments: Customers → Convert a Won opportunity → Create payment request → (after the money arrives) Verify payment with the receipt id. The payment provider screen lists only installed adapters (none ship).
 Tests: `ConvWorld` (tests/…/ConversionKit.cs) opens a tenant with the AI/catalog setup, one rep working every day, and the REAL Phase 10 services behind the AI tools (`Phase10.UseReal`; the older suites still use the "not connected" doubles). `FakeProviderAdapter` is test-only. The clock is `OffsetClock` (tests move it to make reminders and trial expiry due).
+
+## Phase 11: analytics and reporting
+Nothing to install. The Worker runs two Hangfire recurring jobs on queue `analytics` (`analytics-refresh` every 10 minutes, `analytics-rebuild` at 03:30 UTC); until the first refresh the dashboard says "Live". Optional configuration section `Analytics` (`RollupRetentionDays` 400, `IncrementalDays` 7, `CacheSeconds` 60, `StaleAfterMinutes` 45, `MaxRangeDays` 800, `MaxExportRows` 50000, `MaxPageSize` 200). Migration: `Phase11Analytics` only (2 tables + read indexes on earlier tables).
+
+Tests: `dotnet test` as before (MySQL and RabbitMQ variables as in Phase 5). Seeded reconciliation data: `tests/LeadPilot.IntegrationTests/AnalyticsScenario.cs` (documented edge cases; the rows are written with reflection and foreign keys off for the seeding connection only, the expectations come from independent raw SQL and hand counts).
+
+Large-dataset benchmark (opt-in, scratch database, a few minutes):
+```bash
+export LEADPILOT_TEST_CONNECTION="Server=localhost;Port=3306;User=leadpilot;Password=leadpilot_dev;"
+dotnet run --project tests/tools/LargeDatasetBenchmark -c Release -- --scale 1.0 --out docs/benchmarks/phase11-large-dataset.md   # --scale 0.02 for a smoke run, --keep to keep the database
+```

@@ -182,3 +182,25 @@ Every table has a tenant FK (restrict), `TenantId` index and the global query fi
 | PaymentProviderConfigs | unique WebhookId, unique (TenantId, ProviderKey); secret encrypted (data protection) |
 | PaymentEvents | unique (TenantId, ProviderKey, ExternalEventId): webhook idempotency |
 Money columns are `decimal(18,2)` with an explicit currency column; nothing is priced in code.
+
+## Phase 11: analytics (migration `Phase11Analytics`)
+| Table | Notes |
+|---|---|
+| DailyMetrics | one row per (TenantId, MetricKey, Day (`date`, workspace-local), Dimension = currency); `Count`, `decimal(18,2) Amount`; sparse; **unique (TenantId, MetricKey, Day, Dimension)**; tenant FK; also holds the current-state figures of the last refresh under keys `snapshot:*` (dated with the refresh day) |
+| AnalyticsRefreshStates | one row per tenant (unique TenantId): zone, covered days, last refresh / full rebuild, duration, row count — the source of "data as of" |
+
+**Read indexes added to earlier tables** (each chosen by measurement; the benchmark's `IGNORE INDEX` comparison is in `benchmarks/phase11-large-dataset.md`): Messages `(TenantId, Direction, SentAtUtc, DeliveredAtUtc)` (covers sent and delivered; 50 ms vs 3.2 s without), Messages `(TenantId, Direction, OccurredAtUtc)` (responses; 0.25 s vs 3.3 s), Messages `(TenantId, FailedAtUtc)` (18 ms vs 3.2 s), Demos `(TenantId, CreatedAtUtc)` and `(TenantId, CompletedAtUtc)`, Trials, Customers, Payments, Opportunities `(TenantId, Status, UpdatedAtUtc)`, CampaignRecipients `(TenantId, SentAtUtc, RepliedAtUtc)` (14 ms vs 640 ms).
+**Tried and dropped because the plans showed no gain:** Leads `(TenantId, CreatedAtUtc)` (the existing `(TenantId, IsArchived, CreatedAtUtc)` is used), Messages `(TenantId, ContactId, Direction[, SentAtUtc])` (1.25× at best), HandoffEvents, AiInteractions, DiscoveryResults, Campaigns time indexes (the optimiser kept choosing other keys). Round-by-round files: `benchmarks/phase11-round1-before-optimisation.md`, `…round2…`, final `phase11-large-dataset.md`.
+
+### Measured on 200 000 leads, 260 000 contacts, 1.2 M messages + 1.5 M status rows, 400 000 campaign recipients, 100 000 discovery results (scratch DB, 4-core sandbox, MySQL on the same host; final round)
+| What | Time |
+|---|---|
+| Dashboard from the rollup, 30 days + previous period (20 tiles, 5 trends) | **0.54 s** (1.4 MiB allocated) |
+| …365 days + previous period (comparison dropped when older than the rollup) | 1.4 s |
+| Dashboard computed live (no rollup yet), team | 18.6 s |
+| Dashboard computed live, one sales rep's own data | 34.6 s (the slowest path: see limits) |
+| Rollup incremental refresh (7 days + current-state figures) | 7.5 s per workspace |
+| Rollup full rebuild (400 days) | 34 s per workspace (1.1 GiB allocated transiently by EF result handling; peak working set 453 MiB) |
+| Reports, first page of 50 (90 days) | campaigns 9 ms · messaging usage 6 ms · trials 21 ms · revenue 17 ms · demos 90 ms · AI agents 0.47 s · lead sources 0.77 s · pipeline 0.86 s · discovery by city (3 000 cities) 0.92 s · rep performance 4.4 s · conversion funnel 5.2 s |
+| CSV export streamed (3 000-city report) | 3.5 s, 95 KiB, memory flat (peak working set unchanged 452 MiB) |
+Before the final rollup/index changes the same dashboard took 12.6 s from the rollup and 43 s live (round 1); the numbers above are what the shipped code does. Process memory never held record sets: the benchmark process's working set was 209 MiB after generating the data and 453 MiB at the end, dominated by EF's transient allocations during the full rebuild.

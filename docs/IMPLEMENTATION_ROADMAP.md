@@ -61,3 +61,6 @@ Phase 9 (automation workflow engine) is **built and tested with real MySQL and R
 
 ## Status after Phase 10
 Phase 10 (demos, trials, customer conversion, payment verification) is **built and tested with real MySQL and RabbitMQ, the fake WAHA and a test-only payment provider fake; no live WAHA / Claude / Voyage / Qdrant / payment provider / meeting provider was ever used and Docker was never run**. Next: Phase 11 (analytics and reporting). Prerequisites: none outstanding from Phase 10.
+
+## Status after Phase 11
+Phase 11 (analytics and reporting) is **built and tested with real MySQL and RabbitMQ and measured on a generated 200 000-lead / 2.7 M message-row data set; never run against live WAHA, Claude, Voyage, Google Places, a real Qdrant or a payment provider** (their data is whatever the earlier phases recorded). Definitions: METRICS.md; measurements: benchmarks/phase11-large-dataset.md; limits and decisions: PROGRESS.md, OWNER_DECISIONS 41–50. Next: Phase 12 (SaaS commercialization). Not started.

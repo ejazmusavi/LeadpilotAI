@@ -22,7 +22,7 @@ public class AnalyticsReconciliationTests(AppFixture app)
         (StreamKeys.DemosCompleted, "SELECT COUNT(*) FROM Demos WHERE TenantId=@t AND CompletedAtUtc>=@f AND CompletedAtUtc<@e"),
         (StreamKeys.TrialsStarted, "SELECT COUNT(*) FROM Trials WHERE TenantId=@t AND CreatedAtUtc>=@f AND CreatedAtUtc<@e"),
         (StreamKeys.CustomersWon, "SELECT COUNT(*) FROM Customers WHERE TenantId=@t AND ConvertedAtUtc>=@f AND ConvertedAtUtc<@e"),
-        (StreamKeys.OpportunitiesLost, "SELECT COUNT(*) FROM Opportunities WHERE TenantId=@t AND Status='Lost' AND COALESCE(UpdatedAtUtc,CreatedAtUtc)>=@f AND COALESCE(UpdatedAtUtc,CreatedAtUtc)<@e"),
+        (StreamKeys.OpportunitiesLost, "SELECT COUNT(*) FROM Opportunities WHERE TenantId=@t AND Status='Lost' AND UpdatedAtUtc>=@f AND UpdatedAtUtc<@e"),
         (StreamKeys.AiConversations, "SELECT COUNT(*) FROM (SELECT ConversationId, MIN(CreatedAtUtc) first FROM AiInteractions WHERE TenantId=@t GROUP BY ConversationId) x WHERE x.first>=@f AND x.first<@e"),
         (StreamKeys.Handoffs, "SELECT COUNT(*) FROM HandoffEvents WHERE TenantId=@t AND Kind IN ('Takeover','Escalated','AutoTakeover') AND OccurredAtUtc>=@f AND OccurredAtUtc<@e"),
         (StreamKeys.CampaignSent, "SELECT COUNT(*) FROM CampaignRecipients WHERE TenantId=@t AND SentAtUtc>=@f AND SentAtUtc<@e"),

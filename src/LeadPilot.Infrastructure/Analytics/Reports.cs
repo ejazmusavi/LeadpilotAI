@@ -163,7 +163,7 @@ public sealed class ReportBuilder(AppDbContext db, AnalyticsQueries q)
         if (me is { } u2) demos = demos.Where(d => d.RepUserId == u2);
         var done = demos.Where(d => d.CompletedAtUtc >= r.FromUtc && d.CompletedAtUtc < r.ToUtcExclusive).GroupBy(d => d.RepUserId).Select(g => new { Id = g.Key, N = g.Count() });
         var noShow = demos.Where(d => d.Status == DemoStatus.NoShow && d.StartUtc >= r.FromUtc && d.StartUtc < r.ToUtcExclusive).GroupBy(d => d.RepUserId).Select(g => new { Id = g.Key, N = g.Count() });
-        var opps = db.Opportunities.AsNoTracking().Where(o => o.TenantId == t && o.OwnerUserId != null && (o.Status == OpportunityStatus.Won || o.Status == OpportunityStatus.Lost) && (o.UpdatedAtUtc ?? o.CreatedAtUtc) >= r.FromUtc && (o.UpdatedAtUtc ?? o.CreatedAtUtc) < r.ToUtcExclusive);
+        var opps = db.Opportunities.AsNoTracking().Where(o => o.TenantId == t && o.OwnerUserId != null && (o.Status == OpportunityStatus.Won || o.Status == OpportunityStatus.Lost) && o.UpdatedAtUtc >= r.FromUtc && o.UpdatedAtUtc < r.ToUtcExclusive);
         if (me is { } u3) opps = opps.Where(o => o.OwnerUserId == u3);
         var oppRows = await opps.GroupBy(o => new { Id = o.OwnerUserId!.Value, o.Status, o.Currency }).Select(g => new { g.Key.Id, g.Key.Status, g.Key.Currency, N = g.Count(), V = g.Sum(o => o.Value) }).ToListAsync(ct);
 

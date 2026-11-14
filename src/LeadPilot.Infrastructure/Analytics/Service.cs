@@ -107,7 +107,7 @@ public sealed class AnalyticsService(AppDbContext db, ITenantContext tenant, ICu
                     var money = cur.GetValueOrDefault(k)?.Where(x => x.Dim.Length > 0).Select(x => x.Dim).Concat(prev?.GetValueOrDefault(k)?.Select(x => x.Dim) ?? []).Distinct().OrderBy(x => x, StringComparer.Ordinal)
                         .Select(cur2 => new MoneyDto(cur2, cur[k].Where(x => x.Dim == cur2).Sum(x => x.Amount), prev is null ? null : prev.GetValueOrDefault(k)?.Where(x => x.Dim == cur2).Sum(x => x.Amount) ?? 0m)).ToList()
                         ?? (prev?.GetValueOrDefault(k)?.Select(x => x.Dim).Distinct().OrderBy(x => x, StringComparer.Ordinal).Select(d => new MoneyDto(d, 0m, prev[k].Where(x => x.Dim == d).Sum(x => x.Amount))).ToList() ?? []);
-                    list.Add(Dto(def, money: money)); break;
+                    list.Add(Dto(def, money: money, drill: Drill(c, k))); break;
                 }
                 default:
                 {
@@ -136,6 +136,9 @@ public sealed class AnalyticsService(AppDbContext db, ITenantContext tenant, ICu
         {
             MetricCatalog.TotalLeads => "/Leads" + (owner.Length > 0 ? "?" + owner[1..] : ""),
             StreamKeys.LeadsCreated => $"/Leads?CreatedFromUtc={Uri.EscapeDataString(c.Range.FromUtc.ToString("o", Inv))}&CreatedToUtc={Uri.EscapeDataString(c.Range.ToUtcExclusive.AddTicks(-1).ToString("o", Inv))}&Archived=All{owner}",
+            // the list pages that exist have no date filter of their own: the link opens the list, labelled honestly as unfiltered
+            StreamKeys.TrialsStarted => "/Trials", StreamKeys.CustomersWon => "/Customers", StreamKeys.Revenue => "/Payments", StreamKeys.CampaignSent => "/Campaigns",
+            StreamKeys.AiConversations or StreamKeys.Responses or StreamKeys.Handoffs => "/Conversations", StreamKeys.DemosScheduled or StreamKeys.DemosCompleted => "/Demos",
             _ => null
         };
     }

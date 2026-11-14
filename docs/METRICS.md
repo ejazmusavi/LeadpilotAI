@@ -54,6 +54,10 @@ Scope (the dashboard needs `Dashboard.View`, reports `Reports.View`): users with
 
 Duplicates: events are rows, so duplicate *rows* are separate events (two handoff events are two handoffs); "first" metrics (`leads.contacted`, `ai.conversations`) are deliberately de-duplicated per lead / conversation. Archived leads stay in period counts of things that happened (they were created, they were messaged) but leave all current-state totals; soft-deleted contacts never make a lead verified or eligible.
 
+## Drill-down
+
+Metric cards link to the underlying records where a list page exists: *Total leads* and *New leads* open the leads list with the same filters (creation range, archived = all, and the owner for an own-data view). Trials, customers, revenue (payments), campaigns, responses / AI conversations / handoffs (conversations) and demos open their list **without** a date filter — the card says "Open list (not date-filtered)". The other metrics (verified, eligible, interested, qualified, contacted, lost, rates) have no list page that can express their definition, so they have no link rather than a misleading one.
+
 ## Reports
 
 All reports are paginated (`page`, `pageSize` ≤ 200) with a totals row computed over **all** rows, and exportable as CSV. `Team` = needs `Reports.Team`; the others show the viewer's own leads without it.

@@ -90,7 +90,7 @@ public sealed class AnalyticsQueries(AppDbContext db, Guid tenantId, Guid? owner
             case StreamKeys.CustomersWon:
                 return Scope(db.Customers.AsNoTracking().Where(x => x.TenantId == t), x => x.LeadId).Select(x => new EventRow { At = x.ConvertedAtUtc, LeadId = x.LeadId, Dim = "", Amount = 0m });
             case StreamKeys.OpportunitiesLost:
-                return Scope(db.Opportunities.AsNoTracking().Where(o => o.TenantId == t && o.Status == OpportunityStatus.Lost), o => o.LeadId).Select(o => new EventRow { At = o.UpdatedAtUtc ?? o.CreatedAtUtc, LeadId = o.LeadId, Dim = "", Amount = 0m });
+                return Scope(db.Opportunities.AsNoTracking().Where(o => o.TenantId == t && o.Status == OpportunityStatus.Lost && o.UpdatedAtUtc != null), o => o.LeadId).Select(o => new EventRow { At = o.UpdatedAtUtc!.Value, LeadId = o.LeadId, Dim = "", Amount = 0m });
             case StreamKeys.AiConversations:
             {
                 var q = db.AiInteractions.AsNoTracking().Where(i => i.TenantId == t);
@@ -126,13 +126,19 @@ public sealed class AnalyticsQueries(AppDbContext db, Guid tenantId, Guid? owner
         return q.Where(System.Linq.Expressions.Expression.Lambda<Func<T, bool>>(contains, param));
     }
 
+    /// <summary>One 15-minute bucket of a stream (a grouped result row, never a record).</summary>
+    public sealed class BucketRow { public int Year { get; set; } public int Month { get; set; } public int Day { get; set; } public int Hour { get; set; } public int Q { get; set; } public string Dim { get; set; } = ""; public long N { get; set; } public decimal S { get; set; } }
+
+    /// <summary>The grouped query behind <see cref="DaysAsync"/> (exposed so its SQL and plan can be inspected).</summary>
+    public IQueryable<BucketRow> Buckets(string key, DateTime fromUtc, DateTime toUtc) =>
+        Stream(key).Where(e => e.At >= fromUtc && e.At < toUtc)
+            .GroupBy(e => new { e.At.Year, e.At.Month, e.At.Day, e.At.Hour, Q = e.At.Minute < 15 ? 0 : e.At.Minute < 30 ? 1 : e.At.Minute < 45 ? 2 : 3, e.Dim })
+            .Select(g => new BucketRow { Year = g.Key.Year, Month = g.Key.Month, Day = g.Key.Day, Hour = g.Key.Hour, Q = g.Key.Q, Dim = g.Key.Dim, N = g.LongCount(), S = g.Sum(x => x.Amount) });
+
     /// <summary>Events of a stream in [fromUtc, toUtc), grouped in SQL into 15-minute buckets (every real time zone's midnight falls on a bucket edge) and folded into workspace-local days here.</summary>
     public async Task<List<DayCell>> DaysAsync(string key, DateTime fromUtc, DateTime toUtc, TimeZoneInfo tz, CancellationToken ct)
     {
-        var rows = await Stream(key).Where(e => e.At >= fromUtc && e.At < toUtc)
-            .GroupBy(e => new { e.At.Year, e.At.Month, e.At.Day, e.At.Hour, Q = e.At.Minute < 15 ? 0 : e.At.Minute < 30 ? 1 : e.At.Minute < 45 ? 2 : 3, e.Dim })
-            .Select(g => new { g.Key.Year, g.Key.Month, g.Key.Day, g.Key.Hour, g.Key.Q, g.Key.Dim, N = g.LongCount(), S = g.Sum(x => x.Amount) })
-            .ToListAsync(ct);
+        var rows = await Buckets(key, fromUtc, toUtc).ToListAsync(ct);
         var cells = new Dictionary<(DateOnly Day, string Dim), (long N, decimal S)>();
         foreach (var r in rows)
         {

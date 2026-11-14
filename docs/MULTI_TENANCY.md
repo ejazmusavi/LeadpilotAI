@@ -127,3 +127,12 @@ All eight new tables are `ITenantOwned` (architecture test); services use the te
 
 ## Phase 10 additions
 Every new entity is `ITenantOwned` (architecture-tested). Services read through `CrmContext` with explicit tenant predicates; ids of other workspaces answer 404 and referencing another workspace's lead, contact, plan, user, opportunity, subscription or customer is refused (and the SaveChanges guard throws `CrossTenantViolationException` if a bug tried). Jobs: `ConversionDirectory` (allow-listed `IgnoreQueryFilters`) returns tenant ids only; the work runs in `ITenantScopeRunner`. The anonymous payment webhook resolves the tenant from a random webhook id (`PaymentWebhookDirectory`, allow-listed), verifies the signature with THAT tenant's secret, and applies the event only to that tenant's requests. Tests: API (every endpoint family), MVC pages, DB guard, jobs, webhook cross-tenant event.
+
+## Phase 11 additions
+- `DailyMetric` and `AnalyticsRefreshState` are `ITenantOwned` (query filter + save guard + tenant FK; architecture-tested). A scope of B cannot store rollup rows stamped with A's tenant (`CrossTenantViolationException`, tested), and a refresh in B's scope leaves A's rollup untouched (tested).
+- Every root query in `AnalyticsQueries`/`ReportBuilder` names the tenant explicitly on top of the global filter (architecture-tested count) so the tenant-leading indexes are used and a missing filter cannot leak.
+- **Cache isolation:** keys are `t:{tenant}:analytics:v{version}:{key}`, built only by `TenantCacheKeys`; tenant B asking the same range right after tenant A gets B's numbers (tested), invalidation is per tenant, an empty tenant id fails closed.
+- **Jobs:** `analytics-refresh/rebuild` read tenant ids only (allow-listed `AnalyticsDirectory`) and compute each tenant inside its own scope; after the job each rollup equals its own raw rows and the row counts differ per tenant (tested).
+- **API/MVC:** reports of the other workspace never appear in any report's JSON or HTML (searched for A's/B's marker names in all 11 reports and 3 pages); there is no tenant parameter to tamper with.
+- **Within a tenant:** people without `Reports.Team` see only the leads they own (server-side), team-only reports are 403.
+- Existing tenants receive `Dashboard.View`, `Reports.Team`, `Reports.Export` through the start-up role synchronisation (verified on a Phase 10 database that holds data).

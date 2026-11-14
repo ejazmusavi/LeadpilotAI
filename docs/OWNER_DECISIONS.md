@@ -146,3 +146,35 @@ After a person approves (Phase 8 approvals, unchanged), the gateway creates the 
 
 ### 40. New permissions and default roles
 Demos.View/Book/Manage, Trials.View/Manage, Customers.View/Manage, Payments.Request/Verify. Tenant Administrator: all. Sales Manager: all except Payments.Verify. Sales Agent: Demos.View/Book, Trials.View, Customers.View. Tenant Staff and Read-only: the three View permissions. Marketing Manager: none. Existing tenants receive them when the Web host starts (system-role synchronisation, verified by the upgrade test).
+
+## Phase 11 — analytics and reporting (decisions 41–50, taken while the owner was unavailable; each is the recommended default)
+
+### 41. Every metric is defined once, in code and in docs/METRICS.md, and carries a label
+`MetricCatalog` / `ReportCatalog` hold the name, **Verified / Calculated / Estimated** label, definition, formula and source tables; the UI shows them (badge + definition + formula + source) and a unit test fails if docs/METRICS.md lacks a metric or report. Judgement calls, all documented there: *contacted leads* = leads whose FIRST outbound message was sent in the period (a lead counts once); *responses* = inbound messages from known contacts; *interested prospects* = qualification fit Possible/Good OR a pricing / demo-request / trial-request AI intent; *qualified* = fit Good; *contact-eligible* = exactly the audience builder's rules (consent granted, not suppressed, not in a Suppressed stage), counted per lead; *lost opportunities* are counted at their last change (`UpdatedAtUtc`, the move to a Lost stage); *delivery rate* attributes a delivery to the day the message was SENT; *lead conversion rate* is a cohort rate (leads created in the period that are customers today). **Change:** edit `Catalog.cs` + METRICS.md together.
+
+### 42. The workspace time zone is the Phase 10 setting (Demo & trial settings), `UTC` when none exists
+There is no second time-zone setting. Date filters are workspace-local calendar days, both ends inclusive; instants are half-open [local midnight, next local midnight) so an event at exactly 00:00:00 belongs to the new day and DST days are 23/25 hours (tested). A zone change makes the rollup rebuild itself. **Change:** move the zone to a tenant-level setting if non-demo modules need their own.
+
+### 43. New permissions and default role mappings
+`Dashboard.View` (the dashboard), `Reports.View` (existing: reports; now also given to Sales Agents), `Reports.Team` (workspace-wide numbers, every person's performance, campaign / discovery / AI / revenue reports), `Reports.Export` (CSV). Tenant Administrator: all. Sales Manager and Marketing Manager: Dashboard.View + Reports.Team + Reports.Export. Tenant Staff and Read-only: Dashboard.View + Reports.Team (view, no export — exporting data is a deliberate privilege). Sales Agent: Dashboard.View + Reports.View, **no** Team, **no** Export. Existing tenants receive them when the Web host starts (system-role synchronisation; verified on a Phase 10 database).
+
+### 44. Role-appropriate views are enforced on the server, by scope, not by hiding links
+Without `Reports.Team` every query is restricted to the leads the caller OWNS (and what is attached to them: messages, demos, trials, opportunities, customers, conversations). Team-only reports answer 403; team-only metrics (revenue) are marked "Team only", never shown as zero. The own view never reads the workspace-wide rollup (it is computed live). **Change:** add a team/"all reps" scope per manager later (Phase 12 teams).
+
+### 45. Daily rollup: sparse tall table, 15-minute SQL buckets, recomputed not incremented
+`DailyMetrics` (workspace × metric × local day × currency). Aggregation is a SQL GROUP BY on 15-minute buckets (every real time zone's midnight is a bucket edge); the local-day folding of those few grouped rows is done in C#. Hangfire `analytics-refresh` every 10 min recomputes the last 7 local days (late receipts), `analytics-rebuild` rebuilds 400 days nightly at 03:30 UTC and whenever nothing exists or the zone changed. The dashboard says "Rollup — data as of …" or "Live", and flags a rollup older than 45 minutes as stale. Cohort rates, current-state figures and reports are always live. **Change:** `Analytics:*` options.
+
+### 46. Cache: in-process, tenant-scoped, 60-second TTL; no Redis
+The product has no Redis; adding one for this would be a new moving part. `AnalyticsCache` (bounded, 2 000 entries) builds keys only through `TenantCacheKeys` (`t:{tenant}:analytics:v{version}:{key}`) and the key includes the rollup's refresh stamp, so the Worker's refresh invalidates the Web/Api caches on their next read. Tested for cross-tenant isolation and invalidation. **Change:** swap for a distributed cache behind the same class.
+
+### 47. Export: CSV only, refused above 50 000 rows, audited before any byte is sent
+`Reports.Export` (plus `Reports.Team` for workspace-wide reports). The cap (`Analytics:MaxExportRows`) is checked first; larger reports answer 413 and write no audit entry. Otherwise one `Report.Exported` audit entry (who, report, row count, range and zone, scope) is written, then the file is streamed in chunks of 1 000 rows (UTF-8 BOM, shared formula-injection guard). No XLSX (the existing XLSX writer buffers a workbook in memory, which contradicts "streamed"). **Change:** a background export job for larger volumes.
+
+### 48. Charts are inline SVG bars; no chart library, no frontend framework
+Seven lines of Razor per chart (`_Trend.cshtml`): bars with `<title>` tooltips, an `aria-label`, peak value and first/last date; weekly buckets above 92 days. Nothing was added to the Bootstrap-only stack.
+
+### 49. Revenue is verified payments only, per currency, no MRR/ARR yet
+Only `Payments` rows count (they exist only after verification: manual evidence or a signed provider event); open / cancelled payment requests never do. Amounts are grouped by currency and never added across currencies; there is no grand total. Attributed to `PaidAtUtc`. Recurring revenue metrics (MRR, churn) need Phase 12 billing cycles and are not invented here.
+
+### 50. The large-dataset benchmark is a tool under `tests/tools`, results are published, indexes were pruned by evidence
+`tests/tools/LargeDatasetBenchmark` generates 200 000 leads and 2.7 M message and status rows (INSERT … SELECT) in a scratch database, measures every query, and compares each new index with `IGNORE INDEX`; indexes that did not help were removed before the migration was finalised. Results and plans: docs/benchmarks/phase11-large-dataset.md and DATABASE_DESIGN.md. Timings are from this 4-core sandbox with MySQL on the same machine, not a production sizing.

@@ -132,3 +132,12 @@ Cross-tenant data leakage (IDOR, filter bypass, cache/vector leakage) · credent
 - **Booking integrity** — only calculator slots; row-lock + recalculation + unique index; race tests (one rep, two reps).
 - **Separation of duties** — request, convert and verify are different permissions; verification records the verifier; the agreement records its approver and is immutable.
 - **Not covered** — no refunds, no partial payments, no card data of any kind is handled.
+
+## Phase 11: analytics and reporting
+- **Authorization** — dashboard `Dashboard.View`, reports `Reports.View`, export `Reports.Export`, workspace-wide data `Reports.Team`; 401 without a session, 403 without the permission, 404 for an unknown report (also on export). Every action carries a permission policy (architecture-tested). Role scope is server-side, never a hidden link.
+- **Export** — gated, row-capped (50 000, 413 before audit), audited *before* any data leaves (who, report, rows, range, zone, scope, time, IP via the audit entry), UTF-8 BOM CSV with the shared formula-injection guard (`=`, `+`, `-`, `@`, tab, CR neutralised; tested with hostile city names), streamed in chunks.
+- **No fabricated numbers** — empty workspaces show zeros / "—" / empty states; a rate without a denominator is "no rate", never 0 %; unverified payments never count as revenue; amounts are never summed across currencies.
+- **Cache** — tenant-scoped keys, short TTL, per-tenant invalidation; a failed key build (no tenant) throws instead of sharing.
+- **Data exposure** — reports return aggregates; the only free-text values are discovery city names, campaign names, user display names and agent names of the same workspace, rendered HTML-encoded (Razor) and defused in CSV.
+- **Denial of service** — range ≤ 800 days, page size ≤ 200, export cap, statements are grouped SQL (no unbounded materialisation; measured in docs/benchmarks/phase11-large-dataset.md).
+- **Not covered** — no per-user export quota, no scheduled e-mail reports, no row-level data-subject filters in aggregates.

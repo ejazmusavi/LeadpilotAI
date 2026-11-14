@@ -31,7 +31,7 @@
                 }
                 else if (Model.Unit == "percent" && Model.Numerator is not null) { <div class="small text-muted">@Model.Numerator.Value.ToString("N0") of @Model.Denominator?.ToString("N0")</div> }
             }
-            @if (Model.DrillDownUrl is not null) { <a class="small" href="@Model.DrillDownUrl">View records</a> }
+            @if (Model.DrillDownUrl is not null) { <a class="small" href="@Model.DrillDownUrl">@(Model.DrillDownUrl.Contains('?') ? "View records" : "Open list (not date-filtered)")</a> }
             <details class="small mt-1"><summary class="text-muted">Definition</summary><div class="mt-1">@Model.Definition</div>@if (Model.Formula is not null) { <div class="mt-1"><strong>Formula:</strong> @Model.Formula</div> }<div class="mt-1 text-muted"><strong>Source:</strong> @Model.Sources</div></details>
         </div>
     </div>

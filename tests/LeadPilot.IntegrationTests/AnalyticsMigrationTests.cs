@@ -20,7 +20,7 @@ namespace LeadPilot.IntegrationTests;
 public class AnalyticsMigrationTests(AppFixture app)
 {
     private static readonly string[] Codes = ["Reports.Export", "Reports.Team", "Dashboard.View"];
-    private static readonly string[] Indexes = ["IX_Messages_Tenant_Dir_Sent", "IX_Messages_Tenant_Dir_Occurred", "IX_Messages_Tenant_Failed", "IX_Demos_Tenant_Created", "IX_Demos_Tenant_Completed",
+    private static readonly string[] Indexes = ["IX_Messages_Tenant_Dir_Sent", "IX_Messages_Tenant_Contact_Dir_Sent", "IX_Messages_Tenant_Dir_Occurred", "IX_Messages_Tenant_Failed", "IX_Demos_Tenant_Created", "IX_Demos_Tenant_Completed",
         "IX_Trials_Tenant_Created", "IX_Customers_Tenant_Converted", "IX_Payments_Tenant_Paid", "IX_Opportunities_Tenant_Status_Updated", "IX_CampaignRecipients_Tenant_Sent"];
 
     [RequiresMySqlFact]

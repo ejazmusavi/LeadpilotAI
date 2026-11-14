@@ -35,7 +35,8 @@ internal static class AnalyticsModel
         // Indexes on earlier tables (event time first after the tenant, so a date range is one index range scan). Only indexes that the benchmark showed to help are kept; docs/benchmarks/phase11-large-dataset.md lists the ones that were tried and dropped.
         builder.Entity<Message>(b =>
         {
-            b.HasIndex(x => new { x.TenantId, x.Direction, x.SentAtUtc }).HasDatabaseName("IX_Messages_Tenant_Dir_Sent");
+            b.HasIndex(x => new { x.TenantId, x.Direction, x.SentAtUtc, x.DeliveredAtUtc }).HasDatabaseName("IX_Messages_Tenant_Dir_Sent");   // covers "sent" and "delivered" without row look-ups
+            b.HasIndex(x => new { x.TenantId, x.ContactId, x.Direction, x.SentAtUtc }).HasDatabaseName("IX_Messages_Tenant_Contact_Dir_Sent");   // "was this lead messaged before?"
             b.HasIndex(x => new { x.TenantId, x.Direction, x.OccurredAtUtc }).HasDatabaseName("IX_Messages_Tenant_Dir_Occurred");
             b.HasIndex(x => new { x.TenantId, x.FailedAtUtc }).HasDatabaseName("IX_Messages_Tenant_Failed");
         });
@@ -48,6 +49,6 @@ internal static class AnalyticsModel
         builder.Entity<Customer>().HasIndex(x => new { x.TenantId, x.ConvertedAtUtc }).HasDatabaseName("IX_Customers_Tenant_Converted");
         builder.Entity<Payment>().HasIndex(x => new { x.TenantId, x.PaidAtUtc }).HasDatabaseName("IX_Payments_Tenant_Paid");
         builder.Entity<Opportunity>().HasIndex(x => new { x.TenantId, x.Status, x.UpdatedAtUtc }).HasDatabaseName("IX_Opportunities_Tenant_Status_Updated");
-        builder.Entity<CampaignRecipient>().HasIndex(x => new { x.TenantId, x.SentAtUtc }).HasDatabaseName("IX_CampaignRecipients_Tenant_Sent");
+        builder.Entity<CampaignRecipient>().HasIndex(x => new { x.TenantId, x.SentAtUtc, x.RepliedAtUtc }).HasDatabaseName("IX_CampaignRecipients_Tenant_Sent");
     }
 }

@@ -37,7 +37,7 @@ public class ConversionArchitectureTests
         var setter = typeof(Subscription).GetProperty(nameof(Subscription.Status))!.SetMethod!;
         Assert.True(setter.IsPrivate);
         // payments are written only by the verification core
-        var paymentWriters = Files(".").Where(f => File.ReadAllText(f).Contains("Payment.Create(") || File.ReadAllText(f).Contains("db.Payments.Add(")).Select(Path.GetFileName).Where(n => n != "Customers.cs").ToList();
+        var paymentWriters = Files(".").Where(f => System.Text.RegularExpressions.Regex.IsMatch(File.ReadAllText(f), @"(?<!Billing)Payment\.Create\(") || File.ReadAllText(f).Contains("db.Payments.Add(")).Select(Path.GetFileName).Where(n => n != "Customers.cs").ToList();
         Assert.Equal(["PaymentService.cs"], paymentWriters);
     }
 

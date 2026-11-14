@@ -15,7 +15,7 @@ namespace LeadPilot.Infrastructure.Services.Tenancy;
 /// <summary>Platform-level tenant lifecycle. Authorization (Tenants.Manage) is enforced at the edge; every operation is audited against the target tenant.</summary>
 public sealed class TenantAdminService(
     AppDbContext db, ITenantContextAccessor accessor, IAuditService audit, IClock clock, InvitationIssuer issuer,
-    IValidator<CreateTenantRequest> validator, ICurrentUser user, ILogger<TenantAdminService> logger) : ITenantAdminService
+    IValidator<CreateTenantRequest> validator, ICurrentUser user, ITenantSuspensionService suspension, ILogger<TenantAdminService> logger) : ITenantAdminService
 {
     public async Task<PagedResult<TenantDto>> ListAsync(string? search, TenantStatus? status, int page, int pageSize, CancellationToken ct = default)
     {
@@ -87,20 +87,7 @@ public sealed class TenantAdminService(
 
     public Task<Result<TenantDto>> SuspendAsync(Guid id, string? reason, CancellationToken ct = default) => SuspendAsync(id, reason, SuspensionKind.Manual, ct);
 
-    public Task<Result<TenantDto>> SuspendAsync(Guid id, string? reason, SuspensionKind kind, CancellationToken ct = default) =>
-        ResultFlow.GuardAsync(async () =>
-        {
-            var tenant = await db.Tenants.FirstOrDefaultAsync(t => t.Id == id, ct);
-            if (tenant is null) return Result.Failure<TenantDto>(Error.NotFound("Tenant"));
-            using var _ = accessor.BeginPlatformScope();
-            tenant.Suspend(reason, clock.UtcNow, kind);
-            audit.Record(new AuditEntry("Tenant.Suspended", "Tenant", id.ToString(), $"Tenant '{tenant.Name}' suspended ({kind}). Reason: {tenant.SuspensionReason ?? "n/a"}", id));
-            // Active API sessions are cut off at the next request (membership resolver); refresh tokens are revoked so they cannot be renewed either.
-            var now = clock.UtcNow;
-            foreach (var t in await db.RefreshTokens.Where(r => r.TenantId == id && r.RevokedAtUtc == null).ToListAsync(ct)) t.Revoke(now);
-            await db.SaveChangesAsync(ct);
-            return Result.Success(TenantQueries.ToDto(tenant, await MemberCount(id, ct)));
-        }, logger);
+    public Task<Result<TenantDto>> SuspendAsync(Guid id, string? reason, SuspensionKind kind, CancellationToken ct = default) => suspension.SuspendAsync(id, reason, kind, ct);
 
     public Task<Result<TenantDto>> ActivateAsync(Guid id, CancellationToken ct = default) =>
         ResultFlow.GuardAsync(async () =>
@@ -109,6 +96,7 @@ public sealed class TenantAdminService(
             if (tenant is null) return Result.Failure<TenantDto>(Error.NotFound("Tenant"));
             using var _ = accessor.BeginPlatformScope();
             tenant.Activate(clock.UtcNow);
+            if (await db.TenantBillingStates.FirstOrDefaultAsync(x => x.TenantId == id, ct) is { } billingState) billingState.SetSuspensionKind(null, clock.UtcNow);
             audit.Record(new AuditEntry("Tenant.Activated", "Tenant", id.ToString(), $"Tenant '{tenant.Name}' activated.", id));
             await db.SaveChangesAsync(ct);
             return Result.Success(TenantQueries.ToDto(tenant, await MemberCount(id, ct)));

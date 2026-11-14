@@ -1,4 +1,5 @@
 using LeadPilot.Application.Billing;
+using LeadPilot.Application.Contracts;
 using LeadPilot.Domain.Billing;
 using LeadPilot.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -16,12 +17,19 @@ public static class BillingServiceCollection
         services.AddScoped<IEntitlementService, EntitlementService>();
         services.AddScoped<InvoiceIssuer>();
         services.AddScoped<BillingPaymentVerifier>();
+        services.AddScoped<IBillingLifecycleService, BillingLifecycleService>();
+        services.AddScoped<ITenantSuspensionService, LeadPilot.Infrastructure.Services.Tenancy.TenantSuspensionService>();
+        services.AddScoped<PlatformDirectory>();
+        services.AddScoped<BillingJob>();
+        return services;
+    }
+
+    /// <summary>Web and Api only (the Worker has no tenant administration, sign-in or HTTP context): plans, the tenant billing views, platform administration, self-registration and onboarding.</summary>
+    public static IServiceCollection AddBillingAdministration(this IServiceCollection services)
+    {
         services.AddScoped<IPlanService, PlanService>();
         services.AddScoped<IBillingService, BillingService>();
-        services.AddScoped<IBillingLifecycleService, BillingLifecycleService>();
-        services.AddScoped<PlatformDirectory>();
         services.AddScoped<IPlatformBillingService, PlatformBillingService>();
-        services.AddScoped<BillingJob>();
         services.AddScoped<ICaptchaVerifier, NotConfiguredCaptchaVerifier>();
         services.AddScoped<IDisposableDomainPolicy, DefaultDisposableDomainPolicy>();
         services.AddScoped<IRegistrationService, RegistrationService>();

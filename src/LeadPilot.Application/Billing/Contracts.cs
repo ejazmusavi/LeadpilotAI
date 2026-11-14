@@ -28,28 +28,28 @@ public interface IEntitlementService
 
 public sealed record UsageLine(UsageDimension Dimension, string Label, string Unit, bool IsPeriodic, long Used, long? Limit, LimitSource Source, string? OverrideReason, DateTime? OverrideExpiresAtUtc, double? Percent, long UiFactor);
 public sealed record FeatureLine(string Key, string Label, bool Enabled, bool Overridden);
-public sealed record SubscriptionDto(Guid PlanId, string PlanName, SubscriptionState State, DateTime PeriodStartUtc, DateTime PeriodEndUtc, DateTime? TrialEndsAtUtc, DateTime? GraceEndsAtUtc,
+public sealed record TenantSubscriptionDto(Guid PlanId, string PlanName, SubscriptionState State, DateTime PeriodStartUtc, DateTime PeriodEndUtc, DateTime? TrialEndsAtUtc, DateTime? GraceEndsAtUtc,
     Guid? PendingPlanId, string? PendingPlanName, decimal Price, string Currency, PlanCycle Cycle, string? GrantReason);
 public sealed record UsageNoticeDto(UsageDimension Dimension, string Label, int Threshold, long Used, long Limit, DateTime PeriodStartUtc, DateTime CreatedAtUtc);
-public sealed record EntitlementOverview(SubscriptionDto? Subscription, IReadOnlyList<UsageLine> Usage, IReadOnlyList<FeatureLine> Features, IReadOnlyList<UsageNoticeDto> Notices, bool EmailVerificationPending, bool IsPlatformTenant);
+public sealed record EntitlementOverview(TenantSubscriptionDto? Subscription, IReadOnlyList<UsageLine> Usage, IReadOnlyList<FeatureLine> Features, IReadOnlyList<UsageNoticeDto> Notices, bool EmailVerificationPending, bool IsPlatformTenant);
 
 // ---------- plans ----------
 
-public sealed record PlanDto(Guid Id, string Code, string Name, string? Description, PlanCycle Cycle, int? CustomPeriodDays, decimal Price, string Currency, bool IsTrial, int? TrialDays,
+public sealed record PlatformPlanDto(Guid Id, string Code, string Name, string? Description, PlanCycle Cycle, int? CustomPeriodDays, decimal Price, string Currency, bool IsTrial, int? TrialDays,
     PlanStatus Status, PlanVisibility Visibility, int SortOrder, bool IsSample, IReadOnlyDictionary<UsageDimension, long?> Limits, IReadOnlyList<string> Features, int TenantCount);
 
 /// <summary>Limits: a key with a null value is unlimited, a key with 0 means "not included", a missing key is unlimited. Features: the keys that are included.</summary>
-public sealed record SavePlanRequest(string Code, string Name, string? Description, PlanCycle Cycle, int? CustomPeriodDays, decimal Price, string Currency, bool IsTrial, int? TrialDays,
+public sealed record SavePlatformPlanRequest(string Code, string Name, string? Description, PlanCycle Cycle, int? CustomPeriodDays, decimal Price, string Currency, bool IsTrial, int? TrialDays,
     PlanVisibility Visibility, int SortOrder, Dictionary<UsageDimension, long?>? Limits, List<string>? Features);
 
 public interface IPlanService
 {
-    Task<IReadOnlyList<PlanDto>> ListAsync(bool includeArchived, CancellationToken ct = default);
-    Task<Result<PlanDto>> GetAsync(Guid id, CancellationToken ct = default);
-    Task<Result<PlanDto>> CreateAsync(SavePlanRequest request, CancellationToken ct = default);
-    Task<Result<PlanDto>> UpdateAsync(Guid id, SavePlanRequest request, CancellationToken ct = default);
-    Task<Result<PlanDto>> ArchiveAsync(Guid id, CancellationToken ct = default);
-    Task<Result<PlanDto>> RestoreAsync(Guid id, CancellationToken ct = default);
+    Task<IReadOnlyList<PlatformPlanDto>> ListAsync(bool includeArchived, CancellationToken ct = default);
+    Task<Result<PlatformPlanDto>> GetAsync(Guid id, CancellationToken ct = default);
+    Task<Result<PlatformPlanDto>> CreateAsync(SavePlatformPlanRequest request, CancellationToken ct = default);
+    Task<Result<PlatformPlanDto>> UpdateAsync(Guid id, SavePlatformPlanRequest request, CancellationToken ct = default);
+    Task<Result<PlatformPlanDto>> ArchiveAsync(Guid id, CancellationToken ct = default);
+    Task<Result<PlatformPlanDto>> RestoreAsync(Guid id, CancellationToken ct = default);
 }
 
 // ---------- tenant billing ----------
@@ -76,7 +76,7 @@ public interface IBillingService
     Task<Result<InvoiceDto>> GetInvoiceAsync(Guid id, CancellationToken ct = default);
     Task<IReadOnlyList<BillingPaymentDto>> ListPaymentsAsync(CancellationToken ct = default);
     Task<Result<InvoiceDto>> ReportPaymentAsync(Guid invoiceId, PaymentReportRequest request, CancellationToken ct = default);
-    Task<IReadOnlyList<PlanDto>> AvailablePlansAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<PlatformPlanDto>> AvailablePlansAsync(CancellationToken ct = default);
     Task<Result<PlanChangePreview>> PreviewPlanChangeAsync(Guid planId, CancellationToken ct = default);
     Task<Result<PlanChangeDto>> RequestPlanChangeAsync(Guid planId, CancellationToken ct = default);
     Task<Result> CancelPlanChangeAsync(Guid id, CancellationToken ct = default);

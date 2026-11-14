@@ -30,7 +30,7 @@ public sealed class PaymentReportForm
     public DateTime? PaidOn { get; set; }
     [StringLength(500)] public string? Note { get; set; }
 }
-public sealed class PlansViewModel { public IReadOnlyList<PlanDto> Plans { get; set; } = []; public SubscriptionDto? Current { get; set; } public bool CanManage { get; set; } public PlanChangeDto? OpenChange { get; set; } }
+public sealed class PlansViewModel { public IReadOnlyList<PlatformPlanDto> Plans { get; set; } = []; public TenantSubscriptionDto? Current { get; set; } public bool CanManage { get; set; } public PlanChangeDto? OpenChange { get; set; } }
 public sealed class PlanPreviewViewModel { public PlanChangePreview Preview { get; set; } = default!; }
 public sealed class BillingPaymentsViewModel { public IReadOnlyList<BillingPaymentDto> Payments { get; set; } = []; public IReadOnlyList<PlanChangeDto> Changes { get; set; } = []; }
 
@@ -53,7 +53,7 @@ public sealed class OnboardingViewModel { public OnboardingOverview Overview { g
 public sealed class PlatformTenantsViewModel { public string? Query { get; set; } public string? Status { get; set; } public PagedResult<PlatformTenantRow> Result { get; set; } = default!; }
 public sealed class PlatformTenantViewModel
 {
-    public PlatformTenantDetail Detail { get; set; } = default!; public IReadOnlyList<PlanDto> Plans { get; set; } = [];
+    public PlatformTenantDetail Detail { get; set; } = default!; public IReadOnlyList<PlatformPlanDto> Plans { get; set; } = [];
 }
 public sealed class GrantForm { [Required] public Guid PlanId { get; set; } public DateTime? PeriodEnd { get; set; } [Required, StringLength(300)] public string Reason { get; set; } = string.Empty; }
 public sealed class LimitOverrideForm
@@ -82,7 +82,7 @@ public sealed class PlatformPlanForm
     public Dictionary<UsageDimension, long?> Limits { get; set; } = [];
     public List<string> Features { get; set; } = [];
 }
-public sealed class PlatformPlansViewModel { public IReadOnlyList<PlanDto> Plans { get; set; } = []; }
+public sealed class PlatformPlansViewModel { public IReadOnlyList<PlatformPlanDto> Plans { get; set; } = []; }
 
 public sealed class QueueViewModel { public PagedResult<QueueItem> Result { get; set; } = default!; public string? Status { get; set; } public bool Queue { get; set; } }
 public sealed class VerifyForm
@@ -92,5 +92,5 @@ public sealed class VerifyForm
     public DateTime? PaidAt { get; set; } [StringLength(500)] public string? Notes { get; set; }
 }
 public sealed class PlatformInvoiceViewModel { public InvoiceDto Invoice { get; set; } = default!; public VerifyForm Form { get; set; } = new(); }
-public sealed class PlatformSettingsViewModel { public PlatformSettingsDto Settings { get; set; } = default!; public IReadOnlyList<PlanDto> Plans { get; set; } = []; }
+public sealed class PlatformSettingsViewModel { public PlatformSettingsDto Settings { get; set; } = default!; public IReadOnlyList<PlatformPlanDto> Plans { get; set; } = []; }
 public sealed class PlatformAuditViewModel { public string? Action { get; set; } public PagedResult<PlatformAuditRow> Result { get; set; } = default!; }

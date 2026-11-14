@@ -98,6 +98,7 @@ public static class DependencyInjection
         services.AddConversion(config);
         services.AddAnalytics(config);
         services.AddBilling();
+        services.AddBillingAdministration();
         return services;
     }
 

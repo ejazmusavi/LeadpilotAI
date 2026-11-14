@@ -90,6 +90,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ITenantContext
     public DbSet<PlatformSetting> PlatformSettings => Set<PlatformSetting>();
     public DbSet<InvoiceSequence> InvoiceSequences => Set<InvoiceSequence>();
     public DbSet<RegistrationAttempt> RegistrationAttempts => Set<RegistrationAttempt>();
+    public DbSet<TenantBillingState> TenantBillingStates => Set<TenantBillingState>();
     public DbSet<TenantSubscription> TenantSubscriptions => Set<TenantSubscription>();
     public DbSet<SubscriptionEvent> SubscriptionEvents => Set<SubscriptionEvent>();
     public DbSet<TenantEntitlementOverride> TenantEntitlementOverrides => Set<TenantEntitlementOverride>();

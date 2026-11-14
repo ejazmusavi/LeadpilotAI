@@ -61,14 +61,15 @@ public sealed class PlatformDirectory(AppDbContext db)
         var plans = await db.Plans.AsNoTracking().Include(p => p.Limits).Where(p => planIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id, ct);
         var users = await db.UserTenants.IgnoreQueryFilters().AsNoTracking().Where(m => ids.Contains(m.TenantId) && m.Status == MembershipStatus.Active).GroupBy(m => m.TenantId).Select(g => new { g.Key, N = g.Count() }).ToDictionaryAsync(x => x.Key, x => x.N, ct);
         var leads = await db.Leads.IgnoreQueryFilters().AsNoTracking().Where(l => ids.Contains(l.TenantId) && !l.IsArchived).GroupBy(l => l.TenantId).Select(g => new { g.Key, N = g.Count() }).ToDictionaryAsync(x => x.Key, x => x.N, ct);
+        var states = await db.TenantBillingStates.AsNoTracking().Where(s => ids.Contains(s.TenantId)).ToDictionaryAsync(s => s.TenantId, ct);
         var overrides = await db.TenantEntitlementOverrides.IgnoreQueryFilters().AsNoTracking().Where(o => ids.Contains(o.TenantId) && o.Kind == OverrideKind.Limit).ToListAsync(ct);
         return tenants.Select(t =>
         {
-            subs.TryGetValue(t.Id, out var sub); Plan? plan = sub is null ? null : plans.GetValueOrDefault(sub.PlanId);
+            subs.TryGetValue(t.Id, out var sub); states.TryGetValue(t.Id, out var st); Plan? plan = sub is null ? null : plans.GetValueOrDefault(sub.PlanId);
             var views = overrides.Where(o => o.TenantId == t.Id).Select(o => new OverrideView(o.Key, o.Kind, o.LimitValue, o.Unlimited, o.FeatureEnabled, o.ExpiresAtUtc, o.Reason)).ToList();
             long? Lim(UsageDimension d) => plan is null ? null : EntitlementEvaluator.Limit(d, plan.Limits.ToDictionary(l => l.Dimension, l => l.Value), views, now).Limit;
-            return new PlatformTenantRow(t.Id, t.Name, t.Slug, t.Status, t.SuspensionKind, plan?.Name, sub?.State, sub?.PeriodEndUtc, users.GetValueOrDefault(t.Id), leads.GetValueOrDefault(t.Id),
-                Lim(UsageDimension.Leads), Lim(UsageDimension.Users), t.IsSelfRegistered, !t.IsSelfRegistered || t.OwnerEmailVerifiedAtUtc is not null, t.CreatedAtUtc);
+            return new PlatformTenantRow(t.Id, t.Name, t.Slug, t.Status, t.Status == TenantStatus.Suspended ? st?.SuspensionKind : null, plan?.Name, sub?.State, sub?.PeriodEndUtc, users.GetValueOrDefault(t.Id), leads.GetValueOrDefault(t.Id),
+                Lim(UsageDimension.Leads), Lim(UsageDimension.Users), st?.IsSelfRegistered ?? false, !(st?.IsSelfRegistered ?? false) || st!.OwnerEmailVerifiedAtUtc is not null, t.CreatedAtUtc);
         }).ToList();
     }
 

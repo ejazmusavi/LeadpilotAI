@@ -137,8 +137,8 @@ public sealed class RegistrationService(AppDbContext db, UserManager<Application
             try
             {
                 tenant = Tenant.Create(r.WorkspaceName, await UniqueSlugAsync(r.WorkspaceName, ct), null, r.Timezone, null, now);
-                tenant.MarkSelfRegistered();
-                db.Tenants.Add(tenant);
+                var billingState = TenantBillingState.Create(tenant.Id, now); billingState.MarkSelfRegistered(now);
+                db.Tenants.Add(tenant); db.TenantBillingStates.Add(billingState);
                 var permissions = await RoleProvisioner.SyncPermissionsAsync(db, ct);
                 await RoleProvisioner.SyncSystemRolesAsync(db, tenant, permissions, now, ct);
                 Services.Crm.CrmDefaults.AddAll(db, tenant.Id, now);
@@ -223,13 +223,14 @@ public sealed class RegistrationService(AppDbContext db, UserManager<Application
         if (user is null) return invalid;
         var confirmed = await users.ConfirmEmailAsync(user, token);
         if (!confirmed.Succeeded) return invalid;
+        await users.UpdateSecurityStampAsync(user);   // Identity does not burn an e-mail token on use: changing the stamp makes the link single-use
         var now = clock.UtcNow;
         using var _ = accessor.BeginPlatformScope();
         var memberOf = await db.UserTenants.IgnoreQueryFilters().AsNoTracking().Where(m => m.UserId == userId).Select(m => m.TenantId).ToListAsync(ct);
-        foreach (var t in await db.Tenants.Where(t => memberOf.Contains(t.Id) && t.IsSelfRegistered && t.OwnerEmailVerifiedAtUtc == null).ToListAsync(ct))
+        foreach (var t in await db.TenantBillingStates.Where(t => memberOf.Contains(t.TenantId) && t.IsSelfRegistered && t.OwnerEmailVerifiedAtUtc == null).ToListAsync(ct))
         {
             t.VerifyOwnerEmail(now);
-            db.AuditLogs.Add(AuditLog.Create(t.Id, null, userId, user.Email, "Tenant.EmailVerified", "Tenant", t.Id.ToString(), "The owner verified the e-mail address; sensitive features are unlocked.", null, null, now));
+            db.AuditLogs.Add(AuditLog.Create(t.TenantId, null, userId, user.Email, "Tenant.EmailVerified", "Tenant", t.TenantId.ToString(), "The owner verified the e-mail address; sensitive features are unlocked.", null, null, now));
         }
         await db.SaveChangesAsync(ct);
         return Result.Success();
@@ -247,7 +248,7 @@ public sealed class RegistrationService(AppDbContext db, UserManager<Application
         if (user is { EmailConfirmed: false, IsActive: true })
         {
             using var _ = accessor.BeginPlatformScope();
-            var tenantName = await (from m in db.UserTenants.IgnoreQueryFilters().AsNoTracking() join t in db.Tenants.AsNoTracking() on m.TenantId equals t.Id where m.UserId == user.Id && t.IsSelfRegistered select t.Name).FirstOrDefaultAsync(ct);
+            var tenantName = await (from m in db.UserTenants.IgnoreQueryFilters().AsNoTracking() join t in db.Tenants.AsNoTracking() on m.TenantId equals t.Id join st in db.TenantBillingStates.AsNoTracking() on t.Id equals st.TenantId where m.UserId == user.Id && st.IsSelfRegistered select t.Name).FirstOrDefaultAsync(ct);
             if (tenantName is not null) await SendVerificationAsync(user, tenantName, ct);
         }
         return Result.Success();   // the same answer for unknown, verified and pending addresses
@@ -260,7 +261,7 @@ public sealed class OnboardingService(AppDbContext db, ITenantContext tenant) : 
     public async Task<OnboardingOverview> GetAsync(CancellationToken ct = default)
     {
         var t = tenant.RequireTenantId();
-        var tn = await db.Tenants.AsNoTracking().Where(x => x.Id == t).Select(x => new { x.IsSelfRegistered, x.OwnerEmailVerifiedAtUtc }).FirstAsync(ct);
+        var tn = await db.TenantBillingStates.AsNoTracking().Where(x => x.TenantId == t).Select(x => new { x.IsSelfRegistered, x.OwnerEmailVerifiedAtUtc }).FirstOrDefaultAsync(ct) ?? new { IsSelfRegistered = false, OwnerEmailVerifiedAtUtc = (DateTime?)null };
         var members = await db.UserTenants.AsNoTracking().CountAsync(m => m.TenantId == t && m.Status == MembershipStatus.Active, ct);
         var invites = await db.TenantInvitations.AsNoTracking().CountAsync(i => i.TenantId == t, ct);
         var accounts = await db.ChannelAccounts.AsNoTracking().Where(a => a.TenantId == t && !a.IsDeleted).Select(a => a.ConnectionStatus).ToListAsync(ct);

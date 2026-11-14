@@ -35,6 +35,7 @@ public class TenancyArchitectureTests
         "src/LeadPilot.Infrastructure/Campaigns/CampaignDirectory.cs",   // tenant ids with due or stuck campaigns (the sweep job; returns ids only)
         "src/LeadPilot.Infrastructure/Messaging/Services/MessagingDirectory.cs",   // webhook key → tenant, tenants with due outbox rows / stuck messages (everything that must happen BEFORE a tenant scope exists)
         "src/LeadPilot.Infrastructure/Billing/PlatformAdmin.cs",   // PlatformDirectory: every cross-tenant READ of platform billing (tenant list, payment queue, invoices, platform audit, job ids); writes run in the target tenant's scope
+        "src/LeadPilot.Infrastructure/Services/Tenancy/TenantSuspensionService.cs", // the one suspension path (member count of the target tenant)
         "src/LeadPilot.Infrastructure/Billing/BillingSeed.cs",     // start-up backfill: which existing tenants have no subscription yet
         "src/LeadPilot.Infrastructure/Billing/Registration.cs",    // sign-up: the registrant's own memberships (e-mail verification, resend) in an explicit platform scope
     ];

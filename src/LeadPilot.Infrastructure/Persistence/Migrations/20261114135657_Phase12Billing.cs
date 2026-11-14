@@ -11,26 +11,6 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<bool>(
-                name: "IsSelfRegistered",
-                table: "Tenants",
-                type: "tinyint(1)",
-                nullable: false,
-                defaultValue: false);
-
-            migrationBuilder.AddColumn<DateTime>(
-                name: "OwnerEmailVerifiedAtUtc",
-                table: "Tenants",
-                type: "datetime(6)",
-                precision: 6,
-                nullable: true);
-
-            migrationBuilder.AddColumn<int>(
-                name: "SuspensionKind",
-                table: "Tenants",
-                type: "int",
-                nullable: true);
-
             migrationBuilder.CreateTable(
                 name: "InvoiceSequences",
                 columns: table => new
@@ -129,6 +109,28 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
                         principalTable: "Tenants",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
+                })
+                .Annotation("MySQL:Charset", "utf8mb4");
+
+            migrationBuilder.CreateTable(
+                name: "TenantBillingStates",
+                columns: table => new
+                {
+                    TenantId = table.Column<Guid>(type: "char(36)", nullable: false),
+                    IsSelfRegistered = table.Column<bool>(type: "tinyint(1)", nullable: false),
+                    OwnerEmailVerifiedAtUtc = table.Column<DateTime>(type: "datetime(6)", precision: 6, nullable: true),
+                    SuspensionKind = table.Column<int>(type: "int", nullable: true),
+                    UpdatedAtUtc = table.Column<DateTime>(type: "datetime(6)", precision: 6, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_TenantBillingStates", x => x.TenantId);
+                    table.ForeignKey(
+                        name: "FK_TenantBillingStates_Tenants_TenantId",
+                        column: x => x.TenantId,
+                        principalTable: "Tenants",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                 })
                 .Annotation("MySQL:Charset", "utf8mb4");
 
@@ -741,6 +743,9 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
                 name: "SubscriptionEvents");
 
             migrationBuilder.DropTable(
+                name: "TenantBillingStates");
+
+            migrationBuilder.DropTable(
                 name: "TenantEntitlementOverrides");
 
             migrationBuilder.DropTable(
@@ -757,18 +762,6 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
 
             migrationBuilder.DropTable(
                 name: "Plans");
-
-            migrationBuilder.DropColumn(
-                name: "IsSelfRegistered",
-                table: "Tenants");
-
-            migrationBuilder.DropColumn(
-                name: "OwnerEmailVerifiedAtUtc",
-                table: "Tenants");
-
-            migrationBuilder.DropColumn(
-                name: "SuspensionKind",
-                table: "Tenants");
         }
     }
 }

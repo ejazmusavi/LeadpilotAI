@@ -160,6 +160,26 @@ public class InvoiceSequence
     public long LastNumber { get; set; }
 }
 
+/// <summary>
+/// Platform-level facts about a tenant that the tenant table itself does not carry: whether it signed up through public registration, when its owner verified the e-mail, and why it is suspended (if it is).
+/// Global (no tenant filter: operators and the sign-up flow read it across tenants); one optional row per tenant, absent = a tenant created by an operator that was never suspended.
+/// </summary>
+public class TenantBillingState
+{
+    private TenantBillingState() { }
+    public Guid TenantId { get; private set; }
+    public bool IsSelfRegistered { get; private set; }
+    public DateTime? OwnerEmailVerifiedAtUtc { get; private set; }
+    public LeadPilot.Domain.Tenancy.SuspensionKind? SuspensionKind { get; private set; }
+    public DateTime UpdatedAtUtc { get; private set; }
+
+    public static TenantBillingState Create(Guid tenantId, DateTime nowUtc) => new() { TenantId = tenantId, UpdatedAtUtc = nowUtc };
+    public bool SensitiveFeaturesLocked => IsSelfRegistered && OwnerEmailVerifiedAtUtc is null;
+    public void MarkSelfRegistered(DateTime nowUtc) { IsSelfRegistered = true; UpdatedAtUtc = nowUtc; }
+    public void VerifyOwnerEmail(DateTime nowUtc) { if (OwnerEmailVerifiedAtUtc is null) { OwnerEmailVerifiedAtUtc = nowUtc; UpdatedAtUtc = nowUtc; } }
+    public void SetSuspensionKind(LeadPilot.Domain.Tenancy.SuspensionKind? kind, DateTime nowUtc) { SuspensionKind = kind; UpdatedAtUtc = nowUtc; }
+}
+
 /// <summary>One tenant's subscription to the platform. One row per tenant; history lives in <see cref="SubscriptionEvent"/>.</summary>
 public class TenantSubscription : AuditableEntity, ITenantOwned
 {
@@ -210,7 +230,7 @@ public class TenantSubscription : AuditableEntity, ITenantOwned
     /// THE only way a PRICED period starts or is extended. It takes the id of a <see cref="BillingPayment"/>, and those rows are created only by the billing payment verifier
     /// (manual verification by an operator with Platform.Billing.Verify). An architecture test pins the callers.
     /// </summary>
-    public void ActivateWithVerifiedPayment(Guid verifiedPaymentId, Plan plan, DateTime periodStart, DateTime periodEnd, DateTime nowUtc)
+    public void StartPaidPeriodWithVerifiedPayment(Guid verifiedPaymentId, Plan plan, DateTime periodStart, DateTime periodEnd, DateTime nowUtc)
     {
         if (verifiedPaymentId == Guid.Empty) throw new DomainException("A paid period can only be activated by a verified payment.");
         if (periodEnd <= periodStart) throw new DomainException("A period must end after it starts.");
@@ -225,9 +245,9 @@ public class TenantSubscription : AuditableEntity, ITenantOwned
         LastPaymentId = verifiedPaymentId; UpdatedAtUtc = nowUtc;
     }
 
-    /// <summary>The current period ended and the next one was paid in advance: move to it. Takes the verified payment of that invoice, like <see cref="ActivateWithVerifiedPayment"/>.</summary>
+    /// <summary>The current period ended and the next one was paid in advance: move to it. Takes the verified payment of that invoice, like <see cref="StartPaidPeriodWithVerifiedPayment"/>.</summary>
     public void RollOverToPaidPeriod(Guid verifiedPaymentId, Plan plan, DateTime periodStart, DateTime periodEnd, DateTime nowUtc) =>
-        ActivateWithVerifiedPayment(verifiedPaymentId, plan, periodStart, periodEnd, nowUtc);
+        StartPaidPeriodWithVerifiedPayment(verifiedPaymentId, plan, periodStart, periodEnd, nowUtc);
 
     /// <summary>A free (zero-price) plan renews itself: no money is involved, so no payment can be required.</summary>
     public void RenewFree(Plan plan, DateTime periodStart, DateTime periodEnd, DateTime nowUtc)

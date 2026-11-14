@@ -15,7 +15,7 @@ namespace LeadPilot.Infrastructure.Billing;
 
 public static class PlanMap
 {
-    public static PlanDto ToDto(Plan p, int tenantCount) =>
+    public static PlatformPlanDto ToDto(Plan p, int tenantCount) =>
         new(p.Id, p.Code, p.Name, p.Description, p.Cycle, p.CustomPeriodDays, p.Price, p.Currency, p.IsTrial, p.TrialDays, p.Status, p.Visibility, p.SortOrder, p.IsSample,
             p.Limits.ToDictionary(l => l.Dimension, l => l.Value), p.Features.Where(f => f.Enabled).Select(f => f.Feature).OrderBy(f => f).ToList(), tenantCount);
 }
@@ -23,7 +23,7 @@ public static class PlanMap
 /// <summary>Plan configuration for platform administrators. Plans are data: nothing in the code knows a plan name or a price. Editing a plan changes the entitlements of every tenant on it immediately (documented).</summary>
 public sealed class PlanService(AppDbContext db, PlatformDirectory directory, IClock clock, ICurrentUser user, IAuditService audit, ITenantContext tenant, ILogger<PlanService> logger) : IPlanService
 {
-    public async Task<IReadOnlyList<PlanDto>> ListAsync(bool includeArchived, CancellationToken ct = default)
+    public async Task<IReadOnlyList<PlatformPlanDto>> ListAsync(bool includeArchived, CancellationToken ct = default)
     {
         var q = db.Plans.AsNoTracking().Include(p => p.Limits).Include(p => p.Features).AsQueryable();
         if (!includeArchived) q = q.Where(p => p.Status == PlanStatus.Active);
@@ -32,17 +32,17 @@ public sealed class PlanService(AppDbContext db, PlatformDirectory directory, IC
         return plans.Select(p => PlanMap.ToDto(p, counts.GetValueOrDefault(p.Id))).ToList();
     }
 
-    public async Task<Result<PlanDto>> GetAsync(Guid id, CancellationToken ct = default)
+    public async Task<Result<PlatformPlanDto>> GetAsync(Guid id, CancellationToken ct = default)
     {
         var p = await db.Plans.AsNoTracking().Include(x => x.Limits).Include(x => x.Features).FirstOrDefaultAsync(x => x.Id == id, ct);
-        return p is null ? Result.Failure<PlanDto>(Error.NotFound("Plan")) : Result.Success(PlanMap.ToDto(p, (await directory.TenantCountsByPlanAsync(ct)).GetValueOrDefault(id)));
+        return p is null ? Result.Failure<PlatformPlanDto>(Error.NotFound("Plan")) : Result.Success(PlanMap.ToDto(p, (await directory.TenantCountsByPlanAsync(ct)).GetValueOrDefault(id)));
     }
 
-    public Task<Result<PlanDto>> CreateAsync(SavePlanRequest r, CancellationToken ct = default) => ResultFlow.GuardAsync(async () =>
+    public Task<Result<PlatformPlanDto>> CreateAsync(SavePlatformPlanRequest r, CancellationToken ct = default) => ResultFlow.GuardAsync(async () =>
     {
-        if (Validate(r) is { } bad) return Result.Failure<PlanDto>(bad);
+        if (Validate(r) is { } bad) return Result.Failure<PlatformPlanDto>(bad);
         var code = Plan.NormalizeCode(r.Code);
-        if (await db.Plans.AnyAsync(p => p.Code == code, ct)) return Result.Failure<PlanDto>(Error.Conflict($"A plan with the code '{code}' already exists."));
+        if (await db.Plans.AnyAsync(p => p.Code == code, ct)) return Result.Failure<PlatformPlanDto>(Error.Conflict($"A plan with the code '{code}' already exists."));
         var plan = Plan.Create(code, r.Name, r.Description, r.Cycle, r.CustomPeriodDays, r.Price, r.Currency, r.IsTrial, r.TrialDays, r.Visibility, r.SortOrder, false, clock.UtcNow, user.Email);
         Apply(plan, r);
         db.Plans.Add(plan);
@@ -51,11 +51,11 @@ public sealed class PlanService(AppDbContext db, PlatformDirectory directory, IC
         return Result.Success(PlanMap.ToDto(plan, 0));
     }, logger);
 
-    public Task<Result<PlanDto>> UpdateAsync(Guid id, SavePlanRequest r, CancellationToken ct = default) => ResultFlow.GuardAsync(async () =>
+    public Task<Result<PlatformPlanDto>> UpdateAsync(Guid id, SavePlatformPlanRequest r, CancellationToken ct = default) => ResultFlow.GuardAsync(async () =>
     {
-        if (Validate(r) is { } bad) return Result.Failure<PlanDto>(bad);
+        if (Validate(r) is { } bad) return Result.Failure<PlatformPlanDto>(bad);
         var plan = await db.Plans.Include(p => p.Limits).Include(p => p.Features).FirstOrDefaultAsync(p => p.Id == id, ct);
-        if (plan is null) return Result.Failure<PlanDto>(Error.NotFound("Plan"));
+        if (plan is null) return Result.Failure<PlatformPlanDto>(Error.NotFound("Plan"));
         var now = clock.UtcNow;
         var before = $"{plan.Price:0.00} {plan.Currency} / {plan.Cycle}";
         plan.Configure(r.Name, r.Description, r.Cycle, r.CustomPeriodDays, r.Price, r.Currency, r.IsTrial, r.TrialDays, r.Visibility, r.SortOrder, now, user.Email);
@@ -66,7 +66,7 @@ public sealed class PlanService(AppDbContext db, PlatformDirectory directory, IC
         return Result.Success(PlanMap.ToDto(plan, (await directory.TenantCountsByPlanAsync(ct)).GetValueOrDefault(id)));
     }, logger);
 
-    private static Error? Validate(SavePlanRequest r)
+    private static Error? Validate(SavePlatformPlanRequest r)
     {
         foreach (var (d, v) in r.Limits ?? [])
         {
@@ -77,7 +77,7 @@ public sealed class PlanService(AppDbContext db, PlatformDirectory directory, IC
         return null;
     }
 
-    private static void Apply(Plan plan, SavePlanRequest r)
+    private static void Apply(Plan plan, SavePlatformPlanRequest r)
     {
         var wanted = r.Limits ?? [];
         foreach (var existing in plan.Limits.Where(l => !wanted.ContainsKey(l.Dimension)).ToList()) plan.Limits.Remove(existing);
@@ -86,23 +86,23 @@ public sealed class PlanService(AppDbContext db, PlatformDirectory directory, IC
         foreach (var f in Features.All) plan.SetFeature(f.Key, features.Contains(f.Key));
     }
 
-    public Task<Result<PlanDto>> ArchiveAsync(Guid id, CancellationToken ct = default) => ResultFlow.GuardAsync(async () =>
+    public Task<Result<PlatformPlanDto>> ArchiveAsync(Guid id, CancellationToken ct = default) => ResultFlow.GuardAsync(async () =>
     {
         var plan = await db.Plans.Include(p => p.Limits).Include(p => p.Features).FirstOrDefaultAsync(p => p.Id == id, ct);
-        if (plan is null) return Result.Failure<PlanDto>(Error.NotFound("Plan"));
+        if (plan is null) return Result.Failure<PlatformPlanDto>(Error.NotFound("Plan"));
         var id1 = id.ToString();
         if (await db.PlatformSettings.AnyAsync(s => (s.Key == PlatformSettingKeys.DefaultPlanId || s.Key == PlatformSettingKeys.RegistrationPlanId) && s.Value == id1, ct))
-            return Result.Failure<PlanDto>(Error.Conflict("This plan is the default or the sign-up plan in the platform settings. Choose another plan there first."));
+            return Result.Failure<PlatformPlanDto>(Error.Conflict("This plan is the default or the sign-up plan in the platform settings. Choose another plan there first."));
         plan.Archive(clock.UtcNow, user.Email);
         audit.Record(new AuditEntry("Platform.Plan.Archived", "Plan", id1, $"Plan '{plan.Name}' archived: it can no longer be chosen; tenants already on it keep it.", tenant.TenantId));
         await db.SaveChangesAsync(ct);
         return Result.Success(PlanMap.ToDto(plan, (await directory.TenantCountsByPlanAsync(ct)).GetValueOrDefault(id)));
     }, logger);
 
-    public Task<Result<PlanDto>> RestoreAsync(Guid id, CancellationToken ct = default) => ResultFlow.GuardAsync(async () =>
+    public Task<Result<PlatformPlanDto>> RestoreAsync(Guid id, CancellationToken ct = default) => ResultFlow.GuardAsync(async () =>
     {
         var plan = await db.Plans.Include(p => p.Limits).Include(p => p.Features).FirstOrDefaultAsync(p => p.Id == id, ct);
-        if (plan is null) return Result.Failure<PlanDto>(Error.NotFound("Plan"));
+        if (plan is null) return Result.Failure<PlatformPlanDto>(Error.NotFound("Plan"));
         plan.Restore(clock.UtcNow, user.Email);
         audit.Record(new AuditEntry("Platform.Plan.Restored", "Plan", id.ToString(), $"Plan '{plan.Name}' restored.", tenant.TenantId));
         await db.SaveChangesAsync(ct);
@@ -173,7 +173,7 @@ public sealed class BillingService(AppDbContext db, ITenantContext tenant, ICloc
         return await GetInvoiceAsync(invoiceId, ct);
     }, logger);
 
-    public async Task<IReadOnlyList<PlanDto>> AvailablePlansAsync(CancellationToken ct = default)
+    public async Task<IReadOnlyList<PlatformPlanDto>> AvailablePlansAsync(CancellationToken ct = default)
     {
         var plans = await db.Plans.AsNoTracking().Include(p => p.Limits).Include(p => p.Features).Where(p => p.Status == PlanStatus.Active && p.Visibility == PlanVisibility.Public && !p.IsTrial)
             .OrderBy(p => p.SortOrder).ThenBy(p => p.Name).ToListAsync(ct);
@@ -308,7 +308,7 @@ public sealed class BillingService(AppDbContext db, ITenantContext tenant, ICloc
 /// is only ever started by a verified payment (see <see cref="BillingPaymentVerifier"/>); this service issues the invoice, rolls a period that was paid in advance forward, lets a FREE plan renew itself, and
 /// moves unpaid subscriptions through grace to suspension.
 /// </summary>
-public sealed class BillingLifecycleService(AppDbContext db, ITenantContext tenant, IClock clock, IPlatformSettings settings, InvoiceIssuer issuer, IEntitlementService entitlements, ITenantAdminService admin, IAuditService audit, ILogger<BillingLifecycleService> logger) : IBillingLifecycleService
+public sealed class BillingLifecycleService(AppDbContext db, ITenantContext tenant, IClock clock, IPlatformSettings settings, InvoiceIssuer issuer, IEntitlementService entitlements, ITenantSuspensionService suspension, IAuditService audit, ILogger<BillingLifecycleService> logger) : IBillingLifecycleService
 {
     public async Task<LifecycleOutcome> ProcessAsync(CancellationToken ct = default)
     {
@@ -324,7 +324,7 @@ public sealed class BillingLifecycleService(AppDbContext db, ITenantContext tena
             if (await TryRollOverAsync(sub, ct)) return LifecycleOutcome.NothingToDo;
             if (sub.GraceEndsAtUtc is { } g && now >= g)
             {
-                var res = await admin.SuspendAsync(t, $"Subscription unpaid since {sub.PeriodEndUtc:yyyy-MM-dd} (grace period of {s.GraceDays} days ended).", SuspensionKind.NonPayment, ct);
+                var res = await suspension.SuspendAsync(t, $"Subscription unpaid since {sub.PeriodEndUtc:yyyy-MM-dd} (grace period of {s.GraceDays} days ended).", SuspensionKind.NonPayment, ct);
                 if (res.IsFailure) { logger.LogWarning("Could not suspend tenant {TenantId} for non-payment: {Error}", t, res.Error.Message); return LifecycleOutcome.NothingToDo; }
                 sub.MarkSuspended(now);
                 db.SubscriptionEvents.Add(SubscriptionEvent.Create(t, "Suspended", "Suspended for non-payment after the grace period.", sub.PlanId, null, "system", now));
@@ -383,7 +383,7 @@ public sealed class BillingLifecycleService(AppDbContext db, ITenantContext tena
             {
                 audit.Record(new AuditEntry("Billing.RenewalInvoiceIssued", "Invoice", invoice.Id.ToString(), $"Renewal invoice {invoice.Number} issued for {invoice.Total:0.00} {invoice.Currency} (period {due:yyyy-MM-dd} to {end:yyyy-MM-dd})."));
                 await db.SaveChangesAsync(ct);
-                outcome = LifecycleOutcome.RenewalInvoiceIssued;
+                if (outcome == LifecycleOutcome.NothingToDo) outcome = LifecycleOutcome.RenewalInvoiceIssued;
             }
             if (now >= due && invoice.Status == InvoiceStatus.Issued) return await MoveToGraceAsync(sub, s.GraceDays, $"Invoice {invoice.Number} is unpaid", ct);
         }

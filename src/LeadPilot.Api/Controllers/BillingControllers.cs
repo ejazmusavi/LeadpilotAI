@@ -88,14 +88,14 @@ public class PlatformController(IPlanService plans, IPlatformBillingService plat
     public async Task<IActionResult> Plan(Guid id, CancellationToken ct) => Respond(await plans.GetAsync(id, ct));
 
     [HttpPost("plans"), Authorize(Policy = PermissionCodes.PlatformPlansManage)]
-    public async Task<IActionResult> CreatePlan(SavePlanRequest request, CancellationToken ct)
+    public async Task<IActionResult> CreatePlan(SavePlatformPlanRequest request, CancellationToken ct)
     {
         var r = await plans.CreateAsync(request, ct);
         return r.IsSuccess ? CreatedAtAction(nameof(Plan), new { id = r.Value.Id }, r.Value) : Fail(r);
     }
 
     [HttpPut("plans/{id:guid}"), Authorize(Policy = PermissionCodes.PlatformPlansManage)]
-    public async Task<IActionResult> UpdatePlan(Guid id, SavePlanRequest request, CancellationToken ct) => Respond(await plans.UpdateAsync(id, request, ct));
+    public async Task<IActionResult> UpdatePlan(Guid id, SavePlatformPlanRequest request, CancellationToken ct) => Respond(await plans.UpdateAsync(id, request, ct));
 
     [HttpPost("plans/{id:guid}/archive"), Authorize(Policy = PermissionCodes.PlatformPlansManage)]
     public async Task<IActionResult> Archive(Guid id, CancellationToken ct) => Respond(await plans.ArchiveAsync(id, ct));

@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LeadPilot.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20261114133646_Phase12Billing")]
+    [Migration("20261114135657_Phase12Billing")]
     partial class Phase12Billing
     {
         /// <inheritdoc />
@@ -2199,6 +2199,30 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
                     b.HasIndex("TenantId", "OccurredAtUtc");
 
                     b.ToTable("SubscriptionEvents", (string)null);
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Billing.TenantBillingState", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<bool>("IsSelfRegistered")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<DateTime?>("OwnerEmailVerifiedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int?>("SuspensionKind")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)");
+
+                    b.HasKey("TenantId");
+
+                    b.ToTable("TenantBillingStates", (string)null);
                 });
 
             modelBuilder.Entity("LeadPilot.Domain.Billing.TenantEntitlementOverride", b =>
@@ -7071,9 +7095,6 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsPlatform")
                         .HasColumnType("tinyint(1)");
 
-                    b.Property<bool>("IsSelfRegistered")
-                        .HasColumnType("tinyint(1)");
-
                     b.Property<string>("Locale")
                         .IsRequired()
                         .HasMaxLength(16)
@@ -7083,10 +7104,6 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("varchar(200)");
-
-                    b.Property<DateTime?>("OwnerEmailVerifiedAtUtc")
-                        .HasPrecision(6)
-                        .HasColumnType("datetime(6)");
 
                     b.Property<string>("Slug")
                         .IsRequired()
@@ -7101,9 +7118,6 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("SuspendedAtUtc")
                         .HasPrecision(6)
                         .HasColumnType("datetime(6)");
-
-                    b.Property<int?>("SuspensionKind")
-                        .HasColumnType("int");
 
                     b.Property<string>("SuspensionReason")
                         .HasMaxLength(500)
@@ -8488,6 +8502,15 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LeadPilot.Domain.Billing.TenantBillingState", b =>
+                {
+                    b.HasOne("LeadPilot.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

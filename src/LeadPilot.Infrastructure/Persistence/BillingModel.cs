@@ -29,6 +29,13 @@ internal static class BillingModel
             b.HasIndex(x => new { x.IpHash, x.CreatedAtUtc }); b.HasIndex(x => new { x.EmailDomain, x.CreatedAtUtc });
         });
 
+        builder.Entity<TenantBillingState>(b =>
+        {
+            b.ToTable("TenantBillingStates"); b.HasKey(x => x.TenantId); b.Property(x => x.TenantId).ValueGeneratedNever();
+            b.Ignore(x => x.SensitiveFeaturesLocked);
+            b.HasOne<LeadPilot.Domain.Tenancy.Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
+        });
+
         builder.Entity<TenantSubscription>(b =>
         {
             b.ToTable("TenantSubscriptions");

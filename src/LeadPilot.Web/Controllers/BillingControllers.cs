@@ -255,7 +255,7 @@ public class PlatformPlansController(IPlanService plans) : AppController
         Crumbs(("Platform", null), ("Plans", Url.Action(nameof(Index))), (m.Id is null ? "New plan" : m.Name, null));
         if (!ModelState.IsValid) return View("Edit", m);
         var limits = m.Limits.Where(kv => kv.Value is not null).ToDictionary(kv => kv.Key, kv => (long?)(kv.Value!.Value * DimensionCatalog.Get(kv.Key).UiFactor));
-        var req = new SavePlanRequest(m.Code, m.Name, m.Description, m.Cycle, m.CustomPeriodDays, m.Price, m.Currency, m.IsTrial, m.TrialDays, m.Visibility, m.SortOrder, limits, m.Features ?? []);
+        var req = new SavePlatformPlanRequest(m.Code, m.Name, m.Description, m.Cycle, m.CustomPeriodDays, m.Price, m.Currency, m.IsTrial, m.TrialDays, m.Visibility, m.SortOrder, limits, m.Features ?? []);
         var r = m.Id is { } id ? await plans.UpdateAsync(id, req, ct) : await plans.CreateAsync(req, ct);
         if (Reject(r) is { } rej) return rej;
         if (r.IsFailure) { AddError(r); return View("Edit", m); }

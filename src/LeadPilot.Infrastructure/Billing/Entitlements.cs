@@ -96,10 +96,10 @@ public sealed class EntitlementService(AppDbContext db, ITenantContext tenant, I
     private async Task<Ctx> LoadAsync(CancellationToken ct)
     {
         var t = tenant.RequireTenantId();
-        var tn = await db.Tenants.AsNoTracking().Where(x => x.Id == t).Select(x => new { x.IsPlatform, x.IsSelfRegistered, x.OwnerEmailVerifiedAtUtc }).FirstOrDefaultAsync(ct)
+        var isPlatform = await db.Tenants.AsNoTracking().Where(x => x.Id == t).Select(x => (bool?)x.IsPlatform).FirstOrDefaultAsync(ct)
                  ?? throw new TenantUnavailableException("The tenant does not exist.");
-        if (tn.IsPlatform) return new Ctx(t, true, false, null, null, [], null);
-        var locked = tn.IsSelfRegistered && tn.OwnerEmailVerifiedAtUtc is null;
+        if (isPlatform) return new Ctx(t, true, false, null, null, [], null);
+        var locked = await db.TenantBillingStates.AsNoTracking().AnyAsync(x => x.TenantId == t && x.IsSelfRegistered && x.OwnerEmailVerifiedAtUtc == null, ct);
         var sub = await db.TenantSubscriptions.AsNoTracking().FirstOrDefaultAsync(s => s.TenantId == t, ct);
         if (sub is null)
         {
@@ -269,7 +269,7 @@ public sealed class EntitlementService(AppDbContext db, ITenantContext tenant, I
         var planFeatures = c.Plan?.Features.Where(f => f.Enabled).Select(f => f.Feature).ToHashSet() ?? [];
         var features = Features.All.Select(f => new FeatureLine(f.Key, f.Label,
             c.Plan is null || EntitlementEvaluator.Feature(f.Key, planFeatures, c.Overrides, clock.UtcNow), c.Overrides.Any(o => o.Kind == OverrideKind.Feature && o.Key == f.Key && (o.ExpiresAtUtc is null || o.ExpiresAtUtc > clock.UtcNow)))).ToList();
-        SubscriptionDto? dto = c.Sub is null || c.Plan is null ? null : new SubscriptionDto(c.Plan.Id, c.Plan.Name, c.Sub.State, c.Sub.PeriodStartUtc, c.Sub.PeriodEndUtc, c.Sub.TrialEndsAtUtc, c.Sub.GraceEndsAtUtc,
+        TenantSubscriptionDto? dto = c.Sub is null || c.Plan is null ? null : new TenantSubscriptionDto(c.Plan.Id, c.Plan.Name, c.Sub.State, c.Sub.PeriodStartUtc, c.Sub.PeriodEndUtc, c.Sub.TrialEndsAtUtc, c.Sub.GraceEndsAtUtc,
             c.Sub.PendingPlanId, c.PendingPlanName, c.Plan.Price, c.Plan.Currency, c.Plan.Cycle, c.Sub.GrantReason);
         var t = c.TenantId; var start = c.Sub?.PeriodStartUtc;
         var notices = start is null ? [] : (await db.UsageNotices.AsNoTracking().Where(n => n.TenantId == t && n.PeriodStartUtc == start).OrderByDescending(n => n.CreatedAtUtc).Take(20).ToListAsync(ct))

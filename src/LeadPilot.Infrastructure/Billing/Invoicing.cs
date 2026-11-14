@@ -131,7 +131,7 @@ public sealed class BillingPaymentVerifier(AppDbContext db, ITenantContext tenan
                 // a renewal that is paid late (its period already began or is over) and every plan change / initial invoice start a fresh period when it is not contiguous
                 var start = invoice.Kind == InvoiceKind.Renewal && invoice.PeriodEndUtc > now ? invoice.PeriodStartUtc : now;
                 var end = invoice.Kind == InvoiceKind.Renewal && invoice.PeriodEndUtc > now ? invoice.PeriodEndUtc : plan.PeriodEnd(start);
-                sub.ActivateWithVerifiedPayment(payment.Id, plan, start, end, now);
+                sub.StartPaidPeriodWithVerifiedPayment(payment.Id, plan, start, end, now);
                 effect = $"plan '{plan.Name}' active until {end:yyyy-MM-dd}";
             }
             else
@@ -149,7 +149,8 @@ public sealed class BillingPaymentVerifier(AppDbContext db, ITenantContext tenan
 
             var t = await db.Tenants.FirstAsync(x => x.Id == tenantId, ct);
             var reactivated = false;
-            if (t.Status == TenantStatus.Suspended && t.SuspensionKind == SuspensionKind.NonPayment) { t.Activate(now); reactivated = true; }
+            var billingState = await db.TenantBillingStates.FirstOrDefaultAsync(x => x.TenantId == tenantId, ct);
+            if (t.Status == TenantStatus.Suspended && billingState?.SuspensionKind == SuspensionKind.NonPayment) { t.Activate(now); billingState.SetSuspensionKind(null, now); reactivated = true; }
             db.SubscriptionEvents.Add(SubscriptionEvent.Create(tenantId, "PaymentVerified", $"Invoice {invoice.Number} paid ({payment.Amount:0.00} {payment.Currency}, evidence {payment.EvidenceReference}): {effect}.", from, plan.Id, verifiedBy?.ToString(), now));
             audit.Record(new AuditEntry("Platform.Payment.Verified", "BillingPayment", payment.Id.ToString(), $"Payment of {payment.Amount:0.00} {payment.Currency} verified for invoice {invoice.Number} ({source}); {effect}{(reactivated ? "; the tenant was reactivated" : "")}.", tenantId));
             await db.SaveChangesAsync(ct);

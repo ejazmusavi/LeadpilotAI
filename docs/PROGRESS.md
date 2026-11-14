@@ -540,3 +540,42 @@ See SECURITY.md "Phase 10" and MULTI_TENANCY.md. Key points: only `PaymentVerifi
 
 ### Next
 Phase 11 (analytics and reporting). No prerequisites outstanding from Phase 10. Not started.
+
+## Phase 11 — Analytics and reporting (reported)
+
+### 1. Implemented
+Tenant dashboard with the 18 required metrics (20 tiles: campaign performance = messages sent + reply rate, revenue per currency), 11 reports (discovery by city, lead source performance, campaign performance, sales pipeline, conversion funnel, sales representative performance, AI agent performance, demo conversion, trial conversion, subscription revenue, messaging usage). Every metric/column carries a **Verified / Calculated / Estimated** badge, a definition, a formula and its source tables (`docs/METRICS.md` documents them and a unit test keeps docs and code in step). Date presets + custom range, workspace time zone, both ends inclusive / instants half-open (DST tested), previous-period comparison, drill-down to the leads list (filtered) and to other list pages (unfiltered, labelled so, shown only with the page's permission), pagination, SQL aggregation, daily rollup refreshed by Hangfire with a "data as of" indicator, tenant-scoped cache, CSV export (permission-gated, audited before streaming, formula-safe, streamed, 50 000-row cap), role-appropriate views (Sales Agent: own leads only; managers: team), REST endpoints with Swagger docs, inline-SVG trend charts (no library), empty states, 390 px layout.
+
+### 2. Files
+`Domain/Analytics/Analytics.cs`; `Application/Analytics/{Contracts,Catalog,RangeResolver}.cs`; `Infrastructure/Analytics/{Queries,Reports,Rollup,Service,Cache,Jobs}.cs`; `Infrastructure/Persistence/AnalyticsModel.cs` + migration `Phase11Analytics`; `Api/Controllers/AnalyticsControllers.cs`; `Web/Controllers/AnalyticsControllers.cs`, `Home/Index` dashboard, `Views/Reports/*`, partials `_RangeFilter`, `_MetricCard`, `_Trend`; permissions in `Application/Security/Permissions.cs`; `tests/tools/LargeDatasetBenchmark`; docs METRICS.md, benchmarks/*.
+
+### 3. Database
+2 tables (`DailyMetrics`, `AnalyticsRefreshStates`), unique keys, `date` / `decimal(18,2)` columns, tenant FKs; 10 read indexes on earlier tables chosen by measurement and 6 tried and dropped (DATABASE_DESIGN.md has the numbers). Verified on a clean database (no pending model changes) and on a Phase 10 database with data (roles receive the permissions, rollup works).
+
+### 4. Tests (actually run, this machine, MySQL 8.0 + RabbitMQ local)
+| | |
+|---|---|
+| Build | succeeded, 0 warnings, 0 errors (warnings as errors) |
+| Unit | 1072 passed, 0 failed (27 new: ranges incl. DST, rates/guards, catalog and docs in step, role defaults, cache keys and TTL, CSV defusing) |
+| Architecture | 119 passed, 0 failed (6 new: tenant-owned entities, permission policy on every action and no DbContext in controllers, cache keys only via the tenant helper, SQL-only aggregation, one scheduler / audit-before-send, recompute-not-increment) |
+| Integration | see the final line of section 4 below (17 new: reconciliation of EVERY dashboard metric and report total against independent raw SQL and hand counts, rollup == live per stream and day, late event / freshness / stale, date boundaries, DST, permissions 401/403/404, own-vs-team scope, export audit + injection + cap, cache isolation + invalidation, tenant isolation via API / MVC / jobs / DB guard, page rendering, migrations) |
+| Not executed | live WAHA, live Claude/Voyage, real Qdrant, Google Places live, any payment/meeting provider, Docker |
+Playwright (Chromium, 5 %-scale generated workspace of 9 800 leads, 1280 px and 390 px): dashboard (20 cards, trends, comparison), custom range, reports index, five report pages and the definitions page all render, no horizontal overflow, no JS errors; screenshots in `docs/benchmarks/screenshots`.
+**Large dataset (measured, not claimed):** 200 000 leads, 260 000 contacts, 1.2 M messages + 1.5 M status rows, 400 000 recipients in a scratch DB — dashboard from the rollup 0.54 s, reports 6 ms – 5.2 s, rollup refresh 7.5 s, CSV export of 3 000 rows streamed with flat memory; details and the slow paths in DATABASE_DESIGN.md and `docs/benchmarks/phase11-large-dataset.md`.
+
+### 5. Security and architecture review
+See SECURITY.md "Phase 11" and MULTI_TENANCY.md. The export is audited before any data leaves; scope is enforced server-side; the cache cannot cross tenants (tested); rollup rows cannot be written for another tenant (DB guard, tested); no number is fabricated (rates without a denominator are "no rate", unverified payments are never revenue, currencies are never summed).
+
+### 6. Outstanding / known limits
+1. **Slow paths at 200 k leads / 1.2 M messages:** the live (non-rollup) dashboard takes 19 s for a team and **35 s for an own-data view** (Sales Agent), because the own view cannot use the workspace-wide rollup (cached 60 s; a per-owner rollup is the fix). The first view of a new workspace is live until the first refresh (≤ 10 min). 2. Reports **rep performance (4.4 s)** and **conversion funnel (5.2 s)** scan message rows on demand (cached 60 s; candidates for rollup tables). 3. The rollup refresh costs 7.5 s per workspace every 10 min (dominated by the "first contacted" stream) and the nightly rebuild 34 s; fine for tens of workspaces, a scheduler/sharding decision for thousands (Phase 12). 4. Timings are from a 4-core sandbox with MySQL on the same host, not a production sizing. 5. Cache is per process (no Redis). 6. No XLSX export, no scheduled e-mail reports, no MRR/churn (needs Phase 12 billing). 7. "Lost opportunities" are timed by their last change. 8. Live Google Places / WAHA / Claude data never existed here: the numbers are whatever earlier phases recorded in tests. 9. Decisions: OWNER_DECISIONS 41–50.
+
+### 7. Acceptance criteria
+| Criterion | Result |
+|---|---|
+| Dashboard metrics match underlying records | **Passed** (every tile vs independent raw SQL + hand counts, live and from the rollup; every report total) |
+| Tenant reports are isolated | **Passed** (API, MVC, jobs, cache, DB guard; own-vs-team inside a tenant) |
+| Date filters work | **Passed** (presets, custom, inclusive/exclusive boundaries to the second, DST days, invalid ranges refused, previous period) |
+| Large datasets do not require loading all records into memory | **Passed** (grouped SQL only; measured on 200 k leads / 2.7 M message rows; export streamed with flat memory). Performance caveats of the slow paths are listed under 6 and are not hidden |
+
+### Next
+Phase 12 (SaaS commercialization). Not started.

@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LeadPilot.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20261114095639_Phase11Analytics")]
+    [Migration("20261114100516_Phase11Analytics")]
     partial class Phase11Analytics
     {
         /// <inheritdoc />
@@ -5650,9 +5650,6 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("TenantId", "Direction", "OccurredAtUtc")
                         .HasDatabaseName("IX_Messages_Tenant_Dir_Occurred");
-
-                    b.HasIndex("TenantId", "ContactId", "Direction", "SentAtUtc")
-                        .HasDatabaseName("IX_Messages_Tenant_Contact_Dir_Sent");
 
                     b.HasIndex("TenantId", "Direction", "SentAtUtc", "DeliveredAtUtc")
                         .HasDatabaseName("IX_Messages_Tenant_Dir_Sent");

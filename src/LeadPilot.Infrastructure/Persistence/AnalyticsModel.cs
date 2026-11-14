@@ -36,7 +36,6 @@ internal static class AnalyticsModel
         builder.Entity<Message>(b =>
         {
             b.HasIndex(x => new { x.TenantId, x.Direction, x.SentAtUtc, x.DeliveredAtUtc }).HasDatabaseName("IX_Messages_Tenant_Dir_Sent");   // covers "sent" and "delivered" without row look-ups
-            b.HasIndex(x => new { x.TenantId, x.ContactId, x.Direction, x.SentAtUtc }).HasDatabaseName("IX_Messages_Tenant_Contact_Dir_Sent");   // "was this lead messaged before?"
             b.HasIndex(x => new { x.TenantId, x.Direction, x.OccurredAtUtc }).HasDatabaseName("IX_Messages_Tenant_Dir_Occurred");
             b.HasIndex(x => new { x.TenantId, x.FailedAtUtc }).HasDatabaseName("IX_Messages_Tenant_Failed");
         });

@@ -78,11 +78,6 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
                 columns: new[] { "TenantId", "Status", "UpdatedAtUtc" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_Messages_Tenant_Contact_Dir_Sent",
-                table: "Messages",
-                columns: new[] { "TenantId", "ContactId", "Direction", "SentAtUtc" });
-
-            migrationBuilder.CreateIndex(
                 name: "IX_Messages_Tenant_Dir_Occurred",
                 table: "Messages",
                 columns: new[] { "TenantId", "Direction", "OccurredAtUtc" });
@@ -155,10 +150,6 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
             migrationBuilder.DropIndex(
                 name: "IX_Opportunities_Tenant_Status_Updated",
                 table: "Opportunities");
-
-            migrationBuilder.DropIndex(
-                name: "IX_Messages_Tenant_Contact_Dir_Sent",
-                table: "Messages");
 
             migrationBuilder.DropIndex(
                 name: "IX_Messages_Tenant_Dir_Occurred",

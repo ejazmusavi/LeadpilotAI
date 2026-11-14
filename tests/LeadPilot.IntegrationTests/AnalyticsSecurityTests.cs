@@ -245,7 +245,7 @@ public class AnalyticsSecurityTests(AppFixture app)
         await w.RefreshAsync(full: true);
         var web = await WebSession.LoginAsync(app, w.Manager.Email, w.Manager.Password); var qs = AnalyticsWorld.Qs(AnalyticsWorld.Custom(s.From, s.To));
         var home = await web.Html($"/?{qs}");
-        foreach (var m in MetricCatalog.All.Where(m => m.Key is not ("messages.sent" or "messages.delivered" or "messages.failed"))) Assert.Contains($"data-metric=\"{m.Key}\"", home);
+        foreach (var m in MetricCatalog.All.Where(m => m.Key is not ("messages.sent" or "messages.delivered" or "messages.failed" or "campaigns.replied"))) Assert.Contains($"data-metric=\"{m.Key}\"", home);
         Assert.Contains("badge text-bg-success", home); Assert.Contains("badge text-bg-primary", home); Assert.Contains("Data as of", home); Assert.Contains("Rollup", home); Assert.Contains("Compare with the previous period", home);
         Assert.Contains("Formula:", home); Assert.Contains("<svg", home); Assert.Contains("role=\"img\"", home); Assert.Contains("View records", home);
         Assert.Contains($"{s.D0:yyyy-MM-dd} to {s.D1:yyyy-MM-dd}", home); Assert.Contains("(inclusive)", home); Assert.Contains("(exclusive)", home);

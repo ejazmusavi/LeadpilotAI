@@ -6,7 +6,7 @@
         <div class="col-12 col-sm-6 col-lg-3">
             <label class="form-label small mb-1" for="preset">Period</label>
             <select id="preset" name="preset" class="form-select form-select-sm">
-                @foreach (var p in Enum.GetValues<RangePreset>()) { <option value="@p" selected="@(Model.Request.Preset == p)">@(p == RangePreset.Custom ? "Custom range" : System.Text.RegularExpressions.Regex.Replace(p.ToString(), "(?<=[a-z0-9])(?=[A-Z])", " "))</option> }
+                @foreach (var p in Enum.GetValues<RangePreset>()) { <option value="@p" selected="@(Model.Request.Preset == p)">@(p == RangePreset.Custom ? "Custom range" : System.Text.RegularExpressions.Regex.Replace(p.ToString(), "(?<=[a-z])(?=[A-Z0-9])|(?<=[0-9])(?=[A-Z])", " "))</option> }
             </select>
         </div>
         <div class="col-6 col-lg-2"><label class="form-label small mb-1" for="from">From (inclusive)</label><input id="from" name="from" type="date" class="form-control form-control-sm" value="@Model.Request.From?.ToString("yyyy-MM-dd")" /></div>

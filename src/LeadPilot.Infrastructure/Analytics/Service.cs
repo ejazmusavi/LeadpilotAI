@@ -32,6 +32,8 @@ public sealed class AnalyticsService(AppDbContext db, ITenantContext tenant, ICu
 
     private sealed record Ctx(Guid TenantId, string ZoneId, TimeZoneInfo Tz, ResolvedRange Range, bool Team, Guid? Owner, AnalyticsQueries Q, LeadPilot.Domain.Analytics.AnalyticsRefreshState? State, bool UseRollup, DateTime Now, bool ComparisonDropped = false)
     {
+        /// <summary>Permission codes of the list pages the viewer may open (drill-down links are only shown for those).</summary>
+        public HashSet<string> Links { get; set; } = [];
         public string ScopeName => Team ? "Team" : "Own";
         public string ScopeKey => Team ? "team" : "own-" + Owner;
     }
@@ -53,7 +55,10 @@ public sealed class AnalyticsService(AppDbContext db, ITenantContext tenant, ICu
         var useRollup = rollupOk && state!.FromDay <= r.FromLocal;
         var dropped = false;
         if (useRollup && r.Compare && state!.FromDay > r.PrevFromLocal) { r = r with { Compare = false }; dropped = true; }   // the previous period is older than the rollup: no comparison rather than a slow live query
-        return Result.Success(new Ctx(t, zone, tz, r, team, owner, new AnalyticsQueries(db, t, owner), state, useRollup, now, dropped));
+        var links = new HashSet<string>();
+        foreach (var code in new[] { PermissionCodes.LeadsView, PermissionCodes.TrialsView, PermissionCodes.CustomersView, PermissionCodes.CampaignsView, PermissionCodes.ConversationsView, PermissionCodes.DemosView })
+            if (await permissions.HasAsync(code, ct)) links.Add(code);
+        return Result.Success(new Ctx(t, zone, tz, r, team, owner, new AnalyticsQueries(db, t, owner), state, useRollup, now, dropped) { Links = links });
     }
 
     private FreshnessDto Freshness(Ctx c) => c.UseRollup
@@ -70,7 +75,7 @@ public sealed class AnalyticsService(AppDbContext db, ITenantContext tenant, ICu
         var ctx = await PrepareAsync(request, ct);
         if (ctx.IsFailure) return Result.Failure<DashboardDto>(ctx.Error);
         var c = ctx.Value; var r = c.Range;
-        var key = $"dash:{c.ScopeKey}:{r.FromLocal:yyyyMMdd}:{r.ToLocal:yyyyMMdd}:{r.Compare}:{c.ZoneId}:{c.State?.LastRefreshedAtUtc.Ticks}:{c.UseRollup}";
+        var key = $"dash:{c.ScopeKey}:{string.Join(',', c.Links.Order())}:{r.FromLocal:yyyyMMdd}:{r.ToLocal:yyyyMMdd}:{r.Compare}:{c.ZoneId}:{c.State?.LastRefreshedAtUtc.Ticks}:{c.UseRollup}";
         var dto = await cache.GetOrAddAsync(c.TenantId, key, Ttl, () => BuildDashboardAsync(c, ct));
         return Result.Success(dto);
     }
@@ -141,15 +146,17 @@ public sealed class AnalyticsService(AppDbContext db, ITenantContext tenant, ICu
     private static string? Drill(Ctx c, string key)
     {
         var owner = c.Owner is { } o ? $"&OwnerUserId={o}" : "";
-        return key switch
+        var (url, permission) = key switch
         {
-            MetricCatalog.TotalLeads => "/Leads" + (owner.Length > 0 ? "?" + owner[1..] : ""),
-            StreamKeys.LeadsCreated => $"/Leads?CreatedFromUtc={Uri.EscapeDataString(c.Range.FromUtc.ToString("o", Inv))}&CreatedToUtc={Uri.EscapeDataString(c.Range.ToUtcExclusive.AddTicks(-1).ToString("o", Inv))}&Archived=All{owner}",
+            MetricCatalog.TotalLeads => ("/Leads" + (owner.Length > 0 ? "?" + owner[1..] : ""), PermissionCodes.LeadsView),
+            StreamKeys.LeadsCreated => ($"/Leads?CreatedFromUtc={Uri.EscapeDataString(c.Range.FromUtc.ToString("o", Inv))}&CreatedToUtc={Uri.EscapeDataString(c.Range.ToUtcExclusive.AddTicks(-1).ToString("o", Inv))}&Archived=All{owner}", PermissionCodes.LeadsView),
             // the list pages that exist have no date filter of their own: the link opens the list, labelled honestly as unfiltered
-            StreamKeys.TrialsStarted => "/Trials", StreamKeys.CustomersWon => "/Customers", StreamKeys.Revenue => "/Payments", StreamKeys.CampaignSent => "/Campaigns",
-            StreamKeys.AiConversations or StreamKeys.Responses or StreamKeys.Handoffs => "/Conversations", StreamKeys.DemosScheduled or StreamKeys.DemosCompleted => "/Demos",
-            _ => null
+            StreamKeys.TrialsStarted => ("/Trials", PermissionCodes.TrialsView), StreamKeys.CustomersWon => ("/Customers", PermissionCodes.CustomersView), StreamKeys.Revenue => ("/Payments", PermissionCodes.CustomersView),
+            StreamKeys.CampaignSent => ("/Campaigns", PermissionCodes.CampaignsView), StreamKeys.AiConversations or StreamKeys.Responses or StreamKeys.Handoffs => ("/Conversations", PermissionCodes.ConversationsView),
+            StreamKeys.DemosScheduled or StreamKeys.DemosCompleted => ("/Demos", PermissionCodes.DemosView),
+            _ => (null, null)
         };
+        return url is not null && c.Links.Contains(permission!) ? url : null;
     }
 
     private async Task<Dictionary<string, List<(string Dim, long Count, decimal Amount)>>> PeriodTotalsAsync(Ctx c, DateOnly fromDay, DateOnly toDay, DateTime fromUtc, DateTime toUtc, CancellationToken ct)

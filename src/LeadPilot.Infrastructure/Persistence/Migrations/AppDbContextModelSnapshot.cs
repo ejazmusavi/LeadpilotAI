@@ -5648,9 +5648,6 @@ namespace LeadPilot.Infrastructure.Persistence.Migrations
                     b.HasIndex("TenantId", "Direction", "OccurredAtUtc")
                         .HasDatabaseName("IX_Messages_Tenant_Dir_Occurred");
 
-                    b.HasIndex("TenantId", "ContactId", "Direction", "SentAtUtc")
-                        .HasDatabaseName("IX_Messages_Tenant_Contact_Dir_Sent");
-
                     b.HasIndex("TenantId", "Direction", "SentAtUtc", "DeliveredAtUtc")
                         .HasDatabaseName("IX_Messages_Tenant_Dir_Sent");
 

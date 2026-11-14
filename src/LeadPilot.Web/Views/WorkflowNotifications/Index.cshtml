@@ -1,0 +1,16 @@
+@model IReadOnlyList<LeadPilot.Application.Workflows.WorkflowNotificationDto>
+@{ ViewData["Title"] = "My notices"; }
+<div class="mb-3"><h1 class="h3 mb-1">My notices</h1><p class="text-muted mb-0">Notices created for you by workflows ("notify sales representative" steps).</p></div>
+@if (Model.Count == 0) { <div class="card"><partial name="_EmptyState" model='("No notices", "When a workflow notifies you about a lead, it appears here.")' /></div> }
+else
+{
+    <div class="list-group">
+    @foreach (var n in Model)
+    {
+        <div class="list-group-item @(n.IsRead ? "" : "list-group-item-warning")"><div class="d-flex justify-content-between gap-2">
+            <div><strong>@n.Title</strong><div class="small">@n.Body</div><div class="small text-muted">@n.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm") UTC@if (n.LeadId is not null) { <span> · </span><a asp-controller="Leads" asp-action="Details" asp-route-id="@n.LeadId">@n.LeadName</a> }</div></div>
+            @if (!n.IsRead) { <form asp-action="MarkRead" asp-route-id="@n.Id" method="post"><button class="btn btn-sm btn-outline-secondary" type="submit">Mark as read</button></form> }
+        </div></div>
+    }
+    </div>
+}

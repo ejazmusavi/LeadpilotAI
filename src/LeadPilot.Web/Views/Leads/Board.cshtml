@@ -1,0 +1,42 @@
+@model BoardViewModel
+@using LeadPilot.Domain.Crm
+@{ ViewData["Title"] = "Pipeline board"; var b = Model.Board; }
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <h1 class="h3 mb-0">Pipeline board</h1>
+    <form method="get" asp-action="Board" class="d-flex gap-2 align-items-center">
+        <label class="form-label mb-0" for="pipelineId">Pipeline</label>
+        <select id="pipelineId" name="pipelineId" class="form-select w-auto" onchange="this.form.submit()">
+            @foreach (var p in Model.Pipelines.Where(p => p.IsActive)) { <option value="@p.Id" selected="@(p.Id == b.Pipeline.Id)">@p.Name@(p.IsDefault ? " (default)" : "")</option> }
+        </select>
+        <noscript><button class="btn btn-outline-primary" type="submit">Show</button></noscript>
+    </form>
+</div>
+<p class="text-muted small">Showing the top @b.CardsPerColumn leads of each stage by score. Open the lead list filtered by a stage to see them all.</p>
+<div class="board">
+    @foreach (var col in b.Columns)
+    {
+        <section class="board-col" aria-label="@col.Stage.Name">
+            <header class="board-col-head">
+                <span class="fw-semibold">@col.Stage.Name</span>
+                <a asp-action="Index" asp-route-stageId="@col.Stage.Id" class="badge text-bg-light border text-decoration-none" title="Open this stage in the lead list">@col.Stage.LeadCount</a>
+            </header>
+            @if (col.Cards.Count == 0) { <div class="text-muted small p-2">No leads</div> }
+            @foreach (var c in col.Cards)
+            {
+                <div class="board-card">
+                    <a asp-action="Details" asp-route-id="@c.Id" class="fw-semibold text-decoration-none">@c.Name</a>
+                    <div class="small text-muted">@(string.Join(" · ", new[] { c.Category, c.City }.Where(x => !string.IsNullOrWhiteSpace(x))))</div>
+                    <div class="d-flex justify-content-between align-items-center mt-1"><span class="small">@(c.OwnerName ?? "Unassigned")</span><partial name="_ScoreBadge" model="c.Score" /></div>
+                    @if (Model.CanUpdate)
+                    {
+                        <form asp-action="ChangeStage" asp-route-id="@c.Id" method="post" class="mt-2 d-flex gap-1">
+                            <input type="hidden" name="returnTo" value="board" />
+                            <select name="stageId" class="form-select form-select-sm" aria-label="Move @c.Name to stage">@foreach (var s in b.Columns) { <option value="@s.Stage.Id" selected="@(s.Stage.Id == col.Stage.Id)">@s.Stage.Name</option> }</select>
+                            <button type="submit" class="btn btn-sm btn-outline-primary">Move</button>
+                        </form>
+                    }
+                </div>
+            }
+        </section>
+    }
+</div>

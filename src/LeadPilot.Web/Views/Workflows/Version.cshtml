@@ -1,0 +1,35 @@
+@model WorkflowVersionViewModel
+@using LeadPilot.Domain.Workflows
+@{ var v = Model.Version; var w = Model.Workflow; ViewData["Title"] = $"{w.Name} v{v.Number}"; }
+<div class="d-flex flex-wrap justify-content-between align-items-start mb-3 gap-2">
+    <div><h1 class="h3 mb-1">@w.Name · version @v.Number <span class="badge @(v.State == VersionState.Active ? "text-bg-success" : v.State == VersionState.Draft ? "text-bg-warning" : "text-bg-secondary") fs-6 align-middle">@v.State</span></h1>
+        <p class="text-muted mb-0">@(v.State == VersionState.Draft ? "Editable draft." : "Read only: this version never changes.") Created @v.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm") UTC@(v.ActivatedAtUtc is { } a ? $", activated {a:yyyy-MM-dd HH:mm} UTC" : "").</p></div>
+    <div class="d-flex gap-2">
+        @if (v.State == VersionState.Draft && Model.CanUpdate) { <a asp-action="Edit" asp-route-id="@w.Id" class="btn btn-primary">Edit draft</a> }
+        @if (v.State == VersionState.Draft && Model.CanActivate) { <form asp-action="Activate" asp-route-id="@w.Id" asp-route-number="@v.Number" method="post"><button class="btn btn-success" type="submit" data-confirm="Activate version @v.Number?" data-confirm-label="Activate">Activate</button></form> }
+        @if (v.State != VersionState.Draft && Model.CanUpdate && w.Draft is null) { <form asp-action="NewDraft" asp-route-id="@w.Id" asp-route-number="@v.Number" method="post"><button class="btn btn-outline-primary" type="submit">Edit as new draft</button></form> }
+    </div>
+</div>
+@if (!v.Validation.IsValid) { <div class="alert alert-danger" role="alert"><strong>This version has problems:</strong><ul class="mb-0">@foreach (var e in v.Validation.Errors) { <li>@e.Path: @e.Message</li> }</ul></div> }
+@foreach (var wn in v.Validation.Warnings) { <div class="alert alert-warning py-2">@wn.Message</div> }
+<div class="card mb-3"><div class="card-header">Starts when</div><ul class="list-group list-group-flush">
+@foreach (var t in v.Triggers)
+{
+    <li class="list-group-item"><strong>@t.Title</strong>@if (!t.Available) { <span class="badge text-bg-warning ms-1">available when Phase 10 ships</span> }
+        @if (t.InactiveDays is { } d) { <span class="text-muted"> · after @d days without activity</span> }
+        <div class="small text-muted">Only if: @WorkflowDescribe.Condition(t.Condition, Model.Catalog)</div></li>
+}
+</ul></div>
+<div class="card mb-3"><div class="card-header">Steps</div><ol class="list-group list-group-numbered list-group-flush">
+@foreach (var s in v.Steps)
+{
+    <li class="list-group-item"><span class="fw-semibold">@s.Name</span> <span class="badge text-bg-light border">@s.TypeTitle</span>
+        <div class="small">@WorkflowDescribe.Step(s, Model.Catalog)</div>
+        @if (s.Condition is not null) { <div class="small text-muted">Run only if: @WorkflowDescribe.Condition(s.Condition, Model.Catalog)</div> }
+        <div class="small text-muted">If it fails: @(s.OnFailure == FailurePolicy.Retry ? $"retry up to {s.MaxRetries} time(s), then stop the run" : s.OnFailure == FailurePolicy.Skip ? "skip this step and continue" : "stop the run")</div></li>
+}
+</ol></div>
+<div class="card"><div class="card-header">Rules for repeat runs</div><div class="card-body small">
+    Re-entry: <strong>@(v.ReEntry == ReEntryPolicy.Once ? "a lead enters once, ever" : v.ReEntry == ReEntryPolicy.AfterCompletion ? "again only after the previous run ended" : "overlapping runs allowed")</strong> ·
+    cool-down: <strong>@(v.CooldownHours == 0 ? "none" : v.CooldownHours + " h")</strong> · frequency cap: <strong>@(v.MaxStartsPerLeadPer30Days == 0 ? "none" : v.MaxStartsPerLeadPer30Days + " per lead in 30 days")</strong>
+</div></div>

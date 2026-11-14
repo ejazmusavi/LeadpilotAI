@@ -1,0 +1,25 @@
+@model AiActivityViewModel
+@using LeadPilot.Domain.Ai
+@{ ViewData["Title"] = "AI activity"; var q = Model.Query; }
+<h1 class="h3 mb-1">AI activity</h1>
+<p class="text-muted">Every message the AI looked at: what it suggested, or why it handed the conversation to a person.</p>
+<form method="get" asp-action="Activity" class="card card-body mb-3"><div class="row g-3 align-items-end">
+    <div class="col-6 col-md-3"><label class="form-label" for="decision">Outcome</label><select id="decision" name="decision" class="form-select"><option value="">All</option>@foreach (var d in Enum.GetValues<AiDecision>()) { <option value="@d" selected="@(q.Decision == d)">@d</option> }</select></div>
+    <div class="col-6 col-md-3"><label class="form-label" for="status">Suggestion</label><select id="status" name="status" class="form-select"><option value="">All</option>@foreach (var d in Enum.GetValues<DraftStatus>()) { <option value="@d" selected="@(q.Status == d)">@d</option> }</select></div>
+    <div class="col-12 col-md-3"><button type="submit" class="btn btn-outline-primary">Filter</button> <a asp-action="Activity" class="btn btn-link">Clear</a></div>
+</div></form>
+@if (Model.Result.Items.Count == 0) { <div class="card"><partial name="_EmptyState" model='("No AI activity yet", "When the AI is on and a conversation is in AI mode, its suggestions and escalations appear here.")' /></div> }
+else
+{
+    <div class="card"><div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>When (UTC)</th><th>Conversation</th><th>Intent</th><th>Outcome</th><th class="text-end">Confidence</th><th>Suggestion</th></tr></thead><tbody>
+    @foreach (var i in Model.Result.Items)
+    {
+        <tr><td class="small text-nowrap">@i.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm")</td>
+            <td><a asp-controller="Conversations" asp-action="Details" asp-route-id="@i.ConversationId" class="text-decoration-none">@(i.PeerName ?? i.PeerPhoneE164 ?? "Unknown sender")</a>@if (i.InjectionSuspected) { <span class="badge text-bg-danger ms-1">manipulation?</span> }</td>
+            <td>@i.Intent.Replace('_', ' ')</td>
+            <td><span class="badge @(i.Decision == AiDecision.Draft ? "text-bg-success" : i.Decision == AiDecision.Escalate ? "text-bg-warning" : "text-bg-secondary")">@i.Decision</span>@if (i.EscalationReason is not null) { <div class="small text-muted">@i.EscalationReason</div> }</td>
+            <td class="text-end">@i.Confidence.ToString("0.00")</td><td>@i.Status</td></tr>
+    }
+    </tbody></table></div></div>
+    <partial name="_Pager" model='new PagerModel(Model.Result.Page, Model.Result.TotalPages, Model.Result.TotalCount, "Activity", Model.QueryValues)' />
+}

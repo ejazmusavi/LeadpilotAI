@@ -1,0 +1,19 @@
+@model HistoryViewModel
+@using LeadPilot.Domain.Discovery
+@{ ViewData["Title"] = "Search history"; }
+<h1 class="h3 mb-1">Search history</h1>
+<p class="text-muted">Every distinct search you ran, with how often. Running again starts a new search; results already stored are not duplicated.</p>
+@if (Model.Result.Items.Count == 0) { <div class="card"><partial name="_EmptyState" model='("No searches yet", "Your searches appear here after you run them.")' /></div> }
+else
+{
+    <div class="card"><div class="table-responsive"><table class="table align-middle mb-0">
+        <thead><tr><th>Search</th><th>Connector</th><th>Runs</th><th>Last run</th><th>Last status</th><th></th></tr></thead><tbody>
+        @foreach (var h in Model.Result.Items)
+        {
+            <tr><td>@(h.CategoryName ?? h.Keywords ?? "Websites")<div class="small text-muted">@h.Location@(h.CategoryName is not null && h.Keywords is not null ? " · " + h.Keywords : "")</div></td><td>@h.ConnectorName</td><td>@h.Runs</td>
+                <td class="small text-muted">@h.LastRunAtUtc.ToString("yyyy-MM-dd HH:mm") UTC</td><td>@h.LastStatus</td>
+                <td class="text-end"><a asp-action="Details" asp-route-id="@h.LastJobId" class="btn btn-sm btn-outline-secondary">Open</a>
+                    @if (Model.CanRun) { <form asp-action="Rerun" asp-route-id="@h.LastJobId" method="post" class="d-inline"><button type="submit" class="btn btn-sm btn-outline-primary" data-confirm="Run this search again? It counts against the monthly limit." data-confirm-label="Run again">Run again</button></form> }</td></tr>
+        }</tbody></table></div></div>
+    <partial name="_Pager" model='new PagerModel(Model.Result.Page, Model.Result.TotalPages, Model.Result.TotalCount, "History", new Dictionary<string, string?>())' />
+}

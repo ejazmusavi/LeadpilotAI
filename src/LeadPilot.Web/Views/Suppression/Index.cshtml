@@ -1,0 +1,41 @@
+@model SuppressionViewModel
+@using LeadPilot.Domain.Crm
+@{ ViewData["Title"] = "Suppression list"; var q = Model.Query; }
+<h1 class="h3 mb-1">Suppression list</h1>
+<p class="text-muted">Phone numbers and e-mail addresses on this list can never be contacted, whatever consent or lead score says. They are excluded from every campaign audience.</p>
+<form asp-action="Add" method="post" data-loading-form novalidate class="card card-body mb-3">
+    <h2 class="h6">Add to the list</h2>
+    <div class="row g-3 align-items-end">
+        <div class="col-12 col-md-6 col-xl-3"><label asp-for="Form.Value" class="form-label"></label><input asp-for="Form.Value" class="form-control" placeholder="+966 50 123 4567 or name@example.com" required /></div>
+        <div class="col-12 col-md-6 col-xl-2"><label asp-for="Form.Channel" class="form-label">Channel</label><select asp-for="Form.Channel" class="form-select" asp-items="Html.GetEnumSelectList<SuppressionChannel>()"></select></div>
+        <div class="col-12 col-md-6 col-xl-2"><label asp-for="Form.Reason" class="form-label">Reason</label><select asp-for="Form.Reason" class="form-select" asp-items="Html.GetEnumSelectList<SuppressionReason>()"></select></div>
+        <div class="col-12 col-md-6 col-xl-3"><label asp-for="Form.Note" class="form-label"></label><input asp-for="Form.Note" class="form-control" /></div>
+        <div class="col-12 col-md-6 col-xl-2"><button type="submit" class="btn btn-primary"><span class="spinner-border spinner-border-sm d-none" aria-hidden="true"></span> Add</button></div>
+    </div>
+</form>
+<form method="get" asp-action="Index" class="card card-body mb-3"><div class="row g-3 align-items-end">
+    <div class="col-12 col-md-6 col-xl-3"><label class="form-label" for="search">Search</label><input id="search" name="search" value="@q.Search" class="form-control" /></div>
+    <div class="col-12 col-md-6 col-xl-3"><label class="form-label" for="channel">Channel</label><select id="channel" name="channel" class="form-select"><option value="">All</option>@foreach (var c in Enum.GetValues<SuppressionChannel>()) { <option value="@c" selected="@(q.Channel == c)">@c</option> }</select></div>
+    <div class="col-12 col-md-6 col-xl-3"><label class="form-label" for="reason">Reason</label><select id="reason" name="reason" class="form-select"><option value="">All</option>@foreach (var r in Enum.GetValues<SuppressionReason>()) { <option value="@r" selected="@(q.Reason == r)">@r</option> }</select></div>
+    <div class="col-12 col-md-6 col-xl-3"><button type="submit" class="btn btn-outline-primary">Filter</button></div>
+</div></form>
+@if (Model.Result.Items.Count == 0)
+{
+    <div class="card"><partial name="_EmptyState" model='("No suppression entries", "Opt-outs, invalid and blocked numbers or addresses you add appear here.")' /></div>
+}
+else
+{
+    <div class="card"><div class="table-responsive"><table class="table align-middle mb-0">
+        <thead><tr><th>Value</th><th>Channel</th><th>Reason</th><th>Note</th><th>Added</th><th></th></tr></thead>
+        <tbody>
+        @foreach (var s in Model.Result.Items)
+        {
+            <tr>
+                <td class="fw-semibold">@s.Value</td><td>@s.Channel</td><td><span class="badge text-bg-secondary">@s.Reason</span></td><td>@s.Note</td>
+                <td class="small text-muted">@s.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm") @(s.CreatedByName is null ? "" : "· " + s.CreatedByName)</td>
+                <td class="text-end"><form asp-action="Remove" asp-route-id="@s.Id" method="post"><button type="submit" class="btn btn-sm btn-outline-danger" data-confirm="Remove @s.Value from the suppression list? It becomes contactable again if consent allows." data-confirm-label="Remove">Remove</button></form></td>
+            </tr>
+        }
+        </tbody></table></div></div>
+    <partial name="_Pager" model='new PagerModel(Model.Result.Page, Model.Result.TotalPages, Model.Result.TotalCount, "Index", new Dictionary<string, string?> { ["search"] = q.Search, ["channel"] = q.Channel?.ToString(), ["reason"] = q.Reason?.ToString() })' />
+}

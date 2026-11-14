@@ -1,0 +1,39 @@
+@model WorkflowListViewModel
+@using LeadPilot.Domain.Workflows
+@{ ViewData["Title"] = "Workflows"; var q = Model.Query; var s = Model.Settings; }
+<div class="d-flex flex-wrap justify-content-between align-items-start mb-3 gap-2">
+    <div><h1 class="h3 mb-1">Workflows</h1><p class="text-muted mb-0">Follow-ups that run by themselves when something happens to a lead. Every message a workflow sends goes through the normal sending pipeline: consent, suppression and opt-outs are checked again right before it is queued.</p></div>
+    <div class="d-flex gap-2">
+        <a asp-controller="WorkflowExecutions" asp-action="Index" class="btn btn-outline-secondary">Runs</a>
+        <a asp-action="Settings" class="btn btn-outline-secondary">Limits and kill switch</a>
+        @if (Model.CanCreate) { <a asp-action="New" class="btn btn-primary">New workflow</a> }
+    </div>
+</div>
+@if (s.KillSwitch) { <div class="alert alert-danger" role="alert"><strong>The workspace kill switch is ON.</strong> No workflow starts and running ones stop before their next step. Turn it off under Limits and kill switch.</div> }
+<form method="get" asp-action="Index" class="card card-body mb-3"><div class="row g-3 align-items-end">
+    <div class="col-12 col-md-5"><label class="form-label" for="search">Search</label><input id="search" name="search" value="@q.Search" class="form-control" placeholder="Workflow name" /></div>
+    <div class="col-6 col-md-3"><label class="form-label" for="status">Status</label><select id="status" name="status" class="form-select"><option value="">All</option>@foreach (var st in Enum.GetValues<WorkflowStatus>()) { <option value="@st" selected="@(q.Status == st)">@st</option> }</select></div>
+    <div class="col-12 col-md-2"><button type="submit" class="btn btn-outline-primary">Filter</button> <a asp-action="Index" class="btn btn-link">Clear</a></div>
+</div></form>
+@if (Model.Result.Items.Count == 0)
+{
+    <div class="card"><partial name="_EmptyState" model='("No workflows yet", Model.CanCreate ? "Create a workflow: choose what starts it (for example a new lead), add steps such as a wait, a follow-up task or an approved message, and test it with the simulation before you activate it." : "No workflows have been created in this workspace yet.")' /></div>
+}
+else
+{
+    <div class="card"><div class="table-responsive"><table class="table align-middle mb-0">
+        <thead><tr><th>Name</th><th>Status</th><th>Starts when</th><th class="text-end">Runs in progress</th><th>Version</th><th>Updated</th></tr></thead><tbody>
+        @foreach (var w in Model.Result.Items)
+        {
+            <tr>
+                <td><a asp-action="Details" asp-route-id="@w.Id" class="fw-semibold text-decoration-none">@w.Name</a>@if (!string.IsNullOrWhiteSpace(w.Description)) { <div class="small text-muted">@w.Description</div> }</td>
+                <td><span class="badge @(w.Status == WorkflowStatus.Active ? "text-bg-success" : w.Status == WorkflowStatus.Draft ? "text-bg-light border" : "text-bg-secondary")">@w.Status</span>@if (w.IsKilled) { <span class="badge text-bg-danger ms-1">kill switch</span> }</td>
+                <td class="small">@(w.Triggers.Count == 0 ? "–" : string.Join(", ", w.Triggers))</td>
+                <td class="text-end">@w.RunningExecutions</td>
+                <td class="small">@(w.ActiveVersion is { } av ? $"v{av} active" : "not active")@if (w.HasDraft) { <span class="badge text-bg-warning ms-1">draft</span> }</td>
+                <td class="small text-nowrap">@w.UpdatedAtUtc.ToString("yyyy-MM-dd HH:mm") UTC</td>
+            </tr>
+        }
+        </tbody></table></div></div>
+    <partial name="_Pager" model='new PagerModel(Model.Result.Page, Model.Result.TotalPages, Model.Result.TotalCount, "Index", Model.QueryValues)' />
+}

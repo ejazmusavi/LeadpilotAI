@@ -1,0 +1,40 @@
+@model UserListViewModel
+@{ ViewData["Title"] = "Users"; }
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <h1 class="h3 mb-0">Users</h1>
+    <a asp-controller="Invitations" asp-action="Create" class="btn btn-primary">Invite user</a>
+</div>
+<form method="get" asp-action="Index" class="card card-body mb-3"><div class="row g-3 align-items-end">
+    <div class="col-12 col-md-6 col-xl-3"><label class="form-label" for="q">Search</label><input id="q" name="q" value="@Model.Query" class="form-control" placeholder="Name or e-mail" /></div>
+    <div class="col-12 col-md-6 col-xl-3"><button type="submit" class="btn btn-outline-primary">Search</button></div>
+</div></form>
+@if (Model.Result.Items.Count == 0)
+{
+    <div class="card"><partial name="_EmptyState" model='("No users found", "Invite people to this workspace to get started.")' /></div>
+}
+else
+{
+    <div class="card"><div class="table-responsive"><table class="table align-middle mb-0">
+        <thead><tr><th>Name</th><th>Roles</th><th>Status</th><th>Last sign-in</th><th></th></tr></thead>
+        <tbody>
+        @foreach (var m in Model.Result.Items)
+        {
+            <tr>
+                <td><div class="fw-semibold">@m.DisplayName @if (m.UserId == Model.CurrentUserId) { <span class="badge text-bg-light">you</span> }</div><div class="text-muted small">@m.Email</div></td>
+                <td>@if (m.Roles.Count == 0) { <span class="text-muted small">No role</span> } else { foreach (var r in m.Roles) { <span class="badge text-bg-secondary me-1">@r.Name</span> } }</td>
+                <td><span class="badge @(m.IsActive ? "text-bg-success" : "text-bg-secondary")">@(m.IsActive ? "Active" : "Disabled")</span></td>
+                <td>@(m.LastLoginAtUtc?.ToString("yyyy-MM-dd HH:mm") ?? "Never")</td>
+                <td class="text-end table-actions">
+                    <a asp-action="Edit" asp-route-id="@m.UserId" class="btn btn-sm btn-outline-secondary">Roles</a>
+                    @if (m.UserId != Model.CurrentUserId)
+                    {
+                        <form asp-action="SetActive" asp-route-id="@m.UserId" method="post"><input type="hidden" name="active" value="@((!m.IsActive).ToString().ToLowerInvariant())" />
+                            <button type="submit" class="btn btn-sm btn-outline-warning" data-confirm="@(m.IsActive ? $"Disable {m.DisplayName}? They lose access to this workspace until re-enabled." : $"Re-enable {m.DisplayName}?")" data-confirm-label="@(m.IsActive ? "Disable" : "Enable")">@(m.IsActive ? "Disable" : "Enable")</button></form>
+                        <form asp-action="Remove" asp-route-id="@m.UserId" method="post"><button type="submit" class="btn btn-sm btn-outline-danger" data-confirm="Remove @m.DisplayName from this workspace? Their account is kept, but they lose access and their roles here." data-confirm-label="Remove">Remove</button></form>
+                    }
+                </td>
+            </tr>
+        }
+        </tbody></table></div></div>
+    <partial name="_Pager" model='new PagerModel(Model.Result.Page, Model.Result.TotalPages, Model.Result.TotalCount, "Index", new Dictionary<string, string?> { ["q"] = Model.Query })' />
+}

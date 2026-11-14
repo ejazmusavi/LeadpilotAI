@@ -1,0 +1,29 @@
+@model RepHoursViewModel
+@using LeadPilot.Domain.Conversion
+@{ ViewData["Title"] = "Weekly hours"; var r = Model.Rep; string T(int m) => $"{m / 60:00}:{m % 60:00}"; var dis = Model.CanManage ? null : "disabled"; }
+<h1 class="h3 mb-1">Weekly hours · @r.UserName</h1>
+<p class="text-muted">Times are in the representative's time zone (<strong>@r.EffectiveTimeZoneId</strong>). Slots are laid out in real elapsed time, so a daylight-saving change never creates a slot at a time that does not exist. Leave a row empty for no work; use the second row for the afternoon.</p>
+<form asp-action="Hours" asp-route-id="@r.Id" method="post" class="card card-body mb-4"><div class="table-responsive"><table class="table align-middle mb-3"><thead><tr><th>Day</th><th>From</th><th>To</th><th>From</th><th>To</th></tr></thead><tbody>
+@foreach (var day in new[] { DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday })
+{
+    var rows = r.Rules.Where(x => x.Day == day).OrderBy(x => x.StartMinute).ToList(); var a = rows.ElementAtOrDefault(0); var b = rows.ElementAtOrDefault(1);
+    <tr><td>@day</td>
+        <td><input class="form-control form-control-sm" name="d@((int)day)s1" aria-label="@day first period from" placeholder="09:00" value="@(a is null ? "" : T(a.StartMinute))" @dis /></td><td><input class="form-control form-control-sm" name="d@((int)day)e1" aria-label="@day first period to" placeholder="12:00" value="@(a is null ? "" : T(a.EndMinute))" @dis /></td>
+        <td><input class="form-control form-control-sm" name="d@((int)day)s2" aria-label="@day second period from" placeholder="13:00" value="@(b is null ? "" : T(b.StartMinute))" @dis /></td><td><input class="form-control form-control-sm" name="d@((int)day)e2" aria-label="@day second period to" placeholder="17:00" value="@(b is null ? "" : T(b.EndMinute))" @dis /></td></tr>
+}
+</tbody></table></div>@if (Model.CanManage) { <div><button class="btn btn-primary" type="submit">Save weekly hours</button> <a class="btn btn-link" asp-action="Index">Back</a></div> }</form>
+<h2 class="h5">Exceptions</h2>
+@if (r.Exceptions.Count == 0) { <div class="card mb-3"><partial name="_EmptyState" model='("No exceptions", "Add time off or extra opening hours for a specific date.")' /></div> }
+else { <div class="card mb-3"><ul class="list-group list-group-flush">@foreach (var e in r.Exceptions) { <li class="list-group-item d-flex justify-content-between align-items-center"><span>@e.Date.ToString("yyyy-MM-dd") · <strong>@(e.Kind == ExceptionKind.Closed ? "Closed" : "Extra hours")</strong> @(e.StartMinute is null ? "(whole day)" : $"{T(e.StartMinute.Value)}–{T(e.EndMinute!.Value)}") @e.Note</span>
+    @if (Model.CanManage) { <form asp-action="RemoveException" asp-route-id="@r.Id" method="post"><input type="hidden" name="exceptionId" value="@e.Id" /><button class="btn btn-outline-danger btn-sm" type="submit" data-confirm="Remove this exception?" data-confirm-label="Remove">Remove</button></form> }</li> }</ul></div> }
+@if (Model.CanManage)
+{
+    <form asp-action="AddException" asp-route-id="@r.Id" method="post" class="card card-body"><div class="row g-2 align-items-end">
+        <div class="col-md-2"><label class="form-label" for="date">Date</label><input id="date" name="date" type="date" class="form-control" required /></div>
+        <div class="col-md-2"><label class="form-label" for="kind">Type</label><select id="kind" name="kind" class="form-select"><option value="Closed">Closed</option><option value="ExtraOpen">Extra hours</option></select></div>
+        <div class="col-6 col-md-2"><label class="form-label" for="start">From (optional)</label><input id="start" name="start" class="form-control" placeholder="HH:mm" /></div>
+        <div class="col-6 col-md-2"><label class="form-label" for="end">To (optional)</label><input id="end" name="end" class="form-control" placeholder="HH:mm" /></div>
+        <div class="col-md-3"><label class="form-label" for="note">Note</label><input id="note" name="note" class="form-control" /></div>
+        <div class="col-md-1"><button class="btn btn-primary" type="submit">Add</button></div>
+    </div></form>
+}

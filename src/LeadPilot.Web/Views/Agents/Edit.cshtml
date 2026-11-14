@@ -1,0 +1,47 @@
+@model AgentEditViewModel
+@{ var a = Model.Agent; var f = Model.Form; ViewData["Title"] = (a?.Name ?? "New agent") + " · Sales agent"; var dis = Model.CanManage ? "" : "disabled"; }
+<h1 class="h3 mb-1">@(a?.Name ?? "New agent")</h1>
+@if (a?.IsSample == true) { <div class="alert alert-warning" role="alert"><strong>SAMPLE configuration.</strong> The instructions below are generic and the product catalog holds placeholders. Review the instructions, then fill in and confirm your real product information in the <a asp-controller="Catalog" asp-action="Index">catalog</a>. Saving this agent removes the SAMPLE mark.</div> }
+<div asp-validation-summary="All" class="text-danger"></div>
+<form asp-action="Save" method="post" data-loading-form novalidate class="card card-body mb-3">
+    <fieldset @dis>
+    <input type="hidden" asp-for="Form.Id" /><input type="hidden" asp-for="Form.Version" />
+    <div class="row g-3">
+        <div class="col-12 col-md-6"><label asp-for="Form.Name" class="form-label">Name</label><input asp-for="Form.Name" class="form-control" /><span asp-validation-for="Form.Name" class="text-danger"></span></div>
+        <div class="col-12 col-md-6"><label asp-for="Form.Description" class="form-label">Description</label><input asp-for="Form.Description" class="form-control" /></div>
+        <div class="col-12"><label asp-for="Form.Instructions" class="form-label">Instructions</label><textarea asp-for="Form.Instructions" class="form-control" rows="10"></textarea><div class="form-text">How the agent should behave: who it talks to, what to find out, how to handle objections. It must not contain prices or features: those come from the catalog and knowledge base, so they stay true.</div><span asp-validation-for="Form.Instructions" class="text-danger"></span></div>
+        <div class="col-12 col-md-6"><label asp-for="Form.ChatModel" class="form-label">Model (optional)</label><input asp-for="Form.ChatModel" class="form-control" list="models" /><div class="form-text">Empty = the workspace's answer model (AI settings).</div></div>
+        <div class="col-12 col-md-6"><label asp-for="Form.MinConfidence" class="form-label">Minimum confidence 0–1 (optional)</label><input asp-for="Form.MinConfidence" type="number" step="0.01" min="0" max="1" class="form-control" /><div class="form-text">Below this the conversation goes to a person. Empty = the workspace threshold.</div></div>
+        <datalist id="models">@foreach (var m in Model.SuggestedModels) { <option value="@m"></option> }</datalist>
+        <div class="col-12"><label asp-for="Form.OffTopicReply" class="form-label">Reply to unrelated messages</label><textarea asp-for="Form.OffTopicReply" class="form-control" rows="2"></textarea></div>
+        <div class="col-12"><div class="fw-semibold mb-1">Tools this agent may use</div>
+            <div class="row g-2">
+            @foreach (var t in Model.Tools)
+            {
+                <div class="col-12 col-md-6"><div class="form-check"><input class="form-check-input" type="checkbox" id="tool-@t.Name" name="Form.EnabledTools" value="@t.Name" @(f.EnabledTools.Contains(t.Name) ? "checked" : "") />
+                    <label class="form-check-label" for="tool-@t.Name"><strong>@t.Name</strong>@if (t.Approval == "Always") { <span class="badge text-bg-warning ms-1">needs approval</span> } else if (t.Approval == "Conditional") { <span class="badge text-bg-warning ms-1">approval beyond limit</span> }@if (t.ReadOnly) { <span class="badge text-bg-light border ms-1">read only</span> }<br /><span class="small text-muted">@t.Description</span></label></div></div>
+            }
+            </div>
+            <div class="form-text">TransferToHuman and StopMarketingMessages are always available: they only ever reduce what the AI does. Demo, trial and payment tools report "not available" until those services are connected (Phase 10); they never pretend to succeed.</div></div>
+    </div>
+    @if (Model.CanManage) { <button type="submit" class="btn btn-primary mt-3"><span class="spinner-border spinner-border-sm d-none" aria-hidden="true"></span> Save agent</button> }
+    </fieldset>
+</form>
+@if (a is not null)
+{
+    <div class="card mb-3"><div class="card-header">Qualification questions</div><div class="card-body">
+        <p class="small text-muted">The agent asks these (one or two at a time) and records the customer's own answers with QualifyLead. One per line: <code>key | question | text, number or choice | required or optional | answer1; answer2</code> (answers only for choice).</p>
+        <form asp-action="Questions" asp-route-id="@a.Id" method="post"><fieldset @dis>
+            <label class="visually-hidden" for="qtext">Questions</label><textarea id="qtext" name="questionsText" class="form-control font-monospace" rows="7">@Model.QuestionsText</textarea>
+            @if (Model.CanManage) { <button type="submit" class="btn btn-outline-primary mt-2">Save questions</button> }
+        </fieldset></form></div></div>
+    <div class="card border-@(a.AutoReplyEnabled ? "danger" : "secondary") mb-3"><div class="card-header">Automatic replies</div><div class="card-body">
+        <p>Automatic replies are <strong>@(a.AutoReplyEnabled ? "ON" : "off")</strong> for this agent. @(a.TenantAllowsAiReplies ? "" : "They are not allowed for the workspace yet (see the settings on the agents page).")</p>
+        <p class="small text-muted">Off (default): the agent only prepares a suggestion for your team. On: when it is confident and every safety check passes it answers inside the conversation the customer started, through the normal sending pipeline. It never contacts anyone first, never answers while a person is in control or the AI is paused, and stops when the customer opts out.</p>
+        @if (Model.CanManage)
+        {
+            <form asp-action="SetAutoSend" asp-route-id="@a.Id" method="post"><input type="hidden" name="enabled" value="@((!a.AutoReplyEnabled).ToString().ToLowerInvariant())" />
+                <button type="submit" class="btn @(a.AutoReplyEnabled ? "btn-outline-secondary" : "btn-danger")" data-confirm="@(a.AutoReplyEnabled ? "Turn automatic replies off for this agent?" : "Turn automatic replies ON? The agent will send answers to customers without a person reading them first.")" data-confirm-label="@(a.AutoReplyEnabled ? "Turn off" : "Turn on")" @(!a.AutoReplyEnabled && !a.TenantAllowsAiReplies ? "disabled" : "")>@(a.AutoReplyEnabled ? "Turn off automatic replies" : "Turn on automatic replies")</button></form>
+        }
+    </div></div>
+}

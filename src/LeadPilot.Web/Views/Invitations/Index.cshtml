@@ -1,0 +1,33 @@
+@model InvitationListViewModel
+@{ ViewData["Title"] = "Invitations"; }
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <h1 class="h3 mb-0">Invitations</h1>
+    <a asp-action="Create" class="btn btn-primary">Invite user</a>
+</div>
+@if (Model.Result.Items.Count == 0)
+{
+    <div class="card"><partial name="_EmptyState" model='("No invitations yet", "Invite someone by e-mail; they choose their own password.")' /></div>
+}
+else
+{
+    <div class="card"><div class="table-responsive"><table class="table align-middle mb-0">
+        <thead><tr><th>E-mail</th><th>Role</th><th>Status</th><th>Expires</th><th></th></tr></thead>
+        <tbody>
+        @foreach (var i in Model.Result.Items)
+        {
+            <tr>
+                <td>@i.Email</td><td>@i.RoleName</td>
+                <td><span class="badge @(i.Status switch { "Pending" => "text-bg-info", "Accepted" => "text-bg-success", _ => "text-bg-secondary" })">@i.Status</span></td>
+                <td>@i.ExpiresAtUtc.ToString("yyyy-MM-dd HH:mm") UTC</td>
+                <td class="text-end table-actions">
+                    @if (i.Status is "Pending" or "Expired")
+                    {
+                        <form asp-action="Resend" asp-route-id="@i.Id" method="post"><button type="submit" class="btn btn-sm btn-outline-secondary">Resend</button></form>
+                        <form asp-action="Revoke" asp-route-id="@i.Id" method="post"><button type="submit" class="btn btn-sm btn-outline-danger" data-confirm="Revoke the invitation for @i.Email? The link stops working." data-confirm-label="Revoke">Revoke</button></form>
+                    }
+                </td>
+            </tr>
+        }
+        </tbody></table></div></div>
+    <partial name="_Pager" model='new PagerModel(Model.Result.Page, Model.Result.TotalPages, Model.Result.TotalCount, "Index", new Dictionary<string, string?>())' />
+}

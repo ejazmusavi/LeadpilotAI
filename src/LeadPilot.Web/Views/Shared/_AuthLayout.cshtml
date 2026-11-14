@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@(ViewData["Title"] ?? "Sign in") · LeadPilot AI</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body class="auth-body">
+<main class="auth-card card shadow-sm">
+    <div class="card-body p-4">
+        <div class="text-center mb-4">
+            <span class="brand-mark brand-mark-lg">LP</span>
+            <h1 class="h4 mt-2 mb-0">LeadPilot AI</h1>
+            <p class="text-muted small mb-0">Discover. Engage. Convert.</p>
+        </div>
+        <partial name="_Toasts" />
+        @RenderBody()
+    </div>
+</main>
+<script src="~/lib/jquery/dist/jquery.min.js"></script>
+<script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
+<script src="~/lib/jquery-validation-unobtrusive/dist/jquery.validate.unobtrusive.min.js"></script>
+<script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+<script src="~/js/site.js" asp-append-version="true"></script>
+</body>
+</html>
